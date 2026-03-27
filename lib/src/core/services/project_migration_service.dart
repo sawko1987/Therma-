@@ -29,9 +29,7 @@ class ProjectMigrationService {
 
     return MigratedProject(
       project: project.copyWith(
-        houseModel: project.houseModel.elements.isEmpty
-            ? HouseModel.bootstrapFromConstructions(project.constructions)
-            : project.houseModel,
+        houseModel: _migrateHouseModel(project),
         datasetVersion: currentDatasetVersion,
         migratedFromDatasetVersion: requiresDatasetMigration
             ? effectiveSourceDatasetVersion
@@ -40,5 +38,26 @@ class ProjectMigrationService {
       ),
       wasMigrated: true,
     );
+  }
+
+  HouseModel _migrateHouseModel(Project project) {
+    final houseModel = project.houseModel;
+    if (houseModel.elements.isEmpty) {
+      return HouseModel.bootstrapFromConstructions(project.constructions);
+    }
+
+    final rooms = houseModel.rooms.isEmpty
+        ? [Room.defaultRoom()]
+        : houseModel.rooms;
+    final roomIds = rooms.map((item) => item.id).toSet();
+    final elements = houseModel.elements
+        .map(
+          (item) => roomIds.contains(item.roomId)
+              ? item
+              : item.copyWith(roomId: rooms.first.id),
+        )
+        .toList(growable: false);
+
+    return houseModel.copyWith(rooms: rooms, elements: elements);
   }
 }

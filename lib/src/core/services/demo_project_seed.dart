@@ -9,10 +9,20 @@ const Project demoProject = Project(
   datasetVersion: currentDatasetVersion,
   houseModel: HouseModel(
     id: 'house-model',
-    title: 'Базовая схема дома',
+    title: 'Конструктор дома',
+    rooms: [
+      Room(
+        id: defaultRoomId,
+        title: 'Гостиная',
+        kind: RoomKind.livingRoom,
+        areaSquareMeters: 38,
+        heightMeters: 2.8,
+      ),
+    ],
     elements: [
-      HouseElement(
+      HouseEnvelopeElement(
         id: 'house-element-outer-wall',
+        roomId: defaultRoomId,
         title: 'Наружная стена',
         elementKind: ConstructionElementKind.wall,
         areaSquareMeters: 140,

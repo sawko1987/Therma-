@@ -7,12 +7,13 @@ import 'package:smartcalc_mobile/src/features/house_scheme/presentation/house_sc
 import 'support/fakes.dart';
 
 void main() {
-  testWidgets('house scheme screen renders semantic house elements', (
+  testWidgets('house builder screen renders rooms, elements and constructions', (
     tester,
   ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
           projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
         ],
         child: const MaterialApp(home: HouseSchemeScreen()),
@@ -21,11 +22,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Схема дома'), findsOneWidget);
-    expect(find.text('Базовая схема дома'), findsOneWidget);
-    expect(find.text('Элементы дома'), findsOneWidget);
-    expect(find.text('Наружная стена'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('100.0 м²'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('Phase 2 base'), findsOneWidget);
+    expect(find.text('Сборка дома'), findsOneWidget);
+    expect(find.text('Конструктор дома'), findsOneWidget);
+    expect(find.text('Конструкции'), findsOneWidget);
+    expect(find.textContaining('помещения, ограждения и переиспользуемые конструкции'), findsOneWidget);
   });
 }

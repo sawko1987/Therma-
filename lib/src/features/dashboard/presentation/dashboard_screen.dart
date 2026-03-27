@@ -94,7 +94,7 @@ class _HeroCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Текущий каркас уже содержит доменные модели, локальные каталоги, нормативный экран теплозащиты, сезонный расчёт влагорежима, локальное хранение проектов, PDF-отчёт и базовую схему дома для Phase 2.',
+              'Текущий каркас уже содержит доменные модели, локальные каталоги, нормативный экран теплозащиты, сезонный расчёт влагорежима, локальное хранение проектов, PDF-отчёт и рабочий конструктор дома для Phase 2.',
             ),
             const SizedBox(height: 18),
             projectAsync.when(
@@ -209,9 +209,10 @@ class _ProjectListCard extends StatelessWidget {
                       subtitle: Text(
                         [
                           '${project.roomPreset.label} • ${project.constructions.length} конструкция(й)',
-                          if (project.datasetMigrationLabel
-                              case final migrationLabel?)
-                            migrationLabel,
+                          ...?switch (project.datasetMigrationLabel) {
+                            final String migrationLabel => [migrationLabel],
+                            null => null,
+                          },
                         ].join('\n'),
                       ),
                       isThreeLine: project.hasDatasetMigration,
@@ -310,13 +311,13 @@ class _RoadmapCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Открываются экран thermocalc с расчётом теплозащиты v1 и базовая схема дома из Phase 2: семантические элементы, площади и привязка к конструкциям проекта.',
+              'Открываются экран thermocalc с расчётом теплозащиты v1 и конструктор дома из Phase 2: помещения, ограждения, конструкции и запуск расчёта из выбранного элемента.',
             ),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
               onPressed: onOpenHouseScheme,
               icon: const Icon(Icons.home_work_outlined),
-              label: const Text('Открыть схему дома'),
+              label: const Text('Открыть сборку дома'),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(

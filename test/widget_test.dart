@@ -56,7 +56,7 @@ void main() {
 
       expect(find.text('SmartCalc Mobile'), findsOneWidget);
       expect(find.text('Сохранённые проекты'), findsOneWidget);
-      expect(find.text('Открыть схему дома'), findsOneWidget);
+      expect(find.text('Открыть сборку дома'), findsOneWidget);
       expect(find.text('Активный проект: Demo project'), findsOneWidget);
       expect(find.textContaining('seed-2025-12-01'), findsOneWidget);
 
@@ -92,11 +92,11 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Открыть схему дома'), 200);
-    await tester.tap(find.text('Открыть схему дома'));
+    await tester.scrollUntilVisible(find.text('Открыть сборку дома'), 200);
+    await tester.tap(find.text('Открыть сборку дома'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Схема дома'), findsOneWidget);
-    expect(find.text('Элементы дома'), findsOneWidget);
+    expect(find.text('Сборка дома'), findsOneWidget);
+    expect(find.text('Помещения и ограждения'), findsOneWidget);
   });
 }

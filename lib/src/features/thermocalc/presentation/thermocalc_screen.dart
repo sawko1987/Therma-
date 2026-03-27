@@ -40,6 +40,7 @@ class ThermocalcScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final projectAsync = ref.watch(selectedProjectProvider);
     final constructionAsync = ref.watch(selectedConstructionProvider);
+    final elementAsync = ref.watch(selectedEnvelopeElementProvider);
     final calculationAsync = ref.watch(calculationResultProvider);
     final catalogAsync = ref.watch(catalogSnapshotProvider);
     final reportExportAsync = ref.watch(reportExportControllerProvider);
@@ -74,6 +75,7 @@ class ThermocalcScreen extends ConsumerWidget {
           _ProjectSummary(
             projectAsync: projectAsync,
             constructionAsync: constructionAsync,
+            elementAsync: elementAsync,
             catalogAsync: catalogAsync,
           ),
           const SizedBox(height: 16),
@@ -130,11 +132,13 @@ class _ProjectSummary extends StatelessWidget {
   const _ProjectSummary({
     required this.projectAsync,
     required this.constructionAsync,
+    required this.elementAsync,
     required this.catalogAsync,
   });
 
   final AsyncValue<Project?> projectAsync;
   final AsyncValue<Construction?> constructionAsync;
+  final AsyncValue<HouseEnvelopeElement?> elementAsync;
   final AsyncValue<CatalogSnapshot> catalogAsync;
 
   @override
@@ -154,33 +158,43 @@ class _ProjectSummary extends StatelessWidget {
             const SizedBox(height: 12),
             projectAsync.when(
               data: (project) => constructionAsync.when(
-                data: (construction) => catalogAsync.when(
-                  data: (catalog) {
-                    final climate = project == null
-                        ? null
-                        : catalog.climatePoints.firstWhere(
-                            (item) => item.id == project.climatePointId,
-                          );
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(project?.name ?? 'Нет проекта'),
-                        const SizedBox(height: 6),
-                        Text('Климат: ${climate?.displayName ?? '—'}'),
-                        Text('Помещение: ${project?.roomPreset.label ?? '—'}'),
-                        Text('Конструкция: ${construction?.title ?? '—'}'),
-                        if (project?.datasetMigrationLabel
-                            case final migrationLabel?)
-                          Text(migrationLabel),
-                        if (climate != null)
-                          Text(
-                            'Сезоны влагорежима: ${climate.moistureSeasons.map((item) => item.label).join(', ')}',
-                          ),
-                      ],
-                    );
-                  },
+                data: (construction) => elementAsync.when(
+                  data: (element) => catalogAsync.when(
+                    data: (catalog) {
+                      final climate = project == null
+                          ? null
+                          : catalog.climatePoints.firstWhere(
+                              (item) => item.id == project.climatePointId,
+                            );
+                      final room = project?.houseModel.rooms.firstWhere(
+                        (item) => item.id == element?.roomId,
+                        orElse: () => Room.defaultRoom(),
+                      );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(project?.name ?? 'Нет проекта'),
+                          const SizedBox(height: 6),
+                          Text('Климат: ${climate?.displayName ?? '—'}'),
+                          Text('Помещение для норм: ${project?.roomPreset.label ?? '—'}'),
+                          Text('Ограждение: ${element?.title ?? '—'}'),
+                          Text('Комната: ${room?.title ?? '—'}'),
+                          Text('Конструкция: ${construction?.title ?? '—'}'),
+                          if (project?.datasetMigrationLabel
+                              case final migrationLabel?)
+                            Text(migrationLabel),
+                          if (climate != null)
+                            Text(
+                              'Сезоны влагорежима: ${climate.moistureSeasons.map((item) => item.label).join(', ')}',
+                            ),
+                        ],
+                      );
+                    },
+                    loading: () => const LinearProgressIndicator(),
+                    error: (error, _) => Text('Ошибка каталога: $error'),
+                  ),
                   loading: () => const LinearProgressIndicator(),
-                  error: (error, _) => Text('Ошибка каталога: $error'),
+                  error: (error, _) => Text('Ошибка ограждения: $error'),
                 ),
                 loading: () => const LinearProgressIndicator(),
                 error: (error, _) => Text('Ошибка конструкции: $error'),

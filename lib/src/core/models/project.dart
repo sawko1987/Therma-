@@ -1,11 +1,16 @@
-const int currentProjectFormatVersion = 2;
+const int currentProjectFormatVersion = 3;
 const double defaultHouseElementAreaSquareMeters = 100.0;
+const double defaultRoomAreaSquareMeters = 24.0;
+const double defaultRoomHeightMeters = 2.7;
+const String defaultRoomId = 'room-main';
 
 enum ConstructionElementKind { wall, roof, floor, ceiling }
 
 enum LayerKind { solid, frame, crossFrame, masonry, ventilatedGap }
 
 enum RoomPreset { livingRoom, attic, basement }
+
+enum RoomKind { livingRoom, bedroom, kitchen, bathroom, hall, boilerRoom, other }
 
 extension ConstructionElementKindX on ConstructionElementKind {
   String get label => switch (this) {
@@ -61,6 +66,28 @@ extension RoomPresetX on RoomPreset {
   };
 }
 
+extension RoomKindX on RoomKind {
+  String get label => switch (this) {
+    RoomKind.livingRoom => 'Гостиная',
+    RoomKind.bedroom => 'Спальня',
+    RoomKind.kitchen => 'Кухня',
+    RoomKind.bathroom => 'Санузел',
+    RoomKind.hall => 'Холл',
+    RoomKind.boilerRoom => 'Котельная',
+    RoomKind.other => 'Другое',
+  };
+
+  String get storageKey => switch (this) {
+    RoomKind.livingRoom => 'livingRoom',
+    RoomKind.bedroom => 'bedroom',
+    RoomKind.kitchen => 'kitchen',
+    RoomKind.bathroom => 'bathroom',
+    RoomKind.hall => 'hall',
+    RoomKind.boilerRoom => 'boilerRoom',
+    RoomKind.other => 'other',
+  };
+}
+
 ConstructionElementKind parseConstructionElementKind(String value) {
   return switch (value) {
     'wall' => ConstructionElementKind.wall,
@@ -91,6 +118,19 @@ RoomPreset parseRoomPreset(String value) {
   };
 }
 
+RoomKind parseRoomKind(String value) {
+  return switch (value) {
+    'livingRoom' => RoomKind.livingRoom,
+    'bedroom' => RoomKind.bedroom,
+    'kitchen' => RoomKind.kitchen,
+    'bathroom' => RoomKind.bathroom,
+    'hall' => RoomKind.hall,
+    'boilerRoom' => RoomKind.boilerRoom,
+    'other' => RoomKind.other,
+    _ => throw StateError('Unknown RoomKind: $value'),
+  };
+}
+
 class ConstructionLayer {
   const ConstructionLayer({
     required this.id,
@@ -114,6 +154,22 @@ class ConstructionLayer {
   final LayerKind kind;
   final double thicknessMm;
   final bool enabled;
+
+  ConstructionLayer copyWith({
+    String? id,
+    String? materialId,
+    LayerKind? kind,
+    double? thicknessMm,
+    bool? enabled,
+  }) {
+    return ConstructionLayer(
+      id: id ?? this.id,
+      materialId: materialId ?? this.materialId,
+      kind: kind ?? this.kind,
+      thicknessMm: thicknessMm ?? this.thicknessMm,
+      enabled: enabled ?? this.enabled,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -146,6 +202,20 @@ class Construction {
   final ConstructionElementKind elementKind;
   final List<ConstructionLayer> layers;
 
+  Construction copyWith({
+    String? id,
+    String? title,
+    ConstructionElementKind? elementKind,
+    List<ConstructionLayer>? layers,
+  }) {
+    return Construction(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      elementKind: elementKind ?? this.elementKind,
+      layers: layers ?? this.layers,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
@@ -154,40 +224,123 @@ class Construction {
   };
 }
 
-class HouseElement {
-  const HouseElement({
+class Room {
+  const Room({
     required this.id,
+    required this.title,
+    required this.kind,
+    required this.areaSquareMeters,
+    required this.heightMeters,
+  });
+
+  factory Room.fromJson(Map<String, dynamic> json) => Room(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    kind: parseRoomKind((json['kind'] as String?) ?? RoomKind.other.storageKey),
+    areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
+    heightMeters: (json['heightMeters'] as num?)?.toDouble() ??
+        defaultRoomHeightMeters,
+  );
+
+  factory Room.defaultRoom() => const Room(
+    id: defaultRoomId,
+    title: 'Основное помещение',
+    kind: RoomKind.livingRoom,
+    areaSquareMeters: defaultRoomAreaSquareMeters,
+    heightMeters: defaultRoomHeightMeters,
+  );
+
+  final String id;
+  final String title;
+  final RoomKind kind;
+  final double areaSquareMeters;
+  final double heightMeters;
+
+  Room copyWith({
+    String? id,
+    String? title,
+    RoomKind? kind,
+    double? areaSquareMeters,
+    double? heightMeters,
+  }) {
+    return Room(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      kind: kind ?? this.kind,
+      areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
+      heightMeters: heightMeters ?? this.heightMeters,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'kind': kind.storageKey,
+    'areaSquareMeters': areaSquareMeters,
+    'heightMeters': heightMeters,
+  };
+}
+
+class HouseEnvelopeElement {
+  const HouseEnvelopeElement({
+    required this.id,
+    required this.roomId,
     required this.title,
     required this.elementKind,
     required this.areaSquareMeters,
     required this.constructionId,
   });
 
-  factory HouseElement.fromJson(Map<String, dynamic> json) => HouseElement(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    elementKind: parseConstructionElementKind(json['elementKind'] as String),
-    areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
-    constructionId: json['constructionId'] as String,
-  );
-
-  factory HouseElement.fromConstruction(Construction construction) =>
-      HouseElement(
-        id: 'house-element-${construction.id}',
-        title: construction.title,
-        elementKind: construction.elementKind,
-        areaSquareMeters: defaultHouseElementAreaSquareMeters,
-        constructionId: construction.id,
+  factory HouseEnvelopeElement.fromJson(Map<String, dynamic> json) =>
+      HouseEnvelopeElement(
+        id: json['id'] as String,
+        roomId: (json['roomId'] as String?) ?? defaultRoomId,
+        title: json['title'] as String,
+        elementKind: parseConstructionElementKind(json['elementKind'] as String),
+        areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
+        constructionId: json['constructionId'] as String,
       );
 
+  factory HouseEnvelopeElement.fromConstruction(
+    Construction construction, {
+    String roomId = defaultRoomId,
+  }) => HouseEnvelopeElement(
+    id: 'house-element-${construction.id}',
+    roomId: roomId,
+    title: construction.title,
+    elementKind: construction.elementKind,
+    areaSquareMeters: defaultHouseElementAreaSquareMeters,
+    constructionId: construction.id,
+  );
+
   final String id;
+  final String roomId;
   final String title;
   final ConstructionElementKind elementKind;
   final double areaSquareMeters;
   final String constructionId;
 
+  HouseEnvelopeElement copyWith({
+    String? id,
+    String? roomId,
+    String? title,
+    ConstructionElementKind? elementKind,
+    double? areaSquareMeters,
+    String? constructionId,
+  }) {
+    return HouseEnvelopeElement(
+      id: id ?? this.id,
+      roomId: roomId ?? this.roomId,
+      title: title ?? this.title,
+      elementKind: elementKind ?? this.elementKind,
+      areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
+      constructionId: constructionId ?? this.constructionId,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
+    'roomId': roomId,
     'title': title,
     'elementKind': elementKind.storageKey,
     'areaSquareMeters': areaSquareMeters,
@@ -199,39 +352,80 @@ class HouseModel {
   const HouseModel({
     required this.id,
     required this.title,
+    required this.rooms,
     required this.elements,
   });
 
-  factory HouseModel.fromJson(Map<String, dynamic> json) => HouseModel(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    elements: (json['elements'] as List<dynamic>)
-        .map((item) => HouseElement.fromJson(_asJsonMap(item)))
-        .toList(growable: false),
-  );
+  factory HouseModel.fromJson(Map<String, dynamic> json) {
+    final roomsJson = (json['rooms'] as List<dynamic>?) ?? const [];
+    final rooms = roomsJson
+        .map((item) => Room.fromJson(_asJsonMap(item)))
+        .toList(growable: false);
+    final elements = (json['elements'] as List<dynamic>)
+        .map((item) => HouseEnvelopeElement.fromJson(_asJsonMap(item)))
+        .toList(growable: false);
+    return HouseModel(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      rooms: rooms.isEmpty ? [Room.defaultRoom()] : rooms,
+      elements: elements.isEmpty && rooms.isEmpty
+          ? const []
+          : elements
+                .map(
+                  (item) => item.copyWith(
+                    roomId: rooms.isEmpty ? defaultRoomId : item.roomId,
+                  ),
+                )
+                .toList(growable: false),
+    );
+  }
 
   factory HouseModel.bootstrapFromConstructions(
     List<Construction> constructions,
   ) {
     return HouseModel(
       id: 'house-model',
-      title: 'Базовая схема дома',
+      title: 'Конструктор дома',
+      rooms: [Room.defaultRoom()],
       elements: constructions
-          .map(HouseElement.fromConstruction)
+          .map(
+            (construction) => HouseEnvelopeElement.fromConstruction(
+              construction,
+            ),
+          )
           .toList(growable: false),
     );
   }
 
   final String id;
   final String title;
-  final List<HouseElement> elements;
+  final List<Room> rooms;
+  final List<HouseEnvelopeElement> elements;
 
-  double get totalAreaSquareMeters =>
+  double get totalRoomAreaSquareMeters =>
+      rooms.fold(0, (sum, room) => sum + room.areaSquareMeters);
+
+  double get totalEnvelopeAreaSquareMeters =>
       elements.fold(0, (sum, element) => sum + element.areaSquareMeters);
+
+  HouseModel copyWith({
+    String? id,
+    String? title,
+    List<Room>? rooms,
+    List<HouseEnvelopeElement>? elements,
+  }) {
+    return HouseModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      rooms: rooms ?? this.rooms,
+      elements: elements ?? this.elements,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
+    'rooms': rooms.map((item) => item.toJson()).toList(growable: false),
     'elements': elements.map((item) => item.toJson()).toList(growable: false),
   };
 }
