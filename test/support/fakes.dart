@@ -1,6 +1,7 @@
 import 'package:smartcalc_mobile/src/core/models/catalog.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/models/report.dart';
+import 'package:smartcalc_mobile/src/core/models/versioning.dart';
 import 'package:smartcalc_mobile/src/core/services/interfaces.dart';
 
 const testCatalogSnapshot = CatalogSnapshot(
@@ -192,17 +193,30 @@ Construction buildWallConstruction({bool insulationEnabled = true}) {
   );
 }
 
+HouseModel buildHouseModel({List<Construction>? constructions}) {
+  final effectiveConstructions = constructions ?? [buildWallConstruction()];
+  return HouseModel.bootstrapFromConstructions(effectiveConstructions);
+}
+
 Project buildTestProject({
   String climatePointId = 'moscow',
   RoomPreset roomPreset = RoomPreset.livingRoom,
   Construction? construction,
+  HouseModel? houseModel,
+  String datasetVersion = currentDatasetVersion,
+  String? migratedFromDatasetVersion,
 }) {
+  final effectiveConstruction = construction ?? buildWallConstruction();
   return Project(
     id: 'demo',
     name: 'Demo project',
     climatePointId: climatePointId,
     roomPreset: roomPreset,
-    constructions: [construction ?? buildWallConstruction()],
+    houseModel:
+        houseModel ?? buildHouseModel(constructions: [effectiveConstruction]),
+    datasetVersion: datasetVersion,
+    migratedFromDatasetVersion: migratedFromDatasetVersion,
+    constructions: [effectiveConstruction],
   );
 }
 

@@ -23,41 +23,39 @@ class ReferenceCase {
   final ScreeningLevel expectedMoistureLevel;
 }
 
-const referenceCases = [
+final referenceCases = [
   ReferenceCase(
     name: 'moscow_safe_wall',
-    project: Project(
+    project: _buildProject(
       id: 'ref-safe-wall',
       name: 'Эталонная стена / Москва',
       climatePointId: 'moscow',
       roomPreset: RoomPreset.livingRoom,
-      constructions: [
-        Construction(
-          id: 'safe-wall',
-          title: 'Стена с паропроницаемым наружным слоем',
-          elementKind: ConstructionElementKind.wall,
-          layers: [
-            ConstructionLayer(
-              id: 'plaster',
-              materialId: 'gypsum_plaster',
-              kind: LayerKind.solid,
-              thicknessMm: 20,
-            ),
-            ConstructionLayer(
-              id: 'aac',
-              materialId: 'aac_d500',
-              kind: LayerKind.masonry,
-              thicknessMm: 375,
-            ),
-            ConstructionLayer(
-              id: 'wool_outer',
-              materialId: 'mineral_wool',
-              kind: LayerKind.frame,
-              thicknessMm: 50,
-            ),
-          ],
-        ),
-      ],
+      construction: Construction(
+        id: 'safe-wall',
+        title: 'Стена с паропроницаемым наружным слоем',
+        elementKind: ConstructionElementKind.wall,
+        layers: const [
+          ConstructionLayer(
+            id: 'plaster',
+            materialId: 'gypsum_plaster',
+            kind: LayerKind.solid,
+            thicknessMm: 20,
+          ),
+          ConstructionLayer(
+            id: 'aac',
+            materialId: 'aac_d500',
+            kind: LayerKind.masonry,
+            thicknessMm: 375,
+          ),
+          ConstructionLayer(
+            id: 'wool_outer',
+            materialId: 'mineral_wool',
+            kind: LayerKind.frame,
+            thicknessMm: 50,
+          ),
+        ],
+      ),
     ),
     expectedTotalResistance: 4.155714286,
     expectedRequiredResistance: 3.18419,
@@ -68,44 +66,42 @@ const referenceCases = [
   ),
   ReferenceCase(
     name: 'moscow_brick_faced_wall',
-    project: Project(
+    project: _buildProject(
       id: 'ref-brick-wall',
       name: 'Эталонная стена с облицовкой / Москва',
       climatePointId: 'moscow',
       roomPreset: RoomPreset.livingRoom,
-      constructions: [
-        Construction(
-          id: 'brick-faced-wall',
-          title: 'Стена с облицовочным кирпичом',
-          elementKind: ConstructionElementKind.wall,
-          layers: [
-            ConstructionLayer(
-              id: 'plaster',
-              materialId: 'gypsum_plaster',
-              kind: LayerKind.solid,
-              thicknessMm: 20,
-            ),
-            ConstructionLayer(
-              id: 'aac',
-              materialId: 'aac_d500',
-              kind: LayerKind.masonry,
-              thicknessMm: 375,
-            ),
-            ConstructionLayer(
-              id: 'wool',
-              materialId: 'mineral_wool',
-              kind: LayerKind.frame,
-              thicknessMm: 100,
-            ),
-            ConstructionLayer(
-              id: 'brick',
-              materialId: 'facing_brick',
-              kind: LayerKind.masonry,
-              thicknessMm: 120,
-            ),
-          ],
-        ),
-      ],
+      construction: Construction(
+        id: 'brick-faced-wall',
+        title: 'Стена с облицовочным кирпичом',
+        elementKind: ConstructionElementKind.wall,
+        layers: const [
+          ConstructionLayer(
+            id: 'plaster',
+            materialId: 'gypsum_plaster',
+            kind: LayerKind.solid,
+            thicknessMm: 20,
+          ),
+          ConstructionLayer(
+            id: 'aac',
+            materialId: 'aac_d500',
+            kind: LayerKind.masonry,
+            thicknessMm: 375,
+          ),
+          ConstructionLayer(
+            id: 'wool',
+            materialId: 'mineral_wool',
+            kind: LayerKind.frame,
+            thicknessMm: 100,
+          ),
+          ConstructionLayer(
+            id: 'brick',
+            materialId: 'facing_brick',
+            kind: LayerKind.masonry,
+            thicknessMm: 120,
+          ),
+        ],
+      ),
     ),
     expectedTotalResistance: 5.553862434,
     expectedRequiredResistance: 3.18419,
@@ -116,38 +112,36 @@ const referenceCases = [
   ),
   ReferenceCase(
     name: 'novosibirsk_attic_roof',
-    project: Project(
+    project: _buildProject(
       id: 'ref-attic-roof',
       name: 'Эталонная кровля / Новосибирск',
       climatePointId: 'novosibirsk',
       roomPreset: RoomPreset.attic,
-      constructions: [
-        Construction(
-          id: 'attic-roof',
-          title: 'Утеплённая кровля',
-          elementKind: ConstructionElementKind.roof,
-          layers: [
-            ConstructionLayer(
-              id: 'timber_inner',
-              materialId: 'pine_timber',
-              kind: LayerKind.frame,
-              thicknessMm: 40,
-            ),
-            ConstructionLayer(
-              id: 'wool_main',
-              materialId: 'mineral_wool',
-              kind: LayerKind.frame,
-              thicknessMm: 250,
-            ),
-            ConstructionLayer(
-              id: 'wool_outer',
-              materialId: 'mineral_wool',
-              kind: LayerKind.crossFrame,
-              thicknessMm: 40,
-            ),
-          ],
-        ),
-      ],
+      construction: Construction(
+        id: 'attic-roof',
+        title: 'Утеплённая кровля',
+        elementKind: ConstructionElementKind.roof,
+        layers: const [
+          ConstructionLayer(
+            id: 'timber_inner',
+            materialId: 'pine_timber',
+            kind: LayerKind.frame,
+            thicknessMm: 40,
+          ),
+          ConstructionLayer(
+            id: 'wool_main',
+            materialId: 'mineral_wool',
+            kind: LayerKind.frame,
+            thicknessMm: 250,
+          ),
+          ConstructionLayer(
+            id: 'wool_outer',
+            materialId: 'mineral_wool',
+            kind: LayerKind.crossFrame,
+            thicknessMm: 40,
+          ),
+        ],
+      ),
     ),
     expectedTotalResistance: 7.656666667,
     expectedRequiredResistance: 5.3025,
@@ -157,3 +151,20 @@ const referenceCases = [
     expectedMoistureLevel: ScreeningLevel.low,
   ),
 ];
+
+Project _buildProject({
+  required String id,
+  required String name,
+  required String climatePointId,
+  required RoomPreset roomPreset,
+  required Construction construction,
+}) {
+  return Project(
+    id: id,
+    name: name,
+    climatePointId: climatePointId,
+    roomPreset: roomPreset,
+    constructions: [construction],
+    houseModel: HouseModel.bootstrapFromConstructions([construction]),
+  );
+}

@@ -3,14 +3,17 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../models/project.dart';
+import '../models/versioning.dart';
 import '../storage/app_database.dart';
 import 'demo_project_seed.dart';
 import 'interfaces.dart';
+import 'project_migration_service.dart';
 
 class DriftProjectRepository implements ProjectRepository {
   DriftProjectRepository(this._database);
 
   final AppDatabase _database;
+  final ProjectMigrationService _migrationService = const ProjectMigrationService();
 
   @override
   Future<List<Project>> listProjects() async {
@@ -23,7 +26,11 @@ class DriftProjectRepository implements ProjectRepository {
       ]);
 
     final rows = await query.get();
-    return rows.map(_mapRowToProject).toList(growable: false);
+    final projects = <Project>[];
+    for (final row in rows) {
+      projects.add(await _mapRowToProject(row));
+    }
+    return projects;
   }
 
   @override
@@ -41,7 +48,13 @@ class DriftProjectRepository implements ProjectRepository {
   @override
   Future<void> saveProject(Project project) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    await _upsertProject(project, updatedAtEpochMs: now);
+  }
 
+  Future<void> _upsertProject(
+    Project project, {
+    required int updatedAtEpochMs,
+  }) async {
     await _database
         .into(_database.projectEntries)
         .insertOnConflictUpdate(
@@ -52,7 +65,13 @@ class DriftProjectRepository implements ProjectRepository {
             roomPreset: project.roomPreset.storageKey,
             payloadJson: jsonEncode(project.toJson()),
             projectFormatVersion: currentProjectFormatVersion,
-            updatedAtEpochMs: now,
+            datasetVersion: Value(
+              project.datasetVersion ?? legacyUnversionedDatasetVersion,
+            ),
+            migratedFromDatasetVersion: Value(
+              project.migratedFromDatasetVersion,
+            ),
+            updatedAtEpochMs: updatedAtEpochMs,
           ),
         );
   }
@@ -74,8 +93,16 @@ class DriftProjectRepository implements ProjectRepository {
     }
   }
 
-  Project _mapRowToProject(ProjectEntry row) {
+  Future<Project> _mapRowToProject(ProjectEntry row) async {
     final decoded = jsonDecode(row.payloadJson);
-    return Project.fromJson(Map<String, dynamic>.from(decoded as Map));
+    final project = Project.fromJson(Map<String, dynamic>.from(decoded as Map));
+    final migrated = _migrationService.migrate(project);
+    if (migrated.wasMigrated) {
+      await _upsertProject(
+        migrated.project,
+        updatedAtEpochMs: row.updatedAtEpochMs,
+      );
+    }
+    return migrated.project;
   }
 }

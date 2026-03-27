@@ -1,4 +1,5 @@
-const int currentProjectFormatVersion = 1;
+const int currentProjectFormatVersion = 2;
+const double defaultHouseElementAreaSquareMeters = 100.0;
 
 enum ConstructionElementKind { wall, roof, floor, ceiling }
 
@@ -153,6 +154,88 @@ class Construction {
   };
 }
 
+class HouseElement {
+  const HouseElement({
+    required this.id,
+    required this.title,
+    required this.elementKind,
+    required this.areaSquareMeters,
+    required this.constructionId,
+  });
+
+  factory HouseElement.fromJson(Map<String, dynamic> json) => HouseElement(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    elementKind: parseConstructionElementKind(json['elementKind'] as String),
+    areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
+    constructionId: json['constructionId'] as String,
+  );
+
+  factory HouseElement.fromConstruction(Construction construction) =>
+      HouseElement(
+        id: 'house-element-${construction.id}',
+        title: construction.title,
+        elementKind: construction.elementKind,
+        areaSquareMeters: defaultHouseElementAreaSquareMeters,
+        constructionId: construction.id,
+      );
+
+  final String id;
+  final String title;
+  final ConstructionElementKind elementKind;
+  final double areaSquareMeters;
+  final String constructionId;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'elementKind': elementKind.storageKey,
+    'areaSquareMeters': areaSquareMeters,
+    'constructionId': constructionId,
+  };
+}
+
+class HouseModel {
+  const HouseModel({
+    required this.id,
+    required this.title,
+    required this.elements,
+  });
+
+  factory HouseModel.fromJson(Map<String, dynamic> json) => HouseModel(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    elements: (json['elements'] as List<dynamic>)
+        .map((item) => HouseElement.fromJson(_asJsonMap(item)))
+        .toList(growable: false),
+  );
+
+  factory HouseModel.bootstrapFromConstructions(
+    List<Construction> constructions,
+  ) {
+    return HouseModel(
+      id: 'house-model',
+      title: 'Базовая схема дома',
+      elements: constructions
+          .map(HouseElement.fromConstruction)
+          .toList(growable: false),
+    );
+  }
+
+  final String id;
+  final String title;
+  final List<HouseElement> elements;
+
+  double get totalAreaSquareMeters =>
+      elements.fold(0, (sum, element) => sum + element.areaSquareMeters);
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'elements': elements.map((item) => item.toJson()).toList(growable: false),
+  };
+}
+
 class Project {
   const Project({
     required this.id,
@@ -160,6 +243,10 @@ class Project {
     required this.climatePointId,
     required this.roomPreset,
     required this.constructions,
+    required this.houseModel,
+    this.datasetVersion,
+    this.migratedFromDatasetVersion,
+    this.sourceProjectFormatVersion = currentProjectFormatVersion,
   });
 
   factory Project.fromJson(Map<String, dynamic> json) {
@@ -168,14 +255,23 @@ class Project {
       throw StateError('Unsupported projectFormatVersion: $formatVersion');
     }
 
+    final constructions = (json['constructions'] as List<dynamic>)
+        .map((item) => Construction.fromJson(_asJsonMap(item)))
+        .toList(growable: false);
+    final houseModelJson = json['houseModel'];
+
     return Project(
       id: json['id'] as String,
       name: json['name'] as String,
       climatePointId: json['climatePointId'] as String,
       roomPreset: parseRoomPreset(json['roomPreset'] as String),
-      constructions: (json['constructions'] as List<dynamic>)
-          .map((item) => Construction.fromJson(_asJsonMap(item)))
-          .toList(growable: false),
+      constructions: constructions,
+      houseModel: houseModelJson == null
+          ? HouseModel.bootstrapFromConstructions(constructions)
+          : HouseModel.fromJson(_asJsonMap(houseModelJson)),
+      datasetVersion: json['datasetVersion'] as String?,
+      migratedFromDatasetVersion: json['migratedFromDatasetVersion'] as String?,
+      sourceProjectFormatVersion: formatVersion,
     );
   }
 
@@ -184,6 +280,49 @@ class Project {
   final String climatePointId;
   final RoomPreset roomPreset;
   final List<Construction> constructions;
+  final HouseModel houseModel;
+  final String? datasetVersion;
+  final String? migratedFromDatasetVersion;
+  final int sourceProjectFormatVersion;
+
+  bool get hasDatasetMigration => migratedFromDatasetVersion != null;
+
+  String? get datasetMigrationLabel {
+    final migratedFrom = migratedFromDatasetVersion;
+    final datasetVersion = this.datasetVersion;
+    if (migratedFrom == null || datasetVersion == null) {
+      return null;
+    }
+    return 'Проект обновлен с версии $migratedFrom на $datasetVersion';
+  }
+
+  Project copyWith({
+    String? id,
+    String? name,
+    String? climatePointId,
+    RoomPreset? roomPreset,
+    List<Construction>? constructions,
+    HouseModel? houseModel,
+    String? datasetVersion,
+    String? migratedFromDatasetVersion,
+    int? sourceProjectFormatVersion,
+    bool clearMigratedFromDatasetVersion = false,
+  }) {
+    return Project(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      climatePointId: climatePointId ?? this.climatePointId,
+      roomPreset: roomPreset ?? this.roomPreset,
+      constructions: constructions ?? this.constructions,
+      houseModel: houseModel ?? this.houseModel,
+      datasetVersion: datasetVersion ?? this.datasetVersion,
+      migratedFromDatasetVersion: clearMigratedFromDatasetVersion
+          ? null
+          : migratedFromDatasetVersion ?? this.migratedFromDatasetVersion,
+      sourceProjectFormatVersion:
+          sourceProjectFormatVersion ?? this.sourceProjectFormatVersion,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'projectFormatVersion': currentProjectFormatVersion,
@@ -194,6 +333,9 @@ class Project {
     'constructions': constructions
         .map((item) => item.toJson())
         .toList(growable: false),
+    'houseModel': houseModel.toJson(),
+    'datasetVersion': datasetVersion,
+    'migratedFromDatasetVersion': migratedFromDatasetVersion,
   };
 }
 

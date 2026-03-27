@@ -169,6 +169,9 @@ class _ProjectSummary extends StatelessWidget {
                         Text('Климат: ${climate?.displayName ?? '—'}'),
                         Text('Помещение: ${project?.roomPreset.label ?? '—'}'),
                         Text('Конструкция: ${construction?.title ?? '—'}'),
+                        if (project?.datasetMigrationLabel
+                            case final migrationLabel?)
+                          Text(migrationLabel),
                         if (climate != null)
                           Text(
                             'Сезоны влагорежима: ${climate.moistureSeasons.map((item) => item.label).join(', ')}',

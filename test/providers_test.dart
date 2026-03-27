@@ -7,19 +7,19 @@ import 'support/fakes.dart';
 
 void main() {
   test('selectedProjectProvider follows selectedProjectIdProvider', () async {
+    final roofConstruction = Construction(
+      id: 'roof',
+      title: 'Кровля',
+      elementKind: ConstructionElementKind.roof,
+      layers: buildWallConstruction().layers,
+    );
     final secondProject = Project(
       id: 'roof-project',
       name: 'Новосибирск / кровля',
       climatePointId: 'novosibirsk',
       roomPreset: RoomPreset.attic,
-      constructions: [
-        Construction(
-          id: 'roof',
-          title: 'Кровля',
-          elementKind: ConstructionElementKind.roof,
-          layers: buildWallConstruction().layers,
-        ),
-      ],
+      houseModel: HouseModel.bootstrapFromConstructions([roofConstruction]),
+      constructions: [roofConstruction],
     );
 
     final container = ProviderContainer(

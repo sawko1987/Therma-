@@ -1,6 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:drift/drift.dart'
+    show OpeningDetails, QueryExecutor, QueryExecutorUser, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
+import 'package:smartcalc_mobile/src/core/models/versioning.dart';
 import 'package:smartcalc_mobile/src/core/services/drift_project_repository.dart';
 import 'package:smartcalc_mobile/src/core/storage/app_database.dart';
 
@@ -44,6 +50,60 @@ void main() {
       restored.constructions.single.layers.last.kind,
       source.constructions.single.layers.last.kind,
     );
+    expect(restored.houseModel.elements, hasLength(1));
+    expect(
+      restored.houseModel.elements.single.constructionId,
+      source.constructions.single.id,
+    );
+    expect(restored.datasetVersion, currentDatasetVersion);
+    expect(restored.migratedFromDatasetVersion, isNull);
+  });
+
+  test('project json accepts legacy payload without dataset version', () {
+    final legacyPayload = {
+      'projectFormatVersion': 1,
+      'id': 'legacy',
+      'name': 'Legacy project',
+      'climatePointId': 'moscow',
+      'roomPreset': 'livingRoom',
+      'constructions': [
+        {
+          'id': 'wall',
+          'title': 'Наружная стена',
+          'elementKind': 'wall',
+          'layers': [
+            {
+              'id': 'aac',
+              'materialId': 'aac_d500',
+              'kind': 'masonry',
+              'thicknessMm': 375,
+              'enabled': true,
+            },
+          ],
+        },
+      ],
+    };
+
+    final restored = Project.fromJson(legacyPayload);
+
+    expect(restored.datasetVersion, isNull);
+    expect(restored.migratedFromDatasetVersion, isNull);
+    expect(restored.houseModel.elements, hasLength(1));
+    expect(restored.sourceProjectFormatVersion, 1);
+  });
+
+  test('project json rejects future project format version', () {
+    expect(
+      () => Project.fromJson({
+        'projectFormatVersion': currentProjectFormatVersion + 1,
+        'id': 'future',
+        'name': 'Future project',
+        'climatePointId': 'moscow',
+        'roomPreset': 'livingRoom',
+        'constructions': const [],
+      }),
+      throwsStateError,
+    );
   });
 
   test('seedDemoProjectIfEmpty inserts demo project only once', () async {
@@ -56,6 +116,8 @@ void main() {
     expect(firstPass, hasLength(1));
     expect(secondPass, hasLength(1));
     expect(secondPass.single.id, 'demo-project');
+    expect(secondPass.single.datasetVersion, currentDatasetVersion);
+    expect(secondPass.single.houseModel.elements, hasLength(1));
   });
 
   test(
@@ -68,6 +130,7 @@ void main() {
         climatePointId: original.climatePointId,
         roomPreset: original.roomPreset,
         constructions: original.constructions,
+        houseModel: original.houseModel,
       );
 
       await repository.saveProject(original);
@@ -79,6 +142,7 @@ void main() {
 
       expect(projects, hasLength(1));
       expect(stored?.name, 'Updated demo project');
+      expect(stored?.datasetVersion, currentDatasetVersion);
     },
   );
 
@@ -100,6 +164,7 @@ void main() {
       climatePointId: second.climatePointId,
       roomPreset: second.roomPreset,
       constructions: second.constructions,
+      houseModel: second.houseModel,
     );
 
     await repository.saveProject(first);
@@ -110,4 +175,160 @@ void main() {
 
     expect(projects.map((item) => item.id).toList(), ['roof-project', 'demo']);
   });
+
+  test(
+    'getProject auto-migrates legacy dataset version and persists it',
+    () async {
+      final legacyProject = buildTestProject(datasetVersion: 'seed-2025-12-01');
+
+      await database
+          .into(database.projectEntries)
+          .insert(
+            ProjectEntriesCompanion.insert(
+              id: legacyProject.id,
+              name: legacyProject.name,
+              climatePointId: legacyProject.climatePointId,
+              roomPreset: legacyProject.roomPreset.storageKey,
+              payloadJson: jsonEncode(legacyProject.toJson()),
+              projectFormatVersion: currentProjectFormatVersion,
+              datasetVersion: Value(legacyProject.datasetVersion!),
+              updatedAtEpochMs: 123,
+            ),
+          );
+
+      final migrated = await repository.getProject(legacyProject.id);
+      final storedRow = await (database.select(
+        database.projectEntries,
+      )..where((table) => table.id.equals(legacyProject.id))).getSingle();
+
+      expect(migrated?.datasetVersion, currentDatasetVersion);
+      expect(migrated?.migratedFromDatasetVersion, 'seed-2025-12-01');
+      expect(migrated?.houseModel.elements, hasLength(1));
+      expect(storedRow.datasetVersion, currentDatasetVersion);
+      expect(storedRow.migratedFromDatasetVersion, 'seed-2025-12-01');
+      expect(storedRow.updatedAtEpochMs, 123);
+    },
+  );
+
+  test(
+    'listProjects auto-migrates legacy payload without dataset version and house model',
+    () async {
+      final legacyProject = buildTestProject();
+      final legacyPayload = Map<String, dynamic>.from(legacyProject.toJson())
+        ..['projectFormatVersion'] = 1
+        ..remove('houseModel')
+        ..remove('datasetVersion')
+        ..remove('migratedFromDatasetVersion');
+
+      await database
+          .into(database.projectEntries)
+          .insert(
+            ProjectEntriesCompanion.insert(
+              id: legacyProject.id,
+              name: legacyProject.name,
+              climatePointId: legacyProject.climatePointId,
+              roomPreset: legacyProject.roomPreset.storageKey,
+              payloadJson: jsonEncode(legacyPayload),
+              projectFormatVersion: 1,
+              datasetVersion: const Value(legacyUnversionedDatasetVersion),
+              updatedAtEpochMs: 456,
+            ),
+          );
+
+      final projects = await repository.listProjects();
+
+      expect(projects.single.datasetVersion, currentDatasetVersion);
+      expect(
+        projects.single.migratedFromDatasetVersion,
+        legacyUnversionedDatasetVersion,
+      );
+      expect(projects.single.houseModel.elements, hasLength(1));
+      expect(
+        projects.single.sourceProjectFormatVersion,
+        currentProjectFormatVersion,
+      );
+    },
+  );
+
+  test('database migration from schema v1 preserves legacy rows', () async {
+    final tempDir = await Directory.systemTemp.createTemp('therma_db_test');
+    addTearDown(() async {
+      await tempDir.delete(recursive: true);
+    });
+
+    final dbFile = File('${tempDir.path}/app.sqlite');
+    final legacyProject = buildTestProject();
+    final legacyPayload = Map<String, dynamic>.from(legacyProject.toJson())
+      ..['projectFormatVersion'] = 1
+      ..remove('houseModel')
+      ..remove('datasetVersion')
+      ..remove('migratedFromDatasetVersion');
+
+    final legacyDatabase = NativeDatabase(dbFile);
+    await legacyDatabase.ensureOpen(const _NoopExecutorUser());
+    await legacyDatabase.runCustom(
+      'CREATE TABLE project_entries ('
+      'id TEXT NOT NULL PRIMARY KEY, '
+      'name TEXT NOT NULL, '
+      'climate_point_id TEXT NOT NULL, '
+      'room_preset TEXT NOT NULL, '
+      'payload_json TEXT NOT NULL, '
+      'project_format_version INTEGER NOT NULL, '
+      'updated_at_epoch_ms INTEGER NOT NULL'
+      ')',
+      const [],
+    );
+    await legacyDatabase.runCustom(
+      'INSERT INTO project_entries '
+      '(id, name, climate_point_id, room_preset, payload_json, '
+      'project_format_version, updated_at_epoch_ms) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        legacyProject.id,
+        legacyProject.name,
+        legacyProject.climatePointId,
+        legacyProject.roomPreset.storageKey,
+        jsonEncode(legacyPayload),
+        1,
+        789,
+      ],
+    );
+    await legacyDatabase.close();
+
+    final migratedDatabase = AppDatabase.forTesting(NativeDatabase(dbFile));
+    addTearDown(() async {
+      await migratedDatabase.close();
+    });
+    final migratedRepository = DriftProjectRepository(migratedDatabase);
+
+    final projects = await migratedRepository.listProjects();
+    final storedRow = await migratedDatabase
+        .select(migratedDatabase.projectEntries)
+        .getSingle();
+
+    expect(projects.single.datasetVersion, currentDatasetVersion);
+    expect(
+      projects.single.migratedFromDatasetVersion,
+      legacyUnversionedDatasetVersion,
+    );
+    expect(projects.single.houseModel.elements, hasLength(1));
+    expect(storedRow.datasetVersion, currentDatasetVersion);
+    expect(
+      storedRow.migratedFromDatasetVersion,
+      legacyUnversionedDatasetVersion,
+    );
+  });
+}
+
+class _NoopExecutorUser implements QueryExecutorUser {
+  const _NoopExecutorUser();
+
+  @override
+  int get schemaVersion => 1;
+
+  @override
+  Future<void> beforeOpen(
+    QueryExecutor executor,
+    OpeningDetails details,
+  ) async {}
 }

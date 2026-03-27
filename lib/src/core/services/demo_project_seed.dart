@@ -1,10 +1,25 @@
 import '../models/project.dart';
+import '../models/versioning.dart';
 
 const Project demoProject = Project(
   id: 'demo-project',
   name: 'Дом 140 м² / стена',
   climatePointId: 'moscow',
   roomPreset: RoomPreset.livingRoom,
+  datasetVersion: currentDatasetVersion,
+  houseModel: HouseModel(
+    id: 'house-model',
+    title: 'Базовая схема дома',
+    elements: [
+      HouseElement(
+        id: 'house-element-outer-wall',
+        title: 'Наружная стена',
+        elementKind: ConstructionElementKind.wall,
+        areaSquareMeters: 140,
+        constructionId: 'outer-wall',
+      ),
+    ],
+  ),
   constructions: [
     Construction(
       id: 'outer-wall',

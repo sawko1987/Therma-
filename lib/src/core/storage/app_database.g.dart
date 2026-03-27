@@ -70,6 +70,29 @@ class $ProjectEntriesTable extends ProjectEntries
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _datasetVersionMeta = const VerificationMeta(
+    'datasetVersion',
+  );
+  @override
+  late final GeneratedColumn<String> datasetVersion = GeneratedColumn<String>(
+    'dataset_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(legacyUnversionedDatasetVersion),
+  );
+  static const VerificationMeta _migratedFromDatasetVersionMeta =
+      const VerificationMeta('migratedFromDatasetVersion');
+  @override
+  late final GeneratedColumn<String> migratedFromDatasetVersion =
+      GeneratedColumn<String>(
+        'migrated_from_dataset_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _updatedAtEpochMsMeta = const VerificationMeta(
     'updatedAtEpochMs',
   );
@@ -89,6 +112,8 @@ class $ProjectEntriesTable extends ProjectEntries
     roomPreset,
     payloadJson,
     projectFormatVersion,
+    datasetVersion,
+    migratedFromDatasetVersion,
     updatedAtEpochMs,
   ];
   @override
@@ -157,6 +182,24 @@ class $ProjectEntriesTable extends ProjectEntries
     } else if (isInserting) {
       context.missing(_projectFormatVersionMeta);
     }
+    if (data.containsKey('dataset_version')) {
+      context.handle(
+        _datasetVersionMeta,
+        datasetVersion.isAcceptableOrUnknown(
+          data['dataset_version']!,
+          _datasetVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('migrated_from_dataset_version')) {
+      context.handle(
+        _migratedFromDatasetVersionMeta,
+        migratedFromDatasetVersion.isAcceptableOrUnknown(
+          data['migrated_from_dataset_version']!,
+          _migratedFromDatasetVersionMeta,
+        ),
+      );
+    }
     if (data.containsKey('updated_at_epoch_ms')) {
       context.handle(
         _updatedAtEpochMsMeta,
@@ -201,6 +244,14 @@ class $ProjectEntriesTable extends ProjectEntries
         DriftSqlType.int,
         data['${effectivePrefix}project_format_version'],
       )!,
+      datasetVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dataset_version'],
+      )!,
+      migratedFromDatasetVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}migrated_from_dataset_version'],
+      ),
       updatedAtEpochMs: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}updated_at_epoch_ms'],
@@ -221,6 +272,8 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
   final String roomPreset;
   final String payloadJson;
   final int projectFormatVersion;
+  final String datasetVersion;
+  final String? migratedFromDatasetVersion;
   final int updatedAtEpochMs;
   const ProjectEntry({
     required this.id,
@@ -229,6 +282,8 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
     required this.roomPreset,
     required this.payloadJson,
     required this.projectFormatVersion,
+    required this.datasetVersion,
+    this.migratedFromDatasetVersion,
     required this.updatedAtEpochMs,
   });
   @override
@@ -240,6 +295,12 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
     map['room_preset'] = Variable<String>(roomPreset);
     map['payload_json'] = Variable<String>(payloadJson);
     map['project_format_version'] = Variable<int>(projectFormatVersion);
+    map['dataset_version'] = Variable<String>(datasetVersion);
+    if (!nullToAbsent || migratedFromDatasetVersion != null) {
+      map['migrated_from_dataset_version'] = Variable<String>(
+        migratedFromDatasetVersion,
+      );
+    }
     map['updated_at_epoch_ms'] = Variable<int>(updatedAtEpochMs);
     return map;
   }
@@ -252,6 +313,11 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
       roomPreset: Value(roomPreset),
       payloadJson: Value(payloadJson),
       projectFormatVersion: Value(projectFormatVersion),
+      datasetVersion: Value(datasetVersion),
+      migratedFromDatasetVersion:
+          migratedFromDatasetVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(migratedFromDatasetVersion),
       updatedAtEpochMs: Value(updatedAtEpochMs),
     );
   }
@@ -270,6 +336,10 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
       projectFormatVersion: serializer.fromJson<int>(
         json['projectFormatVersion'],
       ),
+      datasetVersion: serializer.fromJson<String>(json['datasetVersion']),
+      migratedFromDatasetVersion: serializer.fromJson<String?>(
+        json['migratedFromDatasetVersion'],
+      ),
       updatedAtEpochMs: serializer.fromJson<int>(json['updatedAtEpochMs']),
     );
   }
@@ -283,6 +353,10 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
       'roomPreset': serializer.toJson<String>(roomPreset),
       'payloadJson': serializer.toJson<String>(payloadJson),
       'projectFormatVersion': serializer.toJson<int>(projectFormatVersion),
+      'datasetVersion': serializer.toJson<String>(datasetVersion),
+      'migratedFromDatasetVersion': serializer.toJson<String?>(
+        migratedFromDatasetVersion,
+      ),
       'updatedAtEpochMs': serializer.toJson<int>(updatedAtEpochMs),
     };
   }
@@ -294,6 +368,8 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
     String? roomPreset,
     String? payloadJson,
     int? projectFormatVersion,
+    String? datasetVersion,
+    Value<String?> migratedFromDatasetVersion = const Value.absent(),
     int? updatedAtEpochMs,
   }) => ProjectEntry(
     id: id ?? this.id,
@@ -302,6 +378,10 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
     roomPreset: roomPreset ?? this.roomPreset,
     payloadJson: payloadJson ?? this.payloadJson,
     projectFormatVersion: projectFormatVersion ?? this.projectFormatVersion,
+    datasetVersion: datasetVersion ?? this.datasetVersion,
+    migratedFromDatasetVersion: migratedFromDatasetVersion.present
+        ? migratedFromDatasetVersion.value
+        : this.migratedFromDatasetVersion,
     updatedAtEpochMs: updatedAtEpochMs ?? this.updatedAtEpochMs,
   );
   ProjectEntry copyWithCompanion(ProjectEntriesCompanion data) {
@@ -320,6 +400,12 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
       projectFormatVersion: data.projectFormatVersion.present
           ? data.projectFormatVersion.value
           : this.projectFormatVersion,
+      datasetVersion: data.datasetVersion.present
+          ? data.datasetVersion.value
+          : this.datasetVersion,
+      migratedFromDatasetVersion: data.migratedFromDatasetVersion.present
+          ? data.migratedFromDatasetVersion.value
+          : this.migratedFromDatasetVersion,
       updatedAtEpochMs: data.updatedAtEpochMs.present
           ? data.updatedAtEpochMs.value
           : this.updatedAtEpochMs,
@@ -335,6 +421,8 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
           ..write('roomPreset: $roomPreset, ')
           ..write('payloadJson: $payloadJson, ')
           ..write('projectFormatVersion: $projectFormatVersion, ')
+          ..write('datasetVersion: $datasetVersion, ')
+          ..write('migratedFromDatasetVersion: $migratedFromDatasetVersion, ')
           ..write('updatedAtEpochMs: $updatedAtEpochMs')
           ..write(')'))
         .toString();
@@ -348,6 +436,8 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
     roomPreset,
     payloadJson,
     projectFormatVersion,
+    datasetVersion,
+    migratedFromDatasetVersion,
     updatedAtEpochMs,
   );
   @override
@@ -360,6 +450,8 @@ class ProjectEntry extends DataClass implements Insertable<ProjectEntry> {
           other.roomPreset == this.roomPreset &&
           other.payloadJson == this.payloadJson &&
           other.projectFormatVersion == this.projectFormatVersion &&
+          other.datasetVersion == this.datasetVersion &&
+          other.migratedFromDatasetVersion == this.migratedFromDatasetVersion &&
           other.updatedAtEpochMs == this.updatedAtEpochMs);
 }
 
@@ -370,6 +462,8 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
   final Value<String> roomPreset;
   final Value<String> payloadJson;
   final Value<int> projectFormatVersion;
+  final Value<String> datasetVersion;
+  final Value<String?> migratedFromDatasetVersion;
   final Value<int> updatedAtEpochMs;
   final Value<int> rowid;
   const ProjectEntriesCompanion({
@@ -379,6 +473,8 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
     this.roomPreset = const Value.absent(),
     this.payloadJson = const Value.absent(),
     this.projectFormatVersion = const Value.absent(),
+    this.datasetVersion = const Value.absent(),
+    this.migratedFromDatasetVersion = const Value.absent(),
     this.updatedAtEpochMs = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -389,6 +485,8 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
     required String roomPreset,
     required String payloadJson,
     required int projectFormatVersion,
+    this.datasetVersion = const Value.absent(),
+    this.migratedFromDatasetVersion = const Value.absent(),
     required int updatedAtEpochMs,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -405,6 +503,8 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
     Expression<String>? roomPreset,
     Expression<String>? payloadJson,
     Expression<int>? projectFormatVersion,
+    Expression<String>? datasetVersion,
+    Expression<String>? migratedFromDatasetVersion,
     Expression<int>? updatedAtEpochMs,
     Expression<int>? rowid,
   }) {
@@ -416,6 +516,9 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
       if (payloadJson != null) 'payload_json': payloadJson,
       if (projectFormatVersion != null)
         'project_format_version': projectFormatVersion,
+      if (datasetVersion != null) 'dataset_version': datasetVersion,
+      if (migratedFromDatasetVersion != null)
+        'migrated_from_dataset_version': migratedFromDatasetVersion,
       if (updatedAtEpochMs != null) 'updated_at_epoch_ms': updatedAtEpochMs,
       if (rowid != null) 'rowid': rowid,
     });
@@ -428,6 +531,8 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
     Value<String>? roomPreset,
     Value<String>? payloadJson,
     Value<int>? projectFormatVersion,
+    Value<String>? datasetVersion,
+    Value<String?>? migratedFromDatasetVersion,
     Value<int>? updatedAtEpochMs,
     Value<int>? rowid,
   }) {
@@ -438,6 +543,9 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
       roomPreset: roomPreset ?? this.roomPreset,
       payloadJson: payloadJson ?? this.payloadJson,
       projectFormatVersion: projectFormatVersion ?? this.projectFormatVersion,
+      datasetVersion: datasetVersion ?? this.datasetVersion,
+      migratedFromDatasetVersion:
+          migratedFromDatasetVersion ?? this.migratedFromDatasetVersion,
       updatedAtEpochMs: updatedAtEpochMs ?? this.updatedAtEpochMs,
       rowid: rowid ?? this.rowid,
     );
@@ -464,6 +572,14 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
     if (projectFormatVersion.present) {
       map['project_format_version'] = Variable<int>(projectFormatVersion.value);
     }
+    if (datasetVersion.present) {
+      map['dataset_version'] = Variable<String>(datasetVersion.value);
+    }
+    if (migratedFromDatasetVersion.present) {
+      map['migrated_from_dataset_version'] = Variable<String>(
+        migratedFromDatasetVersion.value,
+      );
+    }
     if (updatedAtEpochMs.present) {
       map['updated_at_epoch_ms'] = Variable<int>(updatedAtEpochMs.value);
     }
@@ -482,6 +598,8 @@ class ProjectEntriesCompanion extends UpdateCompanion<ProjectEntry> {
           ..write('roomPreset: $roomPreset, ')
           ..write('payloadJson: $payloadJson, ')
           ..write('projectFormatVersion: $projectFormatVersion, ')
+          ..write('datasetVersion: $datasetVersion, ')
+          ..write('migratedFromDatasetVersion: $migratedFromDatasetVersion, ')
           ..write('updatedAtEpochMs: $updatedAtEpochMs, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -508,6 +626,8 @@ typedef $$ProjectEntriesTableCreateCompanionBuilder =
       required String roomPreset,
       required String payloadJson,
       required int projectFormatVersion,
+      Value<String> datasetVersion,
+      Value<String?> migratedFromDatasetVersion,
       required int updatedAtEpochMs,
       Value<int> rowid,
     });
@@ -519,6 +639,8 @@ typedef $$ProjectEntriesTableUpdateCompanionBuilder =
       Value<String> roomPreset,
       Value<String> payloadJson,
       Value<int> projectFormatVersion,
+      Value<String> datasetVersion,
+      Value<String?> migratedFromDatasetVersion,
       Value<int> updatedAtEpochMs,
       Value<int> rowid,
     });
@@ -559,6 +681,16 @@ class $$ProjectEntriesTableFilterComposer
 
   ColumnFilters<int> get projectFormatVersion => $composableBuilder(
     column: $table.projectFormatVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get datasetVersion => $composableBuilder(
+    column: $table.datasetVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get migratedFromDatasetVersion => $composableBuilder(
+    column: $table.migratedFromDatasetVersion,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -607,6 +739,16 @@ class $$ProjectEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get datasetVersion => $composableBuilder(
+    column: $table.datasetVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get migratedFromDatasetVersion => $composableBuilder(
+    column: $table.migratedFromDatasetVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get updatedAtEpochMs => $composableBuilder(
     column: $table.updatedAtEpochMs,
     builder: (column) => ColumnOrderings(column),
@@ -645,6 +787,16 @@ class $$ProjectEntriesTableAnnotationComposer
 
   GeneratedColumn<int> get projectFormatVersion => $composableBuilder(
     column: $table.projectFormatVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get datasetVersion => $composableBuilder(
+    column: $table.datasetVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get migratedFromDatasetVersion => $composableBuilder(
+    column: $table.migratedFromDatasetVersion,
     builder: (column) => column,
   );
 
@@ -693,6 +845,9 @@ class $$ProjectEntriesTableTableManager
                 Value<String> roomPreset = const Value.absent(),
                 Value<String> payloadJson = const Value.absent(),
                 Value<int> projectFormatVersion = const Value.absent(),
+                Value<String> datasetVersion = const Value.absent(),
+                Value<String?> migratedFromDatasetVersion =
+                    const Value.absent(),
                 Value<int> updatedAtEpochMs = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProjectEntriesCompanion(
@@ -702,6 +857,8 @@ class $$ProjectEntriesTableTableManager
                 roomPreset: roomPreset,
                 payloadJson: payloadJson,
                 projectFormatVersion: projectFormatVersion,
+                datasetVersion: datasetVersion,
+                migratedFromDatasetVersion: migratedFromDatasetVersion,
                 updatedAtEpochMs: updatedAtEpochMs,
                 rowid: rowid,
               ),
@@ -713,6 +870,9 @@ class $$ProjectEntriesTableTableManager
                 required String roomPreset,
                 required String payloadJson,
                 required int projectFormatVersion,
+                Value<String> datasetVersion = const Value.absent(),
+                Value<String?> migratedFromDatasetVersion =
+                    const Value.absent(),
                 required int updatedAtEpochMs,
                 Value<int> rowid = const Value.absent(),
               }) => ProjectEntriesCompanion.insert(
@@ -722,6 +882,8 @@ class $$ProjectEntriesTableTableManager
                 roomPreset: roomPreset,
                 payloadJson: payloadJson,
                 projectFormatVersion: projectFormatVersion,
+                datasetVersion: datasetVersion,
+                migratedFromDatasetVersion: migratedFromDatasetVersion,
                 updatedAtEpochMs: updatedAtEpochMs,
                 rowid: rowid,
               ),

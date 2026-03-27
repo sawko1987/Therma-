@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import '../models/catalog.dart';
+import '../models/versioning.dart';
 import 'interfaces.dart';
 
 class AssetCatalogRepository implements CatalogRepository {
@@ -42,7 +43,7 @@ class AssetCatalogRepository implements CatalogRepository {
       materials: materials,
       norms: norms,
       moistureRules: moistureRules,
-      datasetVersion: 'seed-2026-03-27-moisture-v2',
+      datasetVersion: currentDatasetVersion,
     );
   }
 }

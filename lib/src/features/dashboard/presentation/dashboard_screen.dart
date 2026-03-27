@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
+import '../../house_scheme/presentation/house_scheme_screen.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -39,6 +40,13 @@ class DashboardScreen extends ConsumerWidget {
           _CatalogOverview(catalogAsync: catalogAsync),
           const SizedBox(height: 16),
           _RoadmapCard(
+            onOpenHouseScheme: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const HouseSchemeScreen(),
+                ),
+              );
+            },
             onOpenPreview: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -86,7 +94,7 @@ class _HeroCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Текущий каркас уже содержит доменные модели, локальные каталоги, нормативный экран теплозащиты и сезонный расчёт влагорежима. Следующий крупный шаг после стабилизации расчётного ядра — хранение проектов и отчёты.',
+              'Текущий каркас уже содержит доменные модели, локальные каталоги, нормативный экран теплозащиты, сезонный расчёт влагорежима, локальное хранение проектов, PDF-отчёт и базовую схему дома для Phase 2.',
             ),
             const SizedBox(height: 18),
             projectAsync.when(
@@ -96,18 +104,32 @@ class _HeroCard extends StatelessWidget {
                   color: const Color(0xFFEEF5F3),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.home_work_outlined, size: 28),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        project == null
-                            ? 'Сохранённый проект пока не загружен'
-                            : 'Активный проект: ${project.name}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.home_work_outlined, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            project == null
+                                ? 'Сохранённый проект пока не загружен'
+                                : 'Активный проект: ${project.name}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
                     ),
+                    if (project?.datasetMigrationLabel
+                        case final migrationLabel?)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          migrationLabel,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -185,8 +207,14 @@ class _ProjectListCard extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
-                        '${project.roomPreset.label} • ${project.constructions.length} конструкция(й)',
+                        [
+                          '${project.roomPreset.label} • ${project.constructions.length} конструкция(й)',
+                          if (project.datasetMigrationLabel
+                              case final migrationLabel?)
+                            migrationLabel,
+                        ].join('\n'),
                       ),
+                      isThreeLine: project.hasDatasetMigration,
                       trailing: Icon(
                         isSelected
                             ? Icons.radio_button_checked
@@ -258,8 +286,12 @@ class _CatalogOverview extends StatelessWidget {
 }
 
 class _RoadmapCard extends StatelessWidget {
-  const _RoadmapCard({required this.onOpenPreview});
+  const _RoadmapCard({
+    required this.onOpenHouseScheme,
+    required this.onOpenPreview,
+  });
 
+  final VoidCallback onOpenHouseScheme;
   final VoidCallback onOpenPreview;
 
   @override
@@ -278,9 +310,15 @@ class _RoadmapCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Открывается экран thermocalc с расчётом теплозащиты v1 и сезонным влагорежимом: сопротивление теплопередаче, температурный профиль, парциальное давление против насыщения, послойное паросопротивление, сечение конструкции и ссылки на применённые нормы.',
+              'Открываются экран thermocalc с расчётом теплозащиты v1 и базовая схема дома из Phase 2: семантические элементы, площади и привязка к конструкциям проекта.',
             ),
             const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: onOpenHouseScheme,
+              icon: const Icon(Icons.home_work_outlined),
+              label: const Text('Открыть схему дома'),
+            ),
+            const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: onOpenPreview,
               icon: const Icon(Icons.analytics_outlined),
