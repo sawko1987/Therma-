@@ -35,4 +35,59 @@ void main() {
     expect(find.text('Применённые нормы'), findsOneWidget);
     expect(find.text('СП 50.13330.2012'), findsAtLeastNWidgets(1));
   });
+  testWidgets('thermocalc screen exports pdf and shows success message', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+          reportServiceProvider.overrideWithValue(FakeReportService()),
+          reportFileStoreProvider.overrideWithValue(FakeReportFileStore()),
+        ],
+        child: const MaterialApp(home: ThermocalcScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Экспорт PDF'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('PDF сохранен:'), findsOneWidget);
+    expect(find.textContaining('thermocalc_demo.pdf'), findsOneWidget);
+  });
+
+  testWidgets('thermocalc screen shows export failure message', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+          reportServiceProvider.overrideWithValue(
+            FakeReportService(error: StateError('boom')),
+          ),
+          reportFileStoreProvider.overrideWithValue(FakeReportFileStore()),
+        ],
+        child: const MaterialApp(home: ThermocalcScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Экспорт PDF'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Не удалось экспортировать PDF'),
+      findsOneWidget,
+    );
+  });
 }

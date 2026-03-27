@@ -11,12 +11,38 @@ import 'widgets/section_painter.dart';
 class ThermocalcScreen extends ConsumerWidget {
   const ThermocalcScreen({super.key});
 
+  Future<void> _handleExport(BuildContext context, WidgetRef ref) async {
+    try {
+      final savedReport = await ref
+          .read(reportExportControllerProvider.notifier)
+          .exportCurrentCalculation();
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'PDF сохранен: ${savedReport.fileName}\n${savedReport.filePath}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось экспортировать PDF: $error')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectAsync = ref.watch(selectedProjectProvider);
     final constructionAsync = ref.watch(selectedConstructionProvider);
     final calculationAsync = ref.watch(calculationResultProvider);
     final catalogAsync = ref.watch(catalogSnapshotProvider);
+    final reportExportAsync = ref.watch(reportExportControllerProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -24,6 +50,21 @@ class ThermocalcScreen extends ConsumerWidget {
           'Thermocalc',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
+        actions: [
+          IconButton(
+            onPressed: reportExportAsync.isLoading
+                ? null
+                : () => _handleExport(context, ref),
+            tooltip: 'Экспорт PDF',
+            icon: reportExportAsync.isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),

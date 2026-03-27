@@ -1,6 +1,7 @@
 import '../models/calculation.dart';
 import '../models/catalog.dart';
 import '../models/project.dart';
+import '../models/report.dart';
 
 abstract interface class CatalogRepository {
   Future<CatalogSnapshot> loadSnapshot();
@@ -21,6 +22,19 @@ abstract interface class ThermalCalculationEngine {
   });
 }
 
+abstract interface class ReportContentBuilder {
+  ReportContent buildContent({
+    required CatalogSnapshot catalog,
+    required Project project,
+    required Construction construction,
+    required CalculationResult calculation,
+  });
+}
+
 abstract interface class ReportService {
-  Future<String> buildReport(Project project);
+  Future<ReportDocument> buildReport({required ReportContent content});
+}
+
+abstract interface class ReportFileStore {
+  Future<SavedReport> saveReport(ReportDocument document);
 }

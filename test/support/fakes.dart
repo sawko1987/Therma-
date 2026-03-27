@@ -1,5 +1,6 @@
 import 'package:smartcalc_mobile/src/core/models/catalog.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
+import 'package:smartcalc_mobile/src/core/models/report.dart';
 import 'package:smartcalc_mobile/src/core/services/interfaces.dart';
 
 const testCatalogSnapshot = CatalogSnapshot(
@@ -244,5 +245,47 @@ class FakeProjectRepository implements ProjectRepository {
     if (_projects.isEmpty) {
       _projects.add(buildTestProject());
     }
+  }
+}
+
+class FakeReportService implements ReportService {
+  FakeReportService({
+    this.document = const ReportDocument(
+      fileName: 'thermocalc_demo.pdf',
+      bytes: [1, 2, 3, 4],
+    ),
+    this.error,
+  });
+
+  final ReportDocument document;
+  final Object? error;
+
+  @override
+  Future<ReportDocument> buildReport({required ReportContent content}) async {
+    if (error != null) {
+      throw error!;
+    }
+    return document;
+  }
+}
+
+class FakeReportFileStore implements ReportFileStore {
+  FakeReportFileStore({
+    this.savedReport = const SavedReport(
+      fileName: 'thermocalc_demo.pdf',
+      filePath: '/tmp/thermocalc_demo.pdf',
+    ),
+    this.error,
+  });
+
+  final SavedReport savedReport;
+  final Object? error;
+
+  @override
+  Future<SavedReport> saveReport(ReportDocument document) async {
+    if (error != null) {
+      throw error!;
+    }
+    return savedReport;
   }
 }
