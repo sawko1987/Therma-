@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
-import '../../thermocalc/presentation/thermocalc_preview_screen.dart';
+import '../../thermocalc/presentation/thermocalc_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -32,7 +32,7 @@ class DashboardScreen extends ConsumerWidget {
             onOpenPreview: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const ThermocalcPreviewScreen(),
+                  builder: (_) => const ThermocalcScreen(),
                 ),
               );
             },
@@ -76,7 +76,7 @@ class _HeroCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Текущий каркас уже содержит доменные модели, seed-данные, правила разработки и визуальный preview экрана расчета. Следующий крупный шаг — замена preview-движка на нормативный расчет.',
+              'Текущий каркас уже содержит доменные модели, seed-данные, правила разработки, нормативный экран теплозащиты и MVP-скрининг влагорежима. Следующий крупный шаг — хранение проектов, отчеты и дальнейшее углубление расчетного ядра.',
             ),
             const SizedBox(height: 18),
             projectAsync.when(
@@ -186,13 +186,13 @@ class _RoadmapCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Открывается preview основного экрана thermocalc: слои конструкции, статусные индикаторы, сечение и графики. Это рабочий scaffold для UX и архитектуры, а не финальный нормативный расчет.',
+              'Открывается экран thermocalc с расчетом теплозащиты v1 и MVP-скринингом влагорежима: сопротивление теплопередаче, температурный профиль, послойное паросопротивление, сечение конструкции и ссылки на примененные нормы.',
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: onOpenPreview,
               icon: const Icon(Icons.analytics_outlined),
-              label: const Text('Открыть thermocalc preview'),
+              label: const Text('Открыть thermocalc'),
             ),
           ],
         ),

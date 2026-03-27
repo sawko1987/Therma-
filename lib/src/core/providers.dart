@@ -7,8 +7,8 @@ import 'models/project.dart';
 import 'services/asset_catalog_repository.dart';
 import 'services/in_memory_project_repository.dart';
 import 'services/interfaces.dart';
+import 'services/normative_thermal_calculation_engine.dart';
 import 'services/preview_report_service.dart';
-import 'services/preview_thermal_calculation_engine.dart';
 
 final catalogRepositoryProvider = Provider<CatalogRepository>(
   (ref) => AssetCatalogRepository(rootBundle),
@@ -19,7 +19,7 @@ final projectRepositoryProvider = Provider<ProjectRepository>(
 );
 
 final thermalCalculationEngineProvider = Provider<ThermalCalculationEngine>(
-  (ref) => const PreviewThermalCalculationEngine(),
+  (ref) => const NormativeThermalCalculationEngine(),
 );
 
 final reportServiceProvider = Provider<ReportService>(
@@ -42,7 +42,7 @@ final selectedProjectProvider = FutureProvider<Project?>((ref) async {
   return projects.first;
 });
 
-final previewConstructionProvider = FutureProvider<Construction?>((ref) async {
+final selectedConstructionProvider = FutureProvider<Construction?>((ref) async {
   final project = await ref.watch(selectedProjectProvider.future);
   if (project == null || project.constructions.isEmpty) {
     return null;
@@ -50,10 +50,10 @@ final previewConstructionProvider = FutureProvider<Construction?>((ref) async {
   return project.constructions.first;
 });
 
-final previewCalculationProvider = FutureProvider<CalculationResult?>((ref) async {
+final calculationResultProvider = FutureProvider<CalculationResult?>((ref) async {
   final catalog = await ref.watch(catalogSnapshotProvider.future);
   final project = await ref.watch(selectedProjectProvider.future);
-  final construction = await ref.watch(previewConstructionProvider.future);
+  final construction = await ref.watch(selectedConstructionProvider.future);
   if (project == null || construction == null) {
     return null;
   }
