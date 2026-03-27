@@ -1,0 +1,29 @@
+[
+  {
+    "id": "moscow",
+    "country": "Россия",
+    "region": "Московская область",
+    "city": "Москва",
+    "designTemperature": -23.0,
+    "heatingPeriodDays": 202,
+    "gsop": 4383.4
+  },
+  {
+    "id": "kazan",
+    "country": "Россия",
+    "region": "Республика Татарстан",
+    "city": "Казань",
+    "designTemperature": -25.0,
+    "heatingPeriodDays": 215,
+    "gsop": 4870.0
+  },
+  {
+    "id": "novosibirsk",
+    "country": "Россия",
+    "region": "Новосибирская область",
+    "city": "Новосибирск",
+    "designTemperature": -37.0,
+    "heatingPeriodDays": 230,
+    "gsop": 6205.0
+  }
+]

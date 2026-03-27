@@ -1,0 +1,37 @@
+[
+  {
+    "id": "gypsum_plaster",
+    "name": "Гипсовая штукатурка",
+    "category": "Отделка",
+    "thermalConductivity": 0.35,
+    "vaporPermeability": 0.11
+  },
+  {
+    "id": "aac_d500",
+    "name": "Газобетон D500",
+    "category": "Блоки",
+    "thermalConductivity": 0.14,
+    "vaporPermeability": 0.23
+  },
+  {
+    "id": "mineral_wool",
+    "name": "Минеральная вата",
+    "category": "Утеплитель",
+    "thermalConductivity": 0.04,
+    "vaporPermeability": 0.30
+  },
+  {
+    "id": "pine_timber",
+    "name": "Сосновый брус",
+    "category": "Каркас",
+    "thermalConductivity": 0.15,
+    "vaporPermeability": 0.06
+  },
+  {
+    "id": "facing_brick",
+    "name": "Кирпич облицовочный",
+    "category": "Кладка",
+    "thermalConductivity": 0.81,
+    "vaporPermeability": 0.11
+  }
+]
