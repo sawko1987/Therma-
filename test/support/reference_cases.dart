@@ -1,5 +1,5 @@
-import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/models/calculation.dart';
+import 'package:smartcalc_mobile/src/core/models/project.dart';
 
 class ReferenceCase {
   const ReferenceCase({
@@ -112,7 +112,7 @@ const referenceCases = [
     expectedThermalPass: true,
     expectedTotalVaporResistance: 3.236494769,
     expectedOutwardDryingRatio: 6.0,
-    expectedMoistureLevel: ScreeningLevel.medium,
+    expectedMoistureLevel: ScreeningLevel.high,
   ),
   ReferenceCase(
     name: 'novosibirsk_attic_roof',
@@ -124,7 +124,7 @@ const referenceCases = [
       constructions: [
         Construction(
           id: 'attic-roof',
-          title: 'Утепленная кровля',
+          title: 'Утеплённая кровля',
           elementKind: ConstructionElementKind.roof,
           layers: [
             ConstructionLayer(

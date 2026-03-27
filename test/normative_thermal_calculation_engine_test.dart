@@ -40,32 +40,55 @@ void main() {
           result.moistureCheck.outwardDryingRatio,
           closeTo(referenceCase.expectedOutwardDryingRatio, 0.001),
         );
+        expect(result.moistureCheck.level, referenceCase.expectedMoistureLevel);
         expect(
-          result.moistureCheck.level,
-          referenceCase.expectedMoistureLevel,
+          result.moistureCheck.seasonalPeriods,
+          hasLength(
+            testCatalogSnapshot.climatePoints
+                .firstWhere(
+                  (item) => item.id == referenceCase.project.climatePointId,
+                )
+                .moistureSeasons
+                .length,
+          ),
+        );
+        expect(
+          result.moistureCheck.partialPressureSeries.points,
+          hasLength(construction.layers.length + 1),
+        );
+        expect(
+          result.moistureCheck.saturationPressureSeries.points,
+          hasLength(construction.layers.length + 1),
         );
       });
     }
   });
 
-  test('ignores disabled layers in thermal and moisture calculations', () async {
-    final construction = buildWallConstruction(insulationEnabled: false);
-    final project = buildTestProject(construction: construction);
+  test(
+    'ignores disabled layers in thermal and moisture calculations',
+    () async {
+      final construction = buildWallConstruction(insulationEnabled: false);
+      final project = buildTestProject(construction: construction);
 
-    final result = await engine.calculate(
-      catalog: testCatalogSnapshot,
-      project: project,
-      construction: construction,
-    );
+      final result = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+        construction: construction,
+      );
 
-    expect(result.layerRows, hasLength(3));
-    expect(result.moistureCheck.layerRows, hasLength(3));
-    expect(result.totalResistance, closeTo(3.053862434, 0.001));
-    expect(result.moistureCheck.totalVaporResistance, closeTo(2.903161436, 0.001));
-    expect(result.totalResistance, lessThan(result.requiredResistance));
-  });
+      expect(result.layerRows, hasLength(3));
+      expect(result.moistureCheck.layerRows, hasLength(3));
+      expect(result.totalResistance, closeTo(3.053862434, 0.001));
+      expect(
+        result.moistureCheck.totalVaporResistance,
+        closeTo(2.903161436, 0.001),
+      );
+      expect(result.moistureCheck.partialPressureSeries.points, hasLength(4));
+      expect(result.totalResistance, lessThan(result.requiredResistance));
+    },
+  );
 
-  test('builds monotonic thermal and vapor profiles across layer boundaries', () async {
+  test('builds monotonic thermal, vapor and seasonal profiles', () async {
     final project = buildTestProject(
       climatePointId: 'novosibirsk',
       roomPreset: RoomPreset.attic,
@@ -86,8 +109,13 @@ void main() {
       result.moistureCheck.vaporResistanceSeries.points,
       hasLength(construction.layers.length + 1),
     );
+    expect(result.moistureCheck.seasonalPeriods, hasLength(3));
 
-    for (var index = 1; index < result.temperatureSeries.points.length; index++) {
+    for (
+      var index = 1;
+      index < result.temperatureSeries.points.length;
+      index++
+    ) {
       expect(
         result.temperatureSeries.points[index].y,
         lessThanOrEqualTo(result.temperatureSeries.points[index - 1].y),
@@ -99,7 +127,60 @@ void main() {
         ),
       );
     }
+
+    for (final period in result.moistureCheck.seasonalPeriods) {
+      expect(period.endAccumulationKgPerSquareMeter, greaterThanOrEqualTo(0));
+    }
   });
+
+  test(
+    'reports seasonal moisture accumulation for a vapor-closed wall',
+    () async {
+      const vaporClosedWall = Construction(
+        id: 'vapor-closed-wall',
+        title: 'Стена с паронепроницаемой облицовкой',
+        elementKind: ConstructionElementKind.wall,
+        layers: [
+          ConstructionLayer(
+            id: 'plaster',
+            materialId: 'gypsum_plaster',
+            kind: LayerKind.solid,
+            thicknessMm: 20,
+          ),
+          ConstructionLayer(
+            id: 'aac',
+            materialId: 'aac_d500',
+            kind: LayerKind.masonry,
+            thicknessMm: 300,
+          ),
+          ConstructionLayer(
+            id: 'brick',
+            materialId: 'facing_brick',
+            kind: LayerKind.masonry,
+            thicknessMm: 250,
+          ),
+        ],
+      );
+      final project = buildTestProject(construction: vaporClosedWall);
+
+      final result = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+        construction: vaporClosedWall,
+      );
+
+      expect(
+        result.moistureCheck.seasonalPeriods.any(
+          (item) => item.hasInterstitialCondensation,
+        ),
+        isTrue,
+      );
+      expect(
+        result.moistureCheck.finalAccumulationKgPerSquareMeter,
+        greaterThan(0),
+      );
+    },
+  );
 
   test('fails fast for invalid vapor permeability', () async {
     final invalidCatalog = CatalogSnapshot(
@@ -114,6 +195,7 @@ void main() {
         ),
       ],
       norms: testCatalogSnapshot.norms,
+      moistureRules: testCatalogSnapshot.moistureRules,
       datasetVersion: 'invalid',
     );
     const construction = Construction(

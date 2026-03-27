@@ -1,0 +1,27 @@
+{
+  "roomConditions": [
+    {
+      "roomPresetId": "livingRoom",
+      "insideTemperature": 20.0,
+      "insideRelativeHumidity": 0.55,
+      "minimumRecommendedVaporResistance": 1.8
+    },
+    {
+      "roomPresetId": "attic",
+      "insideTemperature": 18.0,
+      "insideRelativeHumidity": 0.5,
+      "minimumRecommendedVaporResistance": 1.4
+    },
+    {
+      "roomPresetId": "basement",
+      "insideTemperature": 16.0,
+      "insideRelativeHumidity": 0.6,
+      "minimumRecommendedVaporResistance": 1.2
+    }
+  ],
+  "defaultMaximumOutwardDryingRatio": 1.0,
+  "coldClimateMaximumOutwardDryingRatio": 0.8,
+  "coldClimateDesignTemperatureThreshold": -30.0,
+  "seasonalDryingRecoveryFactor": 0.65,
+  "maximumSeasonalAccumulationKgPerSquareMeter": 0.2
+}

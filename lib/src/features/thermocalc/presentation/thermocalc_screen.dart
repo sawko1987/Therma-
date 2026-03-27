@@ -41,7 +41,7 @@ class ThermocalcScreen extends ConsumerWidget {
               data: (construction) => catalogAsync.when(
                 data: (catalog) {
                   if (calculation == null || construction == null) {
-                    return const Text('Недостаточно данных для расчета.');
+                    return const Text('Недостаточно данных для расчёта.');
                   }
                   return _CalculationBody(
                     calculation: calculation,
@@ -56,7 +56,7 @@ class ThermocalcScreen extends ConsumerWidget {
               error: (error, _) => Text('Ошибка конструкции: $error'),
             ),
             loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('Ошибка расчета: $error'),
+            error: (error, _) => Text('Ошибка расчёта: $error'),
           ),
         ],
       ),
@@ -77,7 +77,7 @@ class _StatusBanner extends StatelessWidget {
       child: const Padding(
         padding: EdgeInsets.all(16),
         child: Text(
-          'Текущий экран использует нормативный расчет теплозащиты v1 и MVP-скрининг влагорежима: сопротивление теплопередаче, температурный профиль, послойное паросопротивление и ссылки на примененные нормы. PDF-отчет остаётся следующим этапом.',
+          'Экран использует теплотехнический расчёт v1 и сезонный расчёт влагорежима: сопротивление теплопередаче, температурный профиль, послойное паросопротивление, критический сезон, график парциального давления и итог по влагонакоплению.',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
@@ -106,9 +106,9 @@ class _ProjectSummary extends StatelessWidget {
           children: [
             Text(
               'Проект и исходные условия',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
             projectAsync.when(
@@ -128,6 +128,10 @@ class _ProjectSummary extends StatelessWidget {
                         Text('Климат: ${climate?.displayName ?? '—'}'),
                         Text('Помещение: ${project?.roomPreset.label ?? '—'}'),
                         Text('Конструкция: ${construction?.title ?? '—'}'),
+                        if (climate != null)
+                          Text(
+                            'Сезоны влагорежима: ${climate.moistureSeasons.map((item) => item.label).join(', ')}',
+                          ),
                       ],
                     );
                   },
@@ -177,9 +181,9 @@ class _CalculationBody extends StatelessWidget {
               children: [
                 Text(
                   'Нормативные показатели',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -217,7 +221,9 @@ class _CalculationBody extends StatelessWidget {
                         (indicator) => _IndicatorTile(
                           indicator: indicator,
                           norm: catalog.norms
-                              .where((norm) => norm.id == indicator.normReferenceId)
+                              .where(
+                                (norm) => norm.id == indicator.normReferenceId,
+                              )
                               .firstOrNull,
                         ),
                       )
@@ -235,10 +241,10 @@ class _CalculationBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'MVP-скрининг влагорежима',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  'Сезонный влагорежим',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 Text(calculation.moistureCheck.summary),
@@ -258,13 +264,22 @@ class _CalculationBody extends StatelessWidget {
                           '${calculation.moistureCheck.minimumRecommendedVaporResistance.toStringAsFixed(2)} м²·ч·Па/мг',
                     ),
                     _MetricTile(
-                      label: 'Наружный/внутренний слой',
-                      value:
-                          '${calculation.moistureCheck.outwardDryingRatio.toStringAsFixed(2)}',
+                      label: 'Критический сезон',
+                      value: calculation.moistureCheck.criticalSeasonLabel,
                     ),
                     _MetricTile(
-                      label: 'Статус скрининга',
-                      value: calculation.moistureCheck.level.label,
+                      label: 'Итог',
+                      value: calculation.moistureCheck.verdict.label,
+                    ),
+                    _MetricTile(
+                      label: 'Финальное накопление',
+                      value:
+                          '${calculation.moistureCheck.finalAccumulationKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
+                    ),
+                    _MetricTile(
+                      label: 'Допустимый максимум',
+                      value:
+                          '${calculation.moistureCheck.maximumAllowedAccumulationKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
                     ),
                   ],
                 ),
@@ -277,12 +292,24 @@ class _CalculationBody extends StatelessWidget {
                         (indicator) => _IndicatorTile(
                           indicator: indicator,
                           norm: catalog.norms
-                              .where((norm) => norm.id == indicator.normReferenceId)
+                              .where(
+                                (norm) => norm.id == indicator.normReferenceId,
+                              )
                               .firstOrNull,
                         ),
                       )
                       .toList(),
                 ),
+                if (calculation
+                    .moistureCheck
+                    .condensationInterfaceTitles
+                    .isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Критические границы: ${calculation.moistureCheck.condensationInterfaceTitles.join(', ')}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ],
             ),
           ),
@@ -296,9 +323,9 @@ class _CalculationBody extends StatelessWidget {
               children: [
                 Text(
                   'Сечение конструкции',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -323,10 +350,106 @@ class _CalculationBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
+                  'Профиль парциального давления',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Критический период: ${calculation.moistureCheck.criticalSeasonLabel}',
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 220,
+                  child: CustomPaint(
+                    painter: LineChartPainter(
+                      lines: [
+                        ChartLine(
+                          series:
+                              calculation.moistureCheck.partialPressureSeries,
+                          color: const Color(0xFF8B5E34),
+                        ),
+                        ChartLine(
+                          series: calculation
+                              .moistureCheck
+                              .saturationPressureSeries,
+                          color: const Color(0xFF1D4ED8),
+                        ),
+                      ],
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Сезонный баланс влаги',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 12),
+                ...calculation.moistureCheck.seasonalPeriods.map(
+                  (period) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                period.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${period.durationDays} дн., tнар ${period.outsideTemperature.toStringAsFixed(0)} °C, φнар ${(period.outsideRelativeHumidity * 100).toStringAsFixed(0)}%',
+                              ),
+                              Text(
+                                'Конденсация ${period.condensateKgPerSquareMeter.toStringAsFixed(3)} кг/м², высыхание ${period.dryingPotentialKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Σ ${period.endAccumulationKgPerSquareMeter.toStringAsFixed(3)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   'Профиль паросопротивления',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -340,8 +463,13 @@ class _CalculationBody extends StatelessWidget {
                   height: 180,
                   child: CustomPaint(
                     painter: LineChartPainter(
-                      series: calculation.moistureCheck.vaporResistanceSeries,
-                      color: const Color(0xFF8B5E34),
+                      lines: [
+                        ChartLine(
+                          series:
+                              calculation.moistureCheck.vaporResistanceSeries,
+                          color: const Color(0xFF8B5E34),
+                        ),
+                      ],
                     ),
                     child: const SizedBox.expand(),
                   ),
@@ -359,9 +487,9 @@ class _CalculationBody extends StatelessWidget {
               children: [
                 Text(
                   'Температурный профиль',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -375,8 +503,12 @@ class _CalculationBody extends StatelessWidget {
                   height: 180,
                   child: CustomPaint(
                     painter: LineChartPainter(
-                      series: calculation.temperatureSeries,
-                      color: const Color(0xFF006D77),
+                      lines: [
+                        ChartLine(
+                          series: calculation.temperatureSeries,
+                          color: const Color(0xFF006D77),
+                        ),
+                      ],
                     ),
                     child: const SizedBox.expand(),
                   ),
@@ -394,9 +526,9 @@ class _CalculationBody extends StatelessWidget {
               children: [
                 Text(
                   'Послойное паросопротивление',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 ...calculation.moistureCheck.layerRows.map(
@@ -411,7 +543,9 @@ class _CalculationBody extends StatelessWidget {
                             children: [
                               Text(
                                 row.title,
-                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -441,10 +575,10 @@ class _CalculationBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Послойный расчет',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  'Послойный расчёт',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 ...calculation.layerRows.map(
@@ -459,7 +593,9 @@ class _CalculationBody extends StatelessWidget {
                             children: [
                               Text(
                                 row.title,
-                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -489,10 +625,10 @@ class _CalculationBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Примененные нормы',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  'Применённые нормы',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 ...appliedNorms.map(
@@ -511,10 +647,7 @@ class _CalculationBody extends StatelessWidget {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.label,
-    required this.value,
-  });
+  const _MetricTile({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -534,16 +667,16 @@ class _MetricTile extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text(
             value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -552,18 +685,16 @@ class _MetricTile extends StatelessWidget {
 }
 
 class _IndicatorTile extends StatelessWidget {
-  const _IndicatorTile({
-    required this.indicator,
-    required this.norm,
-  });
+  const _IndicatorTile({required this.indicator, required this.norm});
 
   final ComplianceIndicator indicator;
   final NormReference? norm;
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        indicator.isPassed ? const Color(0xFF0F766E) : const Color(0xFFB45309);
+    final color = indicator.isPassed
+        ? const Color(0xFF0F766E)
+        : const Color(0xFFB45309);
 
     return Container(
       width: 220,
@@ -594,10 +725,7 @@ class _IndicatorTile extends StatelessWidget {
           ),
           if (norm != null) ...[
             const SizedBox(height: 6),
-            Text(
-              norm!.code,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(norm!.code, style: Theme.of(context).textTheme.bodySmall),
           ],
         ],
       ),

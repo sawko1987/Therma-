@@ -12,7 +12,9 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final catalogAsync = ref.watch(catalogSnapshotProvider);
+    final projectListAsync = ref.watch(projectListProvider);
     final projectAsync = ref.watch(selectedProjectProvider);
+    final selectedProjectId = ref.watch(selectedProjectIdProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -25,6 +27,14 @@ class DashboardScreen extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
           _HeroCard(projectAsync: projectAsync),
+          const SizedBox(height: 16),
+          _ProjectListCard(
+            projectListAsync: projectListAsync,
+            selectedProjectId: selectedProjectId,
+            onSelectProject: (projectId) {
+              ref.read(selectedProjectIdProvider.notifier).select(projectId);
+            },
+          ),
           const SizedBox(height: 16),
           _CatalogOverview(catalogAsync: catalogAsync),
           const SizedBox(height: 16),
@@ -64,19 +74,19 @@ class _HeroCard extends StatelessWidget {
               children: const [
                 Chip(label: Text('Android first')),
                 Chip(label: Text('Offline-first')),
-                Chip(label: Text('Thermocalc MVP')),
+                Chip(label: Text('Seasonal moisture')),
               ],
             ),
             const SizedBox(height: 18),
             Text(
               'Инженерный калькулятор для мобильного сценария, а не перенос сайта один-в-один.',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
             const Text(
-              'Текущий каркас уже содержит доменные модели, seed-данные, правила разработки, нормативный экран теплозащиты и MVP-скрининг влагорежима. Следующий крупный шаг — хранение проектов, отчеты и дальнейшее углубление расчетного ядра.',
+              'Текущий каркас уже содержит доменные модели, локальные каталоги, нормативный экран теплозащиты и сезонный расчёт влагорежима. Следующий крупный шаг после стабилизации расчётного ядра — хранение проектов и отчёты.',
             ),
             const SizedBox(height: 18),
             projectAsync.when(
@@ -93,8 +103,8 @@ class _HeroCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         project == null
-                            ? 'Демо-проект пока не загружен'
-                            : 'Активный demo-проект: ${project.name}',
+                            ? 'Сохранённый проект пока не загружен'
+                            : 'Активный проект: ${project.name}',
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -105,6 +115,91 @@ class _HeroCard extends StatelessWidget {
               error: (error, _) => Text('Ошибка загрузки проекта: $error'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectListCard extends StatelessWidget {
+  const _ProjectListCard({
+    required this.projectListAsync,
+    required this.selectedProjectId,
+    required this.onSelectProject,
+  });
+
+  final AsyncValue<List<Project>> projectListAsync;
+  final String? selectedProjectId;
+  final ValueChanged<String> onSelectProject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: projectListAsync.when(
+          data: (projects) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Сохранённые проекты',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Проекты читаются из локального хранилища и доступны после перезапуска приложения.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              if (projects.isEmpty)
+                const Text('Пока нет сохранённых проектов.')
+              else
+                ...projects.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final project = entry.value;
+                  final isSelected =
+                      project.id == selectedProjectId ||
+                      (selectedProjectId == null && index == 0);
+
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == projects.length - 1 ? 0 : 12,
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        side: BorderSide(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      title: Text(
+                        project.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        '${project.roomPreset.label} • ${project.constructions.length} конструкция(й)',
+                      ),
+                      trailing: Icon(
+                        isSelected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off_outlined,
+                      ),
+                      onTap: () => onSelectProject(project.id),
+                    ),
+                  );
+                }),
+            ],
+          ),
+          loading: () => const LinearProgressIndicator(),
+          error: (error, _) => Text('Ошибка загрузки проектов: $error'),
         ),
       ),
     );
@@ -127,9 +222,9 @@ class _CatalogOverview extends StatelessWidget {
             children: [
               Text(
                 'Локальные каталоги',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -144,10 +239,7 @@ class _CatalogOverview extends StatelessWidget {
                     label: 'Материалы',
                     value: '${catalog.materials.length}',
                   ),
-                  _MetricTile(
-                    label: 'Нормы',
-                    value: '${catalog.norms.length}',
-                  ),
+                  _MetricTile(label: 'Нормы', value: '${catalog.norms.length}'),
                 ],
               ),
               const SizedBox(height: 14),
@@ -180,13 +272,13 @@ class _RoadmapCard extends StatelessWidget {
           children: [
             Text(
               'Что уже можно смотреть',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
             const Text(
-              'Открывается экран thermocalc с расчетом теплозащиты v1 и MVP-скринингом влагорежима: сопротивление теплопередаче, температурный профиль, послойное паросопротивление, сечение конструкции и ссылки на примененные нормы.',
+              'Открывается экран thermocalc с расчётом теплозащиты v1 и сезонным влагорежимом: сопротивление теплопередаче, температурный профиль, парциальное давление против насыщения, послойное паросопротивление, сечение конструкции и ссылки на применённые нормы.',
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -214,14 +306,16 @@ class _RulesCard extends StatelessWidget {
           children: [
             Text(
               'Зафиксированные правила',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
             const Text('Документация на русском, код на английском.'),
             const Text('Формулы и данные не прячутся во widgets.'),
-            const Text('Каждая расчетная правка требует тестов и ссылки на источник.'),
+            const Text(
+              'Каждая расчётная правка требует тестов и ссылки на источник.',
+            ),
             const Text('Чек-лист и ADR обновляются вместе с кодом.'),
           ],
         ),
@@ -251,9 +345,9 @@ class _MetricTile extends StatelessWidget {
         children: [
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 4),
           Text(label),

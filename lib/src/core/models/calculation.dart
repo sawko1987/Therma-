@@ -35,10 +35,7 @@ class MoistureLayerCalculationRow {
 }
 
 class GraphSeries {
-  const GraphSeries({
-    required this.title,
-    required this.points,
-  });
+  const GraphSeries({required this.title, required this.points});
 
   final String title;
   final List<Point<double>> points;
@@ -66,10 +63,44 @@ enum ScreeningLevel { low, medium, high }
 
 extension ScreeningLevelX on ScreeningLevel {
   String get label => switch (this) {
-        ScreeningLevel.low => 'Низкий риск',
-        ScreeningLevel.medium => 'Умеренный риск',
-        ScreeningLevel.high => 'Повышенный риск',
-      };
+    ScreeningLevel.low => 'Низкий риск',
+    ScreeningLevel.medium => 'Умеренный риск',
+    ScreeningLevel.high => 'Повышенный риск',
+  };
+}
+
+enum SeasonalMoistureVerdict { pass, recoveryRequired, fail }
+
+extension SeasonalMoistureVerdictX on SeasonalMoistureVerdict {
+  String get label => switch (this) {
+    SeasonalMoistureVerdict.pass => 'Сезон устойчив',
+    SeasonalMoistureVerdict.recoveryRequired => 'Нужна проверка узла',
+    SeasonalMoistureVerdict.fail => 'Есть риск влагонакопления',
+  };
+}
+
+class SeasonalMoisturePeriodResult {
+  const SeasonalMoisturePeriodResult({
+    required this.label,
+    required this.durationDays,
+    required this.outsideTemperature,
+    required this.outsideRelativeHumidity,
+    required this.maxExcessPressure,
+    required this.condensateKgPerSquareMeter,
+    required this.dryingPotentialKgPerSquareMeter,
+    required this.endAccumulationKgPerSquareMeter,
+    required this.hasInterstitialCondensation,
+  });
+
+  final String label;
+  final int durationDays;
+  final double outsideTemperature;
+  final double outsideRelativeHumidity;
+  final double maxExcessPressure;
+  final double condensateKgPerSquareMeter;
+  final double dryingPotentialKgPerSquareMeter;
+  final double endAccumulationKgPerSquareMeter;
+  final bool hasInterstitialCondensation;
 }
 
 class MoistureCheckResult {
@@ -83,6 +114,14 @@ class MoistureCheckResult {
     required this.indicators,
     required this.level,
     required this.summary,
+    required this.criticalSeasonLabel,
+    required this.partialPressureSeries,
+    required this.saturationPressureSeries,
+    required this.condensationInterfaceTitles,
+    required this.seasonalPeriods,
+    required this.finalAccumulationKgPerSquareMeter,
+    required this.maximumAllowedAccumulationKgPerSquareMeter,
+    required this.verdict,
   });
 
   final double totalVaporResistance;
@@ -94,6 +133,14 @@ class MoistureCheckResult {
   final List<ComplianceIndicator> indicators;
   final ScreeningLevel level;
   final String summary;
+  final String criticalSeasonLabel;
+  final GraphSeries partialPressureSeries;
+  final GraphSeries saturationPressureSeries;
+  final List<String> condensationInterfaceTitles;
+  final List<SeasonalMoisturePeriodResult> seasonalPeriods;
+  final double finalAccumulationKgPerSquareMeter;
+  final double maximumAllowedAccumulationKgPerSquareMeter;
+  final SeasonalMoistureVerdict verdict;
 }
 
 class CalculationResult {

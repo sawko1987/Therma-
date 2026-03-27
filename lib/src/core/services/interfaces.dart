@@ -8,6 +8,9 @@ abstract interface class CatalogRepository {
 
 abstract interface class ProjectRepository {
   Future<List<Project>> listProjects();
+  Future<Project?> getProject(String id);
+  Future<void> saveProject(Project project);
+  Future<void> seedDemoProjectIfEmpty();
 }
 
 abstract interface class ThermalCalculationEngine {

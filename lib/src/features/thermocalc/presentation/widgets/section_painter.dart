@@ -6,17 +6,16 @@ import '../../../../core/models/catalog.dart';
 import '../../../../core/models/project.dart';
 
 class SectionPainter extends CustomPainter {
-  SectionPainter({
-    required this.construction,
-    required this.materials,
-  });
+  SectionPainter({required this.construction, required this.materials});
 
   final Construction construction;
   final Map<String, MaterialEntry> materials;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final enabled = construction.layers.where((layer) => layer.enabled).toList();
+    final enabled = construction.layers
+        .where((layer) => layer.enabled)
+        .toList();
     final totalThickness = enabled.fold<double>(
       0,
       (value, layer) => value + layer.thicknessMm,
@@ -33,7 +32,7 @@ class SectionPainter extends CustomPainter {
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       maxLines: 2,
-      ellipsis: '…',
+      ellipsis: '...',
     );
 
     var currentX = 0.0;
@@ -61,10 +60,7 @@ class SectionPainter extends CustomPainter {
         ),
       );
       textPainter.layout(minWidth: 0, maxWidth: rect.width - 12);
-      textPainter.paint(
-        canvas,
-        Offset(rect.left + 6, rect.top + 10),
-      );
+      textPainter.paint(canvas, Offset(rect.left + 6, rect.top + 10));
 
       currentX += width;
     }

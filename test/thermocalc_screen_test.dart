@@ -16,8 +16,9 @@ void main() {
         overrides: [
           catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
           projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
-          thermalCalculationEngineProvider
-              .overrideWithValue(const NormativeThermalCalculationEngine()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
         ],
         child: const MaterialApp(home: ThermocalcScreen()),
       ),
@@ -27,11 +28,11 @@ void main() {
 
     expect(find.text('Нормативные показатели'), findsOneWidget);
     expect(find.text('Требуемое R'), findsOneWidget);
-    expect(find.text('MVP-скрининг влагорежима'), findsOneWidget);
-    expect(find.text('Профиль паросопротивления'), findsOneWidget);
-    expect(find.text('Послойное паросопротивление'), findsOneWidget);
+    expect(find.text('Сезонный влагорежим'), findsOneWidget);
+    expect(find.text('Профиль парциального давления'), findsOneWidget);
+    expect(find.text('Сезонный баланс влаги'), findsOneWidget);
     expect(find.text('Температурный профиль'), findsOneWidget);
-    expect(find.text('Примененные нормы'), findsOneWidget);
+    expect(find.text('Применённые нормы'), findsOneWidget);
     expect(find.text('СП 50.13330.2012'), findsAtLeastNWidgets(1));
   });
 }

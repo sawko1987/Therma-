@@ -12,6 +12,29 @@ const testCatalogSnapshot = CatalogSnapshot(
       designTemperature: -23,
       heatingPeriodDays: 202,
       gsop: 4383.4,
+      moistureSeasons: [
+        ClimateSeason(
+          id: 'winter',
+          label: 'Зимний период',
+          durationDays: 120,
+          outsideTemperature: -14,
+          outsideRelativeHumidity: 0.84,
+        ),
+        ClimateSeason(
+          id: 'transition',
+          label: 'Весна и осень',
+          durationDays: 140,
+          outsideTemperature: 6,
+          outsideRelativeHumidity: 0.72,
+        ),
+        ClimateSeason(
+          id: 'summer',
+          label: 'Летний период',
+          durationDays: 105,
+          outsideTemperature: 18,
+          outsideRelativeHumidity: 0.66,
+        ),
+      ],
     ),
     ClimatePoint(
       id: 'novosibirsk',
@@ -21,6 +44,29 @@ const testCatalogSnapshot = CatalogSnapshot(
       designTemperature: -37,
       heatingPeriodDays: 230,
       gsop: 6205.0,
+      moistureSeasons: [
+        ClimateSeason(
+          id: 'winter',
+          label: 'Зимний период',
+          durationDays: 150,
+          outsideTemperature: -22,
+          outsideRelativeHumidity: 0.82,
+        ),
+        ClimateSeason(
+          id: 'transition',
+          label: 'Весна и осень',
+          durationDays: 110,
+          outsideTemperature: 4,
+          outsideRelativeHumidity: 0.68,
+        ),
+        ClimateSeason(
+          id: 'summer',
+          label: 'Летний период',
+          durationDays: 105,
+          outsideTemperature: 17,
+          outsideRelativeHumidity: 0.62,
+        ),
+      ],
     ),
   ],
   materials: [
@@ -65,27 +111,52 @@ const testCatalogSnapshot = CatalogSnapshot(
       id: 'sp_50',
       code: 'СП 50.13330.2012',
       clause: 'Тепловая защита зданий',
-      title: 'Базовый набор требований по теплозащите',
+      title: 'Базовый набор требований по теплозащите и влагорежиму',
     ),
     NormReference(
       id: 'sp_131',
       code: 'СП 131.13330.2020',
       clause: 'Строительная климатология',
-      title: 'Климатические параметры для расчетов',
+      title: 'Климатические параметры для расчётов',
     ),
     NormReference(
       id: 'gost_54851',
       code: 'ГОСТ Р 54851-2011',
       clause: 'Ограждающие конструкции',
-      title: 'Приведенное сопротивление теплопередаче',
+      title: 'Приведённое сопротивление теплопередаче',
     ),
   ],
-  datasetVersion: 'test',
+  moistureRules: MoistureRuleSet(
+    roomConditions: [
+      MoistureRoomCondition(
+        roomPresetId: 'livingRoom',
+        insideTemperature: 20,
+        insideRelativeHumidity: 0.55,
+        minimumRecommendedVaporResistance: 1.8,
+      ),
+      MoistureRoomCondition(
+        roomPresetId: 'attic',
+        insideTemperature: 18,
+        insideRelativeHumidity: 0.5,
+        minimumRecommendedVaporResistance: 1.4,
+      ),
+      MoistureRoomCondition(
+        roomPresetId: 'basement',
+        insideTemperature: 16,
+        insideRelativeHumidity: 0.6,
+        minimumRecommendedVaporResistance: 1.2,
+      ),
+    ],
+    defaultMaximumOutwardDryingRatio: 1.0,
+    coldClimateMaximumOutwardDryingRatio: 0.8,
+    coldClimateDesignTemperatureThreshold: -30.0,
+    seasonalDryingRecoveryFactor: 0.65,
+    maximumSeasonalAccumulationKgPerSquareMeter: 0.2,
+  ),
+  datasetVersion: 'test-moisture-v2',
 );
 
-Construction buildWallConstruction({
-  bool insulationEnabled = true,
-}) {
+Construction buildWallConstruction({bool insulationEnabled = true}) {
   return Construction(
     id: 'wall',
     title: 'Наружная стена',
@@ -140,12 +211,38 @@ class FakeCatalogRepository implements CatalogRepository {
 }
 
 class FakeProjectRepository implements ProjectRepository {
-  FakeProjectRepository({
-    List<Project>? projects,
-  }) : _projects = projects ?? [buildTestProject()];
+  FakeProjectRepository({List<Project>? projects})
+    : _projects = projects ?? [buildTestProject()];
 
   final List<Project> _projects;
 
   @override
-  Future<List<Project>> listProjects() async => _projects;
+  Future<List<Project>> listProjects() async => List.unmodifiable(_projects);
+
+  @override
+  Future<Project?> getProject(String id) async {
+    for (final project in _projects) {
+      if (project.id == id) {
+        return project;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<void> saveProject(Project project) async {
+    final index = _projects.indexWhere((item) => item.id == project.id);
+    if (index == -1) {
+      _projects.add(project);
+      return;
+    }
+    _projects[index] = project;
+  }
+
+  @override
+  Future<void> seedDemoProjectIfEmpty() async {
+    if (_projects.isEmpty) {
+      _projects.add(buildTestProject());
+    }
+  }
 }

@@ -13,9 +13,13 @@ class AssetCatalogRepository implements CatalogRepository {
   @override
   Future<CatalogSnapshot> loadSnapshot() async {
     final climateRaw = await bundle.loadString('assets/data/climate.seed.json');
-    final materialsRaw =
-        await bundle.loadString('assets/data/materials.seed.json');
+    final materialsRaw = await bundle.loadString(
+      'assets/data/materials.seed.json',
+    );
     final normsRaw = await bundle.loadString('assets/data/norms.seed.json');
+    final moistureRulesRaw = await bundle.loadString(
+      'assets/data/moisture_rules.seed.json',
+    );
 
     final climate = (jsonDecode(climateRaw) as List<dynamic>)
         .cast<Map<String, dynamic>>()
@@ -29,12 +33,16 @@ class AssetCatalogRepository implements CatalogRepository {
         .cast<Map<String, dynamic>>()
         .map(NormReference.fromJson)
         .toList();
+    final moistureRules = MoistureRuleSet.fromJson(
+      jsonDecode(moistureRulesRaw) as Map<String, dynamic>,
+    );
 
     return CatalogSnapshot(
       climatePoints: climate,
       materials: materials,
       norms: norms,
-      datasetVersion: 'seed-2026-03-27',
+      moistureRules: moistureRules,
+      datasetVersion: 'seed-2026-03-27-moisture-v2',
     );
   }
 }
