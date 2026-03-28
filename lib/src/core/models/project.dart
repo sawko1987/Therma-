@@ -864,6 +864,66 @@ class HouseModel {
   };
 }
 
+class DesignObject {
+  const DesignObject({
+    required this.id,
+    required this.title,
+    required this.address,
+    required this.description,
+    required this.customerPhone,
+    required this.projectId,
+    required this.updatedAtEpochMs,
+  });
+
+  factory DesignObject.fromJson(Map<String, dynamic> json) => DesignObject(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    address: json['address'] as String? ?? '',
+    description: json['description'] as String? ?? '',
+    customerPhone: json['customerPhone'] as String? ?? '',
+    projectId: json['projectId'] as String,
+    updatedAtEpochMs: (json['updatedAtEpochMs'] as num?)?.toInt() ?? 0,
+  );
+
+  final String id;
+  final String title;
+  final String address;
+  final String description;
+  final String customerPhone;
+  final String projectId;
+  final int updatedAtEpochMs;
+
+  DesignObject copyWith({
+    String? id,
+    String? title,
+    String? address,
+    String? description,
+    String? customerPhone,
+    String? projectId,
+    int? updatedAtEpochMs,
+  }) {
+    return DesignObject(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      address: address ?? this.address,
+      description: description ?? this.description,
+      customerPhone: customerPhone ?? this.customerPhone,
+      projectId: projectId ?? this.projectId,
+      updatedAtEpochMs: updatedAtEpochMs ?? this.updatedAtEpochMs,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'address': address,
+    'description': description,
+    'customerPhone': customerPhone,
+    'projectId': projectId,
+    'updatedAtEpochMs': updatedAtEpochMs,
+  };
+}
+
 class Project {
   const Project({
     required this.id,
@@ -872,6 +932,7 @@ class Project {
     required this.roomPreset,
     required this.constructions,
     required this.houseModel,
+    this.selectedConstructionIds = const [],
     this.groundFloorCalculations = const [],
     this.datasetVersion,
     this.migratedFromDatasetVersion,
@@ -902,6 +963,10 @@ class Project {
       houseModel: houseModelJson == null
           ? HouseModel.bootstrapFromConstructions(constructions)
           : HouseModel.fromJson(_asJsonMap(houseModelJson)),
+      selectedConstructionIds:
+          ((json['selectedConstructionIds'] as List<dynamic>?) ?? const [])
+              .map((item) => item as String)
+              .toList(growable: false),
       groundFloorCalculations: groundFloorCalculations,
       datasetVersion: json['datasetVersion'] as String?,
       migratedFromDatasetVersion: json['migratedFromDatasetVersion'] as String?,
@@ -915,10 +980,16 @@ class Project {
   final RoomPreset roomPreset;
   final List<Construction> constructions;
   final HouseModel houseModel;
+  final List<String> selectedConstructionIds;
   final List<GroundFloorCalculation> groundFloorCalculations;
   final String? datasetVersion;
   final String? migratedFromDatasetVersion;
   final int sourceProjectFormatVersion;
+
+  List<String> get effectiveSelectedConstructionIds =>
+      selectedConstructionIds.isEmpty
+      ? constructions.map((item) => item.id).toList(growable: false)
+      : selectedConstructionIds;
 
   bool get hasDatasetMigration => migratedFromDatasetVersion != null;
 
@@ -938,6 +1009,7 @@ class Project {
     RoomPreset? roomPreset,
     List<Construction>? constructions,
     HouseModel? houseModel,
+    List<String>? selectedConstructionIds,
     List<GroundFloorCalculation>? groundFloorCalculations,
     String? datasetVersion,
     String? migratedFromDatasetVersion,
@@ -951,6 +1023,8 @@ class Project {
       roomPreset: roomPreset ?? this.roomPreset,
       constructions: constructions ?? this.constructions,
       houseModel: houseModel ?? this.houseModel,
+      selectedConstructionIds:
+          selectedConstructionIds ?? this.selectedConstructionIds,
       groundFloorCalculations:
           groundFloorCalculations ?? this.groundFloorCalculations,
       datasetVersion: datasetVersion ?? this.datasetVersion,
@@ -972,6 +1046,7 @@ class Project {
         .map((item) => item.toJson())
         .toList(growable: false),
     'houseModel': houseModel.toJson(),
+    'selectedConstructionIds': effectiveSelectedConstructionIds,
     'groundFloorCalculations': groundFloorCalculations
         .map((item) => item.toJson())
         .toList(growable: false),

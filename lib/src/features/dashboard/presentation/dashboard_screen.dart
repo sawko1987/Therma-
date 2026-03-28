@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
+import '../../building_step/presentation/building_step_screen.dart';
+import '../../construction_library/presentation/construction_step_screen.dart';
 import '../../ground_floor/presentation/ground_floor_screen.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
+import '../../object_step/presentation/object_step_screen.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -14,9 +17,10 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final catalogAsync = ref.watch(catalogSnapshotProvider);
-    final projectListAsync = ref.watch(projectListProvider);
+    final objectListAsync = ref.watch(objectListProvider);
     final projectAsync = ref.watch(selectedProjectProvider);
-    final selectedProjectId = ref.watch(selectedProjectIdProvider);
+    final objectAsync = ref.watch(selectedObjectProvider);
+    final selectedObjectId = ref.watch(selectedObjectIdProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -28,19 +32,42 @@ class DashboardScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
-          _HeroCard(projectAsync: projectAsync),
+          _HeroCard(objectAsync: objectAsync, projectAsync: projectAsync),
           const SizedBox(height: 16),
-          _ProjectListCard(
-            projectListAsync: projectListAsync,
-            selectedProjectId: selectedProjectId,
-            onSelectProject: (projectId) {
-              ref.read(selectedProjectIdProvider.notifier).select(projectId);
+          _ObjectListCard(
+            objectListAsync: objectListAsync,
+            selectedObjectId: selectedObjectId,
+            onSelectObject: (object) {
+              ref.read(selectedObjectIdProvider.notifier).select(object.id);
+              ref.read(selectedProjectIdProvider.notifier).select(object.projectId);
             },
           ),
           const SizedBox(height: 16),
           _CatalogOverview(catalogAsync: catalogAsync),
           const SizedBox(height: 16),
           _RoadmapCard(
+            hasSelectedObject: selectedObjectId != null,
+            onOpenObjectStep: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ObjectStepScreen(),
+                ),
+              );
+            },
+            onOpenConstructionStep: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ConstructionStepScreen(),
+                ),
+              );
+            },
+            onOpenBuildingStep: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const BuildingStepScreen(),
+                ),
+              );
+            },
             onOpenHouseScheme: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -72,8 +99,12 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.projectAsync});
+  const _HeroCard({
+    required this.objectAsync,
+    required this.projectAsync,
+  });
 
+  final AsyncValue<DesignObject?> objectAsync;
   final AsyncValue<Project?> projectAsync;
 
   @override
@@ -105,8 +136,8 @@ class _HeroCard extends StatelessWidget {
               'Текущий каркас уже содержит доменные модели, локальные каталоги, нормативный экран теплозащиты, сезонный расчёт влагорежима, локальное хранение проектов, PDF-отчёт и рабочий конструктор дома для Phase 2.',
             ),
             const SizedBox(height: 18),
-            projectAsync.when(
-              data: (project) => Container(
+            objectAsync.when(
+              data: (object) => Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEEF5F3),
@@ -121,20 +152,19 @@ class _HeroCard extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            project == null
-                                ? 'Сохранённый проект пока не загружен'
-                                : 'Активный проект: ${project.name}',
+                            object == null
+                                ? 'Объект пока не выбран'
+                                : 'Активный объект: ${object.title}',
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
                       ],
                     ),
-                    if (project?.datasetMigrationLabel
-                        case final migrationLabel?)
+                    if (object != null && object.address.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 12),
                         child: Text(
-                          migrationLabel,
+                          object.address,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
@@ -142,7 +172,7 @@ class _HeroCard extends StatelessWidget {
                 ),
               ),
               loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text('Ошибка загрузки проекта: $error'),
+              error: (error, _) => Text('Ошибка загрузки объекта: $error'),
             ),
           ],
         ),
@@ -151,51 +181,51 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _ProjectListCard extends StatelessWidget {
-  const _ProjectListCard({
-    required this.projectListAsync,
-    required this.selectedProjectId,
-    required this.onSelectProject,
+class _ObjectListCard extends StatelessWidget {
+  const _ObjectListCard({
+    required this.objectListAsync,
+    required this.selectedObjectId,
+    required this.onSelectObject,
   });
 
-  final AsyncValue<List<Project>> projectListAsync;
-  final String? selectedProjectId;
-  final ValueChanged<String> onSelectProject;
+  final AsyncValue<List<DesignObject>> objectListAsync;
+  final String? selectedObjectId;
+  final ValueChanged<DesignObject> onSelectObject;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: projectListAsync.when(
-          data: (projects) => Column(
+        child: objectListAsync.when(
+          data: (objects) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Сохранённые проекты',
+                'Объекты',
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
               Text(
-                'Проекты читаются из локального хранилища и доступны после перезапуска приложения.',
+                'Сначала выберите объект проектирования, затем переходите к инженерным шагам расчета.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 16),
-              if (projects.isEmpty)
-                const Text('Пока нет сохранённых проектов.')
+              if (objects.isEmpty)
+                const Text('Пока нет объектов.')
               else
-                ...projects.asMap().entries.map((entry) {
+                ...objects.asMap().entries.map((entry) {
                   final index = entry.key;
-                  final project = entry.value;
+                  final object = entry.value;
                   final isSelected =
-                      project.id == selectedProjectId ||
-                      (selectedProjectId == null && index == 0);
+                      object.id == selectedObjectId ||
+                      (selectedObjectId == null && index == 0);
 
                   return Padding(
                     padding: EdgeInsets.only(
-                      bottom: index == projects.length - 1 ? 0 : 12,
+                      bottom: index == objects.length - 1 ? 0 : 12,
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(
@@ -211,32 +241,30 @@ class _ProjectListCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       title: Text(
-                        project.name,
+                        object.title,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
                         [
-                          '${project.roomPreset.label} • ${project.constructions.length} конструкция(й)',
-                          ...?switch (project.datasetMigrationLabel) {
-                            final String migrationLabel => [migrationLabel],
-                            null => null,
-                          },
+                          if (object.address.isNotEmpty) object.address,
+                          if (object.customerPhone.isNotEmpty)
+                            'Телефон: ${object.customerPhone}',
                         ].join('\n'),
                       ),
-                      isThreeLine: project.hasDatasetMigration,
+                      isThreeLine: object.customerPhone.isNotEmpty,
                       trailing: Icon(
                         isSelected
                             ? Icons.radio_button_checked
                             : Icons.radio_button_off_outlined,
                       ),
-                      onTap: () => onSelectProject(project.id),
+                      onTap: () => onSelectObject(object),
                     ),
                   );
                 }),
             ],
           ),
           loading: () => const LinearProgressIndicator(),
-          error: (error, _) => Text('Ошибка загрузки проектов: $error'),
+          error: (error, _) => Text('Ошибка загрузки объектов: $error'),
         ),
       ),
     );
@@ -296,11 +324,19 @@ class _CatalogOverview extends StatelessWidget {
 
 class _RoadmapCard extends StatelessWidget {
   const _RoadmapCard({
+    required this.hasSelectedObject,
+    required this.onOpenObjectStep,
+    required this.onOpenConstructionStep,
+    required this.onOpenBuildingStep,
     required this.onOpenHouseScheme,
     required this.onOpenPreview,
     required this.onOpenGroundFloor,
   });
 
+  final bool hasSelectedObject;
+  final VoidCallback onOpenObjectStep;
+  final VoidCallback onOpenConstructionStep;
+  final VoidCallback onOpenBuildingStep;
   final VoidCallback onOpenHouseScheme;
   final VoidCallback onOpenPreview;
   final VoidCallback onOpenGroundFloor;
@@ -324,20 +360,38 @@ class _RoadmapCard extends StatelessWidget {
               'Открываются экран thermocalc, отдельный модуль полов по грунту v1 и конструктор дома из Phase 2: помещения, ограждения, конструкции и запуск расчёта из выбранного элемента.',
             ),
             const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onOpenObjectStep,
+              icon: const Icon(Icons.looks_3_outlined),
+              label: const Text('Открыть шаг 0'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: hasSelectedObject ? onOpenConstructionStep : null,
+              icon: const Icon(Icons.looks_one_outlined),
+              label: const Text('Открыть шаг 1'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: hasSelectedObject ? onOpenBuildingStep : null,
+              icon: const Icon(Icons.looks_two_outlined),
+              label: const Text('Открыть шаг 2'),
+            ),
+            const SizedBox(height: 12),
             FilledButton.tonalIcon(
-              onPressed: onOpenHouseScheme,
+              onPressed: hasSelectedObject ? onOpenHouseScheme : null,
               icon: const Icon(Icons.home_work_outlined),
               label: const Text('Открыть сборку дома'),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: onOpenPreview,
+              onPressed: hasSelectedObject ? onOpenPreview : null,
               icon: const Icon(Icons.analytics_outlined),
               label: const Text('Открыть thermocalc'),
             ),
             const SizedBox(height: 12),
             FilledButton.tonalIcon(
-              onPressed: onOpenGroundFloor,
+              onPressed: hasSelectedObject ? onOpenGroundFloor : null,
               icon: const Icon(Icons.foundation_outlined),
               label: const Text('Открыть полы по грунту'),
             ),

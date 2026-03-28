@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../features/dashboard/presentation/dashboard_screen.dart';
+import '../features/object_step/presentation/object_step_screen.dart';
 import 'theme.dart';
 
 class SmartCalcApp extends StatelessWidget {
@@ -12,7 +12,7 @@ class SmartCalcApp extends StatelessWidget {
       title: 'SmartCalc Mobile',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: const DashboardScreen(),
+      home: const ObjectStepScreen(),
     );
   }
 }

@@ -95,6 +95,34 @@ void main() {
     expect(find.textContaining('thermocalc_demo.pdf'), findsOneWidget);
   });
 
+  testWidgets('thermocalc screen can render a focused construction without element context', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: ThermocalcScreen(
+            constructionId: 'wall',
+            showElementContext: false,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Конструкция: Наружная стена'), findsOneWidget);
+    expect(find.textContaining('Ограждение:'), findsNothing);
+    expect(find.text('Сезонный влагорежим'), findsOneWidget);
+  });
+
   testWidgets('thermocalc screen shows export failure message', (tester) async {
     await tester.pumpWidget(
       ProviderScope(

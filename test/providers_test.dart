@@ -7,7 +7,7 @@ import 'package:smartcalc_mobile/src/core/providers.dart';
 import 'support/fakes.dart';
 
 void main() {
-  test('selectedProjectProvider follows selectedProjectIdProvider', () async {
+  test('selectedProjectProvider follows selectedObjectProvider', () async {
     final roofConstruction = Construction(
       id: 'roof',
       title: 'Кровля',
@@ -35,7 +35,9 @@ void main() {
     final initialProject = await container.read(selectedProjectProvider.future);
     expect(initialProject?.id, 'demo');
 
-    container.read(selectedProjectIdProvider.notifier).select('roof-project');
+    container
+        .read(selectedObjectIdProvider.notifier)
+        .select('object-roof-project');
 
     final selectedProject = await container.read(
       selectedProjectProvider.future,

@@ -9,7 +9,16 @@ import 'demo_project_seed.dart';
 import 'interfaces.dart';
 import 'project_migration_service.dart';
 
-class DriftProjectRepository implements ProjectRepository {
+const _constructionLibraryEntryId = '__construction_library__';
+const _constructionLibraryPayloadVersion = 1;
+const _objectEntryIdPrefix = '__object__';
+const _objectPayloadVersion = 1;
+
+class DriftProjectRepository
+    implements
+        ProjectRepository,
+        ConstructionLibraryRepository,
+        ObjectRepository {
   DriftProjectRepository(this._database);
 
   final AppDatabase _database;
@@ -28,6 +37,9 @@ class DriftProjectRepository implements ProjectRepository {
     final rows = await query.get();
     final projects = <Project>[];
     for (final row in rows) {
+      if (_isTechnicalEntry(row.id)) {
+        continue;
+      }
       projects.add(await _mapRowToProject(row));
     }
     return projects;
@@ -35,6 +47,9 @@ class DriftProjectRepository implements ProjectRepository {
 
   @override
   Future<Project?> getProject(String id) async {
+    if (_isTechnicalEntry(id)) {
+      return null;
+    }
     final query = _database.select(_database.projectEntries)
       ..where((table) => table.id.equals(id));
 
@@ -49,6 +64,17 @@ class DriftProjectRepository implements ProjectRepository {
   Future<void> saveProject(Project project) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     await _upsertProject(project, updatedAtEpochMs: now);
+    await _mergeProjectConstructionsIntoLibrary(project.constructions);
+  }
+
+  @override
+  Future<void> deleteProject(String id) async {
+    if (_isTechnicalEntry(id)) {
+      return;
+    }
+    final query = _database.delete(_database.projectEntries)
+      ..where((table) => table.id.equals(id));
+    await query.go();
   }
 
   Future<void> _upsertProject(
@@ -78,11 +104,7 @@ class DriftProjectRepository implements ProjectRepository {
 
   @override
   Future<void> seedDemoProjectIfEmpty() async {
-    final countExpression = _database.projectEntries.id.count();
-    final query = _database.selectOnly(_database.projectEntries)
-      ..addColumns([countExpression]);
-    final result = await query.getSingle();
-    final existing = result.read(countExpression) ?? 0;
+    final existing = (await listProjects()).length;
 
     if (existing > 0) {
       return;
@@ -90,6 +112,125 @@ class DriftProjectRepository implements ProjectRepository {
 
     for (final project in demoProjects) {
       await saveProject(project);
+    }
+  }
+
+  @override
+  Future<List<Construction>> listConstructions() async {
+    await _ensureLibrarySeeded();
+    final row = await _getLibraryRow();
+    return row == null ? const [] : _decodeLibraryRow(row);
+  }
+
+  @override
+  Future<Construction?> getConstruction(String id) async {
+    final constructions = await listConstructions();
+    for (final construction in constructions) {
+      if (construction.id == id) {
+        return construction;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<void> saveConstruction(Construction construction) async {
+    final constructions = await listConstructions();
+    final updated = [
+      for (final item in constructions)
+        if (item.id == construction.id) construction else item,
+      if (!constructions.any((item) => item.id == construction.id)) construction,
+    ];
+    await _saveLibrary(updated);
+  }
+
+  @override
+  Future<void> deleteConstruction(String id) async {
+    final constructions = await listConstructions();
+    await _saveLibrary([
+      for (final item in constructions)
+        if (item.id != id) item,
+    ]);
+  }
+
+  @override
+  Future<List<DesignObject>> listObjects() async {
+    await seedObjectsIfEmpty();
+    final query = _database.select(_database.projectEntries)
+      ..orderBy([
+        (table) => OrderingTerm(
+          expression: table.updatedAtEpochMs,
+          mode: OrderingMode.desc,
+        ),
+      ]);
+    final rows = await query.get();
+    return rows
+        .where((row) => row.id.startsWith(_objectEntryIdPrefix))
+        .map(_decodeObjectRow)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<DesignObject?> getObject(String id) async {
+    final query = _database.select(_database.projectEntries)
+      ..where((table) => table.id.equals(_buildObjectEntryId(id)));
+    final row = await query.getSingleOrNull();
+    return row == null ? null : _decodeObjectRow(row);
+  }
+
+  @override
+  Future<void> saveObject(DesignObject object) async {
+    await _database
+        .into(_database.projectEntries)
+        .insertOnConflictUpdate(
+          ProjectEntriesCompanion.insert(
+            id: _buildObjectEntryId(object.id),
+            name: object.title,
+            climatePointId: 'object',
+            roomPreset: RoomPreset.livingRoom.storageKey,
+            payloadJson: jsonEncode({
+              'type': 'designObject',
+              'payloadVersion': _objectPayloadVersion,
+              'object': object.toJson(),
+            }),
+            projectFormatVersion: currentProjectFormatVersion,
+            datasetVersion: const Value(currentDatasetVersion),
+            migratedFromDatasetVersion: const Value(null),
+            updatedAtEpochMs: object.updatedAtEpochMs,
+          ),
+        );
+  }
+
+  @override
+  Future<void> deleteObject(String id) async {
+    final query = _database.delete(_database.projectEntries)
+      ..where((table) => table.id.equals(_buildObjectEntryId(id)));
+    await query.go();
+  }
+
+  @override
+  Future<void> seedObjectsIfEmpty() async {
+    final existing = await listProjects();
+    final existingObjectsQuery = _database.select(_database.projectEntries)
+      ..where((table) => table.id.like('$_objectEntryIdPrefix%'));
+    final existingObjects = await existingObjectsQuery.get();
+    if (existingObjects.isNotEmpty) {
+      return;
+    }
+
+    for (final project in existing) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await saveObject(
+        DesignObject(
+          id: 'object-${project.id}',
+          title: project.name,
+          address: '',
+          description: '',
+          customerPhone: '',
+          projectId: project.id,
+          updatedAtEpochMs: now,
+        ),
+      );
     }
   }
 
@@ -105,4 +246,89 @@ class DriftProjectRepository implements ProjectRepository {
     }
     return migrated.project;
   }
+
+  Future<ProjectEntry?> _getLibraryRow() async {
+    final query = _database.select(_database.projectEntries)
+      ..where((table) => table.id.equals(_constructionLibraryEntryId));
+    return query.getSingleOrNull();
+  }
+
+  Future<void> _ensureLibrarySeeded() async {
+    final existing = await _getLibraryRow();
+    if (existing != null) {
+      return;
+    }
+
+    final query = _database.select(_database.projectEntries)
+      ..where((table) => table.id.isNotValue(_constructionLibraryEntryId));
+    final rows = await query.get();
+    final constructionsById = <String, Construction>{};
+    for (final row in rows) {
+      if (_isTechnicalEntry(row.id)) {
+        continue;
+      }
+      final project = await _mapRowToProject(row);
+      for (final construction in project.constructions) {
+        constructionsById.putIfAbsent(construction.id, () => construction);
+      }
+    }
+    await _saveLibrary(constructionsById.values.toList(growable: false));
+  }
+
+  Future<void> _mergeProjectConstructionsIntoLibrary(
+    List<Construction> constructions,
+  ) async {
+    final existing = await listConstructions();
+    final merged = {
+      for (final item in existing) item.id: item,
+      for (final item in constructions) item.id: item,
+    }.values.toList(growable: false);
+    await _saveLibrary(merged);
+  }
+
+  List<Construction> _decodeLibraryRow(ProjectEntry row) {
+    final payload = Map<String, dynamic>.from(jsonDecode(row.payloadJson) as Map);
+    final items = (payload['constructions'] as List<dynamic>? ?? const []);
+    return items
+        .map((item) => Construction.fromJson(Map<String, dynamic>.from(item as Map)))
+        .toList(growable: false);
+  }
+
+  Future<void> _saveLibrary(List<Construction> constructions) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _database
+        .into(_database.projectEntries)
+        .insertOnConflictUpdate(
+          ProjectEntriesCompanion.insert(
+            id: _constructionLibraryEntryId,
+            name: 'Construction library',
+            climatePointId: 'library',
+            roomPreset: RoomPreset.livingRoom.storageKey,
+            payloadJson: jsonEncode({
+              'type': 'constructionLibrary',
+              'payloadVersion': _constructionLibraryPayloadVersion,
+              'constructions': constructions
+                  .map((item) => item.toJson())
+                  .toList(growable: false),
+            }),
+            projectFormatVersion: currentProjectFormatVersion,
+            datasetVersion: const Value(currentDatasetVersion),
+            migratedFromDatasetVersion: const Value(null),
+            updatedAtEpochMs: now,
+          ),
+        );
+  }
+
+  DesignObject _decodeObjectRow(ProjectEntry row) {
+    final payload = Map<String, dynamic>.from(jsonDecode(row.payloadJson) as Map);
+    return DesignObject.fromJson(
+      Map<String, dynamic>.from(payload['object'] as Map),
+    );
+  }
+
+  bool _isTechnicalEntry(String id) {
+    return id == _constructionLibraryEntryId || id.startsWith(_objectEntryIdPrefix);
+  }
+
+  String _buildObjectEntryId(String objectId) => '$_objectEntryIdPrefix$objectId';
 }

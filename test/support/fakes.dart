@@ -356,11 +356,30 @@ class FakeCatalogRepository implements CatalogRepository {
   Future<CatalogSnapshot> loadSnapshot() async => testCatalogSnapshot;
 }
 
-class FakeProjectRepository implements ProjectRepository {
+class FakeProjectRepository
+    implements ProjectRepository, ConstructionLibraryRepository, ObjectRepository {
   FakeProjectRepository({List<Project>? projects})
-    : _projects = projects ?? [buildTestProject()];
+    : _projects = projects ?? [buildTestProject()],
+      _library = {
+        for (final project in (projects ?? [buildTestProject()]))
+          for (final construction in project.constructions) construction.id: construction,
+      },
+      _objects = {
+        for (final project in (projects ?? [buildTestProject()]))
+          'object-${project.id}': DesignObject(
+            id: 'object-${project.id}',
+            title: project.name,
+            address: '',
+            description: '',
+            customerPhone: '',
+            projectId: project.id,
+            updatedAtEpochMs: 0,
+          ),
+      };
 
   final List<Project> _projects;
+  final Map<String, Construction> _library;
+  final Map<String, DesignObject> _objects;
 
   @override
   Future<List<Project>> listProjects() async => List.unmodifiable(_projects);
@@ -377,6 +396,9 @@ class FakeProjectRepository implements ProjectRepository {
 
   @override
   Future<void> saveProject(Project project) async {
+    for (final construction in project.constructions) {
+      _library[construction.id] = construction;
+    }
     final index = _projects.indexWhere((item) => item.id == project.id);
     if (index == -1) {
       _projects.add(project);
@@ -386,9 +408,72 @@ class FakeProjectRepository implements ProjectRepository {
   }
 
   @override
+  Future<void> deleteProject(String id) async {
+    _projects.removeWhere((item) => item.id == id);
+  }
+
+  @override
   Future<void> seedDemoProjectIfEmpty() async {
     if (_projects.isEmpty) {
-      _projects.add(buildTestProject());
+      final project = buildTestProject();
+      _projects.add(project);
+      for (final construction in project.constructions) {
+        _library[construction.id] = construction;
+      }
+    }
+  }
+
+  @override
+  Future<List<Construction>> listConstructions() async {
+    return List.unmodifiable(_library.values);
+  }
+
+  @override
+  Future<Construction?> getConstruction(String id) async => _library[id];
+
+  @override
+  Future<void> saveConstruction(Construction construction) async {
+    _library[construction.id] = construction;
+  }
+
+  @override
+  Future<void> deleteConstruction(String id) async {
+    _library.remove(id);
+  }
+
+  @override
+  Future<List<DesignObject>> listObjects() async {
+    return List.unmodifiable(_objects.values);
+  }
+
+  @override
+  Future<DesignObject?> getObject(String id) async => _objects[id];
+
+  @override
+  Future<void> saveObject(DesignObject object) async {
+    _objects[object.id] = object;
+  }
+
+  @override
+  Future<void> deleteObject(String id) async {
+    _objects.remove(id);
+  }
+
+  @override
+  Future<void> seedObjectsIfEmpty() async {
+    if (_objects.isNotEmpty) {
+      return;
+    }
+    for (final project in _projects) {
+      _objects['object-${project.id}'] = DesignObject(
+        id: 'object-${project.id}',
+        title: project.name,
+        address: '',
+        description: '',
+        customerPhone: '',
+        projectId: project.id,
+        updatedAtEpochMs: 0,
+      );
     }
   }
 }

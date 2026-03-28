@@ -9,7 +9,14 @@ import 'widgets/line_chart_painter.dart';
 import 'widgets/section_painter.dart';
 
 class ThermocalcScreen extends ConsumerWidget {
-  const ThermocalcScreen({super.key});
+  const ThermocalcScreen({
+    super.key,
+    this.constructionId,
+    this.showElementContext = true,
+  });
+
+  final String? constructionId;
+  final bool showElementContext;
 
   Future<void> _handleExport(BuildContext context, WidgetRef ref) async {
     try {
@@ -39,9 +46,17 @@ class ThermocalcScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectAsync = ref.watch(selectedProjectProvider);
-    final constructionAsync = ref.watch(selectedConstructionProvider);
-    final elementAsync = ref.watch(selectedEnvelopeElementProvider);
-    final calculationAsync = ref.watch(calculationResultProvider);
+    final constructionAsync = switch (constructionId) {
+      final String id => ref.watch(constructionByIdProvider(id)),
+      null => ref.watch(selectedConstructionProvider),
+    };
+    final elementAsync = showElementContext
+        ? ref.watch(selectedEnvelopeElementProvider)
+        : const AsyncData<HouseEnvelopeElement?>(null);
+    final calculationAsync = switch (constructionId) {
+      final String id => ref.watch(calculationResultForConstructionProvider(id)),
+      null => ref.watch(calculationResultProvider),
+    };
     final catalogAsync = ref.watch(catalogSnapshotProvider);
     final reportExportAsync = ref.watch(reportExportControllerProvider);
 
@@ -77,6 +92,7 @@ class ThermocalcScreen extends ConsumerWidget {
             constructionAsync: constructionAsync,
             elementAsync: elementAsync,
             catalogAsync: catalogAsync,
+            showElementContext: showElementContext,
           ),
           const SizedBox(height: 16),
           calculationAsync.when(
@@ -134,12 +150,14 @@ class _ProjectSummary extends StatelessWidget {
     required this.constructionAsync,
     required this.elementAsync,
     required this.catalogAsync,
+    required this.showElementContext,
   });
 
   final AsyncValue<Project?> projectAsync;
   final AsyncValue<Construction?> constructionAsync;
   final AsyncValue<HouseEnvelopeElement?> elementAsync;
   final AsyncValue<CatalogSnapshot> catalogAsync;
+  final bool showElementContext;
 
   @override
   Widget build(BuildContext context) {
@@ -177,8 +195,10 @@ class _ProjectSummary extends StatelessWidget {
                           const SizedBox(height: 6),
                           Text('Климат: ${climate?.displayName ?? '—'}'),
                           Text('Помещение для норм: ${project?.roomPreset.label ?? '—'}'),
-                          Text('Ограждение: ${element?.title ?? '—'}'),
-                          Text('Комната: ${room?.title ?? '—'}'),
+                          if (showElementContext)
+                            Text('Ограждение: ${element?.title ?? '—'}'),
+                          if (showElementContext)
+                            Text('Комната: ${room?.title ?? '—'}'),
                           Text('Конструкция: ${construction?.title ?? '—'}'),
                           if (project?.datasetMigrationLabel
                               case final migrationLabel?)

@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'models/building_heat_loss.dart';
@@ -25,6 +26,15 @@ class SelectedProjectIdNotifier extends Notifier<String?> {
 
   void select(String? projectId) {
     state = projectId;
+  }
+}
+
+class SelectedObjectIdNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String? objectId) {
+    state = objectId;
   }
 }
 
@@ -69,6 +79,74 @@ class ProjectEditor {
     _ref.invalidate(buildingHeatLossResultProvider);
     _ref.invalidate(selectedGroundFloorCalculationProvider);
     _ref.invalidate(groundFloorCalculationResultProvider);
+    _ref.invalidate(constructionLibraryProvider);
+    _ref.invalidate(objectListProvider);
+    _ref.invalidate(selectedObjectProvider);
+  }
+
+  Future<void> createObject({
+    required String title,
+    required String address,
+    required String description,
+    required String customerPhone,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final project = Project(
+      id: 'project-$now',
+      name: title,
+      climatePointId: 'moscow',
+      roomPreset: RoomPreset.livingRoom,
+      constructions: const [],
+      houseModel: HouseModel.bootstrapFromConstructions(const []),
+    );
+    final object = DesignObject(
+      id: 'object-$now',
+      title: title,
+      address: address,
+      description: description,
+      customerPhone: customerPhone,
+      projectId: project.id,
+      updatedAtEpochMs: now,
+    );
+    await _ref.read(projectRepositoryProvider).saveProject(project);
+    await _ref.read(objectRepositoryProvider).saveObject(object);
+    _ref.read(selectedObjectIdProvider.notifier).select(object.id);
+    _ref.read(selectedProjectIdProvider.notifier).select(project.id);
+    _ref.invalidate(projectListProvider);
+    _ref.invalidate(objectListProvider);
+    _ref.invalidate(selectedObjectProvider);
+    _ref.invalidate(selectedProjectProvider);
+  }
+
+  Future<void> updateObject(DesignObject object) async {
+    await _ref.read(objectRepositoryProvider).saveObject(object);
+    final project = await _ref.read(projectRepositoryProvider).getProject(
+      object.projectId,
+    );
+    if (project != null && project.name != object.title) {
+      await _ref.read(projectRepositoryProvider).saveProject(
+        project.copyWith(name: object.title),
+      );
+    }
+    _ref.invalidate(projectListProvider);
+    _ref.invalidate(objectListProvider);
+    _ref.invalidate(selectedObjectProvider);
+    _ref.invalidate(selectedProjectProvider);
+  }
+
+  Future<void> deleteObject(String objectId) async {
+    final object = await _ref.read(objectRepositoryProvider).getObject(objectId);
+    if (object == null) {
+      return;
+    }
+    await _ref.read(objectRepositoryProvider).deleteObject(objectId);
+    await _ref.read(projectRepositoryProvider).deleteProject(object.projectId);
+    _ref.read(selectedObjectIdProvider.notifier).select(null);
+    _ref.read(selectedProjectIdProvider.notifier).select(null);
+    _ref.invalidate(projectListProvider);
+    _ref.invalidate(objectListProvider);
+    _ref.invalidate(selectedObjectProvider);
+    _ref.invalidate(selectedProjectProvider);
   }
 
   Future<void> addRoom(Room room) async {
@@ -210,29 +288,110 @@ class ProjectEditor {
 
   Future<void> addConstruction(Construction construction) async {
     final project = await _requireProject();
+    await _ref.read(constructionLibraryRepositoryProvider).saveConstruction(
+      construction,
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
-        .addConstruction(project, construction);
+        .selectConstruction(project, construction);
     await saveProject(updated);
     _ref.read(selectedConstructionIdProvider.notifier).select(construction.id);
   }
 
   Future<void> updateConstruction(Construction construction) async {
-    final project = await _requireProject();
-    final updated = _ref
-        .read(projectEditingServiceProvider)
-        .updateConstruction(project, construction);
-    await saveProject(updated);
+    await updateLibraryConstruction(construction);
     _ref.read(selectedConstructionIdProvider.notifier).select(construction.id);
   }
 
   Future<void> deleteConstruction(String constructionId) async {
+    await unselectConstructionFromProject(constructionId);
+    _ref.read(selectedConstructionIdProvider.notifier).select(null);
+  }
+
+  Future<void> selectConstructionForProject(Construction construction) async {
     final project = await _requireProject();
     final updated = _ref
         .read(projectEditingServiceProvider)
-        .deleteConstruction(project, constructionId);
+        .selectConstruction(project, construction);
     await saveProject(updated);
-    _ref.read(selectedConstructionIdProvider.notifier).select(null);
+    _ref.read(selectedConstructionIdProvider.notifier).select(construction.id);
+  }
+
+  Future<void> unselectConstructionFromProject(String constructionId) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .unselectConstruction(project, constructionId);
+    await saveProject(updated);
+    final remainingIds = updated.effectiveSelectedConstructionIds;
+    _ref.read(selectedConstructionIdProvider.notifier).select(
+      remainingIds.isEmpty ? null : remainingIds.first,
+    );
+  }
+
+  Future<void> saveConstructionToLibrary(Construction construction) async {
+    await _ref.read(constructionLibraryRepositoryProvider).saveConstruction(
+      construction,
+    );
+    _ref.invalidate(constructionLibraryProvider);
+  }
+
+  Future<void> updateLibraryConstruction(Construction construction) async {
+    await saveConstructionToLibrary(construction);
+    final repository = _ref.read(projectRepositoryProvider);
+    final libraryId = construction.id;
+    final allProjects = await repository.listProjects();
+    for (final project in allProjects) {
+      if (!project.effectiveSelectedConstructionIds.contains(libraryId)) {
+        continue;
+      }
+      final existing = project.constructions.any((item) => item.id == libraryId);
+      final updatedProject = existing
+          ? _ref
+                .read(projectEditingServiceProvider)
+                .updateConstruction(project, construction)
+          : _ref
+                .read(projectEditingServiceProvider)
+                .selectConstruction(project, construction);
+      await repository.saveProject(updatedProject);
+    }
+    _ref.invalidate(projectListProvider);
+    _ref.invalidate(selectedProjectProvider);
+    _ref.invalidate(selectedEnvelopeElementProvider);
+    _ref.invalidate(selectedConstructionProvider);
+    _ref.invalidate(buildingHeatLossResultProvider);
+    _ref.invalidate(selectedGroundFloorCalculationProvider);
+    _ref.invalidate(groundFloorCalculationResultProvider);
+    _ref.invalidate(constructionLibraryProvider);
+  }
+
+  Future<void> deleteConstructionFromLibrary(String constructionId) async {
+    final projects = await _ref.read(projectRepositoryProvider).listProjects();
+    final inUse = projects.any(
+      (project) => project.effectiveSelectedConstructionIds.contains(
+        constructionId,
+      ),
+    );
+    if (inUse) {
+      throw StateError(
+        'Нельзя удалить конструкцию из библиотеки, пока она выбрана в проекте.',
+      );
+    }
+    await _ref
+        .read(constructionLibraryRepositoryProvider)
+        .deleteConstruction(constructionId);
+    _ref.invalidate(constructionLibraryProvider);
+  }
+
+  Future<Construction> duplicateConstructionInLibrary(
+    Construction source,
+  ) async {
+    final duplicated = source.copyWith(
+      id: _buildDuplicateConstructionId(source.id),
+      title: '${source.title} (копия)',
+    );
+    await saveConstructionToLibrary(duplicated);
+    return duplicated;
   }
 
   Future<void> addGroundFloorCalculation(
@@ -347,6 +506,23 @@ final projectRepositoryProvider = Provider<ProjectRepository>(
   (ref) => DriftProjectRepository(ref.watch(appDatabaseProvider)),
 );
 
+final objectRepositoryProvider = Provider<ObjectRepository>((ref) {
+  final repository = ref.watch(projectRepositoryProvider);
+  if (repository is ObjectRepository) {
+    return repository as ObjectRepository;
+  }
+  return DriftProjectRepository(ref.watch(appDatabaseProvider));
+});
+
+final constructionLibraryRepositoryProvider =
+    Provider<ConstructionLibraryRepository>((ref) {
+      final repository = ref.watch(projectRepositoryProvider);
+      if (repository is ConstructionLibraryRepository) {
+        return repository as ConstructionLibraryRepository;
+      }
+      return DriftProjectRepository(ref.watch(appDatabaseProvider));
+    });
+
 final thermalCalculationEngineProvider = Provider<ThermalCalculationEngine>(
   (ref) => const NormativeThermalCalculationEngine(),
 );
@@ -398,6 +574,11 @@ final selectedProjectIdProvider =
       SelectedProjectIdNotifier.new,
     );
 
+final selectedObjectIdProvider =
+    NotifierProvider<SelectedObjectIdNotifier, String?>(
+      SelectedObjectIdNotifier.new,
+    );
+
 final selectedConstructionIdProvider =
     NotifierProvider<SelectedConstructionIdNotifier, String?>(
       SelectedConstructionIdNotifier.new,
@@ -428,13 +609,57 @@ final projectListProvider = FutureProvider<List<Project>>((ref) async {
   return projects;
 });
 
+final objectListProvider = FutureProvider<List<DesignObject>>((ref) async {
+  final repository = ref.read(objectRepositoryProvider);
+  await repository.seedObjectsIfEmpty();
+  final objects = await repository.listObjects();
+  final selectedObjectId = ref.read(selectedObjectIdProvider);
+  if (objects.isNotEmpty &&
+      (selectedObjectId == null ||
+          objects.every((item) => item.id != selectedObjectId))) {
+    final first = objects.first;
+    ref.read(selectedObjectIdProvider.notifier).select(first.id);
+    ref.read(selectedProjectIdProvider.notifier).select(first.projectId);
+  }
+  return objects;
+});
+
+final selectedObjectProvider = FutureProvider<DesignObject?>((ref) async {
+  final objects = await ref.watch(objectListProvider.future);
+  if (objects.isEmpty) {
+    return null;
+  }
+  final selectedObjectId = ref.watch(selectedObjectIdProvider);
+  for (final object in objects) {
+    if (object.id == selectedObjectId) {
+      return object;
+    }
+  }
+  return objects.first;
+});
+
+final constructionLibraryProvider = FutureProvider<List<Construction>>((
+  ref,
+) async {
+  return ref.read(constructionLibraryRepositoryProvider).listConstructions();
+});
+
 final selectedProjectProvider = FutureProvider<Project?>((ref) async {
+  final selectedObject = await ref.watch(selectedObjectProvider.future);
+  if (selectedObject != null) {
+    ref
+        .read(selectedProjectIdProvider.notifier)
+        .select(selectedObject.projectId);
+    return ref
+        .read(projectRepositoryProvider)
+        .getProject(selectedObject.projectId);
+  }
   final projects = await ref.watch(projectListProvider.future);
   if (projects.isEmpty) {
     return null;
   }
-  final selectedProjectId = ref.watch(selectedProjectIdProvider);
 
+  final selectedProjectId = ref.watch(selectedProjectIdProvider);
   for (final project in projects) {
     if (project.id == selectedProjectId) {
       return project;
@@ -443,6 +668,87 @@ final selectedProjectProvider = FutureProvider<Project?>((ref) async {
 
   return projects.first;
 });
+
+abstract interface class CustomerPhonePicker {
+  Future<bool> get supportsContacts;
+  Future<bool> get supportsCallLog;
+  Future<List<CustomerPhoneRecord>> loadContacts();
+  Future<List<CustomerPhoneRecord>> loadCallLog();
+}
+
+class CustomerPhoneRecord {
+  const CustomerPhoneRecord({
+    required this.label,
+    required this.phone,
+    this.subtitle,
+  });
+
+  final String label;
+  final String phone;
+  final String? subtitle;
+}
+
+class MethodChannelCustomerPhonePicker implements CustomerPhonePicker {
+  static const _channel = MethodChannel('smartcalc_mobile/customer_phone');
+
+  @override
+  Future<bool> get supportsContacts async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return false;
+    }
+    return await _channel.invokeMethod<bool>('supportsContacts') ?? false;
+  }
+
+  @override
+  Future<bool> get supportsCallLog async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return false;
+    }
+    return await _channel.invokeMethod<bool>('supportsCallLog') ?? false;
+  }
+
+  @override
+  Future<List<CustomerPhoneRecord>> loadContacts() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return const [];
+    }
+    final items =
+        await _channel.invokeListMethod<Map<dynamic, dynamic>>('loadContacts') ??
+        const [];
+    return items
+        .map(
+          (item) => CustomerPhoneRecord(
+            label: item['label'] as String,
+            phone: item['phone'] as String,
+            subtitle: item['subtitle'] as String?,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<CustomerPhoneRecord>> loadCallLog() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return const [];
+    }
+    final items =
+        await _channel.invokeListMethod<Map<dynamic, dynamic>>('loadCallLog') ??
+        const [];
+    return items
+        .map(
+          (item) => CustomerPhoneRecord(
+            label: item['label'] as String,
+            phone: item['phone'] as String,
+            subtitle: item['subtitle'] as String?,
+          ),
+        )
+        .toList(growable: false);
+  }
+}
+
+final customerPhonePickerProvider = Provider<CustomerPhonePicker>(
+  (ref) => MethodChannelCustomerPhonePicker(),
+);
 
 final selectedEnvelopeElementProvider = FutureProvider<HouseEnvelopeElement?>((
   ref,
@@ -499,6 +805,47 @@ final selectedConstructionProvider = FutureProvider<Construction?>((ref) async {
   ref.read(selectedConstructionIdProvider.notifier).select(fallback.id);
   return fallback;
 });
+
+final constructionByIdProvider = FutureProvider.family<Construction?, String>((
+  ref,
+  constructionId,
+) async {
+  final project = await ref.watch(selectedProjectProvider.future);
+  if (project != null) {
+    for (final construction in project.constructions) {
+      if (construction.id == constructionId) {
+        return construction;
+      }
+    }
+  }
+  return ref
+      .read(constructionLibraryRepositoryProvider)
+      .getConstruction(constructionId);
+});
+
+final calculationResultForConstructionProvider =
+    FutureProvider.family<CalculationResult?, String>((ref, constructionId) async {
+      final catalog = await ref.watch(catalogSnapshotProvider.future);
+      final project = await ref.watch(selectedProjectProvider.future);
+      final construction = await ref.watch(
+        constructionByIdProvider(constructionId).future,
+      );
+      if (project == null || construction == null) {
+        return null;
+      }
+      return ref
+          .read(thermalCalculationEngineProvider)
+          .calculate(
+            catalog: catalog,
+            project: project,
+            construction: construction,
+          );
+    });
+
+String _buildDuplicateConstructionId(String sourceId) {
+  final timestamp = DateTime.now().millisecondsSinceEpoch;
+  return '$sourceId-copy-$timestamp';
+}
 
 final selectedGroundFloorCalculationProvider =
     FutureProvider<GroundFloorCalculation?>((ref) async {

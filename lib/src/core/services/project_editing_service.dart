@@ -201,8 +201,10 @@ class ProjectEditingService {
   }
 
   Project addConstruction(Project project, Construction construction) {
+    final selectedIds = project.effectiveSelectedConstructionIds;
     return project.copyWith(
       constructions: [...project.constructions, construction],
+      selectedConstructionIds: [...selectedIds, construction.id],
     );
   }
 
@@ -246,6 +248,56 @@ class ProjectEditingService {
       constructions: [
         for (final item in project.constructions)
           if (item.id != constructionId) item,
+      ],
+      selectedConstructionIds: [
+        for (final item in project.effectiveSelectedConstructionIds)
+          if (item != constructionId) item,
+      ],
+    );
+  }
+
+  Project selectConstruction(Project project, Construction construction) {
+    if (project.effectiveSelectedConstructionIds.contains(construction.id)) {
+      return project;
+    }
+    return project.copyWith(
+      constructions: [...project.constructions, construction],
+      selectedConstructionIds: [
+        ...project.effectiveSelectedConstructionIds,
+        construction.id,
+      ],
+    );
+  }
+
+  Project unselectConstruction(Project project, String constructionId) {
+    final isUsedByElements = project.houseModel.elements.any(
+      (item) => item.constructionId == constructionId,
+    );
+    if (isUsedByElements) {
+      throw StateError(
+        'Нельзя убрать конструкцию из проекта, пока она используется в ограждениях.',
+      );
+    }
+    final isUsedByGroundFloor = project.groundFloorCalculations.any(
+      (item) => item.constructionId == constructionId,
+    );
+    if (isUsedByGroundFloor) {
+      throw StateError(
+        'Нельзя убрать конструкцию из проекта, пока она используется в расчете пола по грунту.',
+      );
+    }
+    final selectedIds = project.effectiveSelectedConstructionIds;
+    if (selectedIds.length <= 1) {
+      throw StateError('В проекте должна остаться хотя бы одна конструкция.');
+    }
+    return project.copyWith(
+      constructions: [
+        for (final item in project.constructions)
+          if (item.id != constructionId) item,
+      ],
+      selectedConstructionIds: [
+        for (final item in selectedIds)
+          if (item != constructionId) item,
       ],
     );
   }

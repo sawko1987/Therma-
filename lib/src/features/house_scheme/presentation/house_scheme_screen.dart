@@ -7,6 +7,7 @@ import '../../../core/models/building_heat_loss.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
+import '../../construction_library/presentation/construction_editor_sheet.dart';
 import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
 import 'floor_plan_geometry.dart';
 import 'widgets/floor_plan_editor_card.dart';
@@ -14,7 +15,22 @@ import 'widgets/heating_devices_card.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 
 class HouseSchemeScreen extends ConsumerWidget {
-  const HouseSchemeScreen({super.key});
+  const HouseSchemeScreen({
+    super.key,
+    this.screenTitle = 'Сборка дома',
+    this.statusText,
+    this.limitToSelectedConstructions = false,
+    this.showConstructionsCard = true,
+    this.showHeatingDevices = true,
+    this.trailingHeader,
+  });
+
+  final String screenTitle;
+  final String? statusText;
+  final bool limitToSelectedConstructions;
+  final bool showConstructionsCard;
+  final bool showHeatingDevices;
+  final Widget? trailingHeader;
 
   Future<void> _handleAddRoom(
     BuildContext context,
@@ -394,15 +410,23 @@ class HouseSchemeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Сборка дома',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          screenTitle,
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
-          const _StatusCard(),
+          _StatusCard(
+            text:
+                statusText ??
+                'Конструктор дома собирает проект сверху вниз: помещения, ограждения, окна/двери и переиспользуемые конструкции. Расчёт конструкции запускается прямо из выбранного ограждения, а сводка дома учитывает чистую площадь и проёмы.',
+          ),
+          if (trailingHeader != null) ...[
+            const SizedBox(height: 16),
+            trailingHeader!,
+          ],
           const SizedBox(height: 16),
           summaryAsync.when(
             data: (summary) => projectAsync.when(
@@ -410,8 +434,9 @@ class HouseSchemeScreen extends ConsumerWidget {
                 if (project == null || summary == null) {
                   return const Text('Активный проект не найден.');
                 }
+                final effectiveProject = _resolveProject(project);
                 return _SummaryCard(
-                  project: project,
+                  project: effectiveProject,
                   summary: summary,
                   onOpenBuildingHeatLoss: () =>
                       _handleOpenBuildingHeatLoss(context),
@@ -430,12 +455,14 @@ class HouseSchemeScreen extends ConsumerWidget {
                 if (project == null) {
                   return const Text('Активный проект не найден.');
                 }
+                final effectiveProject = _resolveProject(project);
                 return Column(
                   children: [
                     _PlanAndRoomsSection(
-                      project: project,
+                      project: effectiveProject,
                       catalog: catalog,
                       summary: summaryAsync.asData?.value,
+                      showHeatingDevices: showHeatingDevices,
                       onAddRoom: () => _handleAddRoom(context, ref, project),
                       onUpdateRoomLayout: (roomId, layout) =>
                           _handleUpdateRoomLayout(context, ref, roomId, layout),
@@ -489,22 +516,28 @@ class HouseSchemeScreen extends ConsumerWidget {
                       onOpenThermocalc: (element) =>
                           _handleOpenThermocalc(context, ref, element),
                     ),
-                    const SizedBox(height: 16),
-                    _ConstructionsCard(
-                      project: project,
-                      catalog: catalog,
-                      onAddConstruction: () =>
-                          _handleAddConstruction(context, ref, catalog),
-                      onEditConstruction: (construction) =>
-                          _handleEditConstruction(
-                            context,
-                            ref,
-                            catalog,
-                            construction,
-                          ),
-                      onDeleteConstruction: (construction) =>
-                          _handleDeleteConstruction(context, ref, construction),
-                    ),
+                    if (showConstructionsCard) ...[
+                      const SizedBox(height: 16),
+                      _ConstructionsCard(
+                        project: effectiveProject,
+                        catalog: catalog,
+                        onAddConstruction: () =>
+                            _handleAddConstruction(context, ref, catalog),
+                        onEditConstruction: (construction) =>
+                            _handleEditConstruction(
+                              context,
+                              ref,
+                              catalog,
+                              construction,
+                            ),
+                        onDeleteConstruction: (construction) =>
+                            _handleDeleteConstruction(
+                              context,
+                              ref,
+                              construction,
+                            ),
+                      ),
+                    ],
                   ],
                 );
               },
@@ -518,10 +551,25 @@ class HouseSchemeScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Project _resolveProject(Project project) {
+    if (!limitToSelectedConstructions) {
+      return project;
+    }
+    final selectedIds = project.effectiveSelectedConstructionIds.toSet();
+    return project.copyWith(
+      constructions: [
+        for (final item in project.constructions)
+          if (selectedIds.contains(item.id)) item,
+      ],
+    );
+  }
 }
 
 class _StatusCard extends StatelessWidget {
-  const _StatusCard();
+  const _StatusCard({required this.text});
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {
@@ -530,11 +578,11 @@ class _StatusCard extends StatelessWidget {
         color: const Color(0xFFF2EEE4),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Padding(
-        padding: EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Text(
-          'Конструктор дома собирает проект сверху вниз: помещения, ограждения, окна/двери и переиспользуемые конструкции. Расчёт конструкции запускается прямо из выбранного ограждения, а сводка дома учитывает чистую площадь и проёмы.',
-          style: TextStyle(fontWeight: FontWeight.w700),
+          text,
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -651,6 +699,7 @@ class _PlanAndRoomsSection extends StatefulWidget {
     required this.project,
     required this.catalog,
     required this.summary,
+    required this.showHeatingDevices,
     required this.onAddRoom,
     required this.onUpdateRoomLayout,
     required this.onEditRoom,
@@ -671,6 +720,7 @@ class _PlanAndRoomsSection extends StatefulWidget {
   final Project project;
   final CatalogSnapshot catalog;
   final BuildingHeatLossResult? summary;
+  final bool showHeatingDevices;
   final VoidCallback onAddRoom;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
@@ -753,17 +803,19 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
           onDeleteOpening: widget.onDeleteOpening,
           onOpenThermocalc: widget.onOpenThermocalc,
         ),
-        const SizedBox(height: 16),
-        HeatingDevicesCard(
-          project: widget.project,
-          catalog: widget.catalog,
-          summary: widget.summary,
-          selectedRoomId: selectedRoomId,
-          onSelectRoom: _selectRoom,
-          onAddHeatingDevice: widget.onAddHeatingDevice,
-          onEditHeatingDevice: widget.onEditHeatingDevice,
-          onDeleteHeatingDevice: widget.onDeleteHeatingDevice,
-        ),
+        if (widget.showHeatingDevices) ...[
+          const SizedBox(height: 16),
+          HeatingDevicesCard(
+            project: widget.project,
+            catalog: widget.catalog,
+            summary: widget.summary,
+            selectedRoomId: selectedRoomId,
+            onSelectRoom: _selectRoom,
+            onAddHeatingDevice: widget.onAddHeatingDevice,
+            onEditHeatingDevice: widget.onEditHeatingDevice,
+            onDeleteHeatingDevice: widget.onDeleteHeatingDevice,
+          ),
+        ],
       ],
     );
   }
@@ -1713,216 +1765,11 @@ Future<Construction?> _showConstructionEditor(
   required CatalogSnapshot catalog,
   Construction? construction,
 }) async {
-  final titleController = TextEditingController(
-    text: construction?.title ?? '',
+  return showConstructionEditor(
+    context,
+    catalog: catalog,
+    construction: construction,
   );
-  var selectedKind = construction?.elementKind ?? ConstructionElementKind.wall;
-  final layers = [...?construction?.layers];
-  if (layers.isEmpty && catalog.materials.isNotEmpty) {
-    layers.add(
-      ConstructionLayer(
-        id: _buildId('layer'),
-        materialId: catalog.materials.first.id,
-        kind: LayerKind.solid,
-        thicknessMm: 100,
-      ),
-    );
-  }
-
-  final result = await showModalBottomSheet<Construction>(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final materialMap = {
-            for (final item in catalog.materials) item.id: item,
-          };
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              20 + MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  construction == null
-                      ? 'Новая конструкция'
-                      : 'Редактирование конструкции',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Название'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<ConstructionElementKind>(
-                  initialValue: selectedKind,
-                  decoration: const InputDecoration(
-                    labelText: 'Тип конструкции',
-                  ),
-                  items: ConstructionElementKind.values
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => selectedKind = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Text(
-                      'Слои конструкции',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () async {
-                        final layer = await _showLayerEditor(
-                          context,
-                          catalog: catalog,
-                        );
-                        if (layer != null) {
-                          setState(() => layers.add(layer));
-                        }
-                      },
-                      child: const Text('Добавить слой'),
-                    ),
-                  ],
-                ),
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        ...layers.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final layer = entry.value;
-                          final material = materialMap[layer.materialId];
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              tileColor: const Color(0xFFF9F7F2),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              title: Text(material?.name ?? layer.materialId),
-                              subtitle: Text(
-                                '${layer.kind.label} • ${layer.thicknessMm.toStringAsFixed(0)} мм • ${layer.enabled ? 'в расчёте' : 'выключен'}',
-                              ),
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (value) async {
-                                  switch (value) {
-                                    case 'up':
-                                      if (index > 0) {
-                                        final moved = layers.removeAt(index);
-                                        layers.insert(index - 1, moved);
-                                        setState(() {});
-                                      }
-                                    case 'down':
-                                      if (index < layers.length - 1) {
-                                        final moved = layers.removeAt(index);
-                                        layers.insert(index + 1, moved);
-                                        setState(() {});
-                                      }
-                                    case 'toggle':
-                                      layers[index] = layer.copyWith(
-                                        enabled: !layer.enabled,
-                                      );
-                                      setState(() {});
-                                    case 'edit':
-                                      final updated = await _showLayerEditor(
-                                        context,
-                                        catalog: catalog,
-                                        layer: layer,
-                                      );
-                                      if (updated != null) {
-                                        layers[index] = updated;
-                                        setState(() {});
-                                      }
-                                    case 'delete':
-                                      layers.removeAt(index);
-                                      setState(() {});
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'up',
-                                    child: Text('Переместить внутрь'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'down',
-                                    child: Text('Переместить наружу'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'toggle',
-                                    child: Text('Вкл/выкл слой'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Text('Редактировать слой'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Удалить слой'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: layers.isEmpty
-                      ? null
-                      : () {
-                          Navigator.of(context).pop(
-                            Construction(
-                              id: construction?.id ?? _buildId('construction'),
-                              title: _requiredText(
-                                titleController.text,
-                                fallback: selectedKind.label,
-                              ),
-                              elementKind: selectedKind,
-                              layers: List.unmodifiable(layers),
-                            ),
-                          );
-                        },
-                  child: const Text('Сохранить'),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-
-  titleController.dispose();
-  return result;
 }
 
 Future<EnvelopeOpening?> _showOpeningEditor(
@@ -2052,6 +1899,7 @@ Future<EnvelopeOpening?> _showOpeningEditor(
   return result;
 }
 
+// ignore: unused_element
 Future<ConstructionLayer?> _showLayerEditor(
   BuildContext context, {
   required CatalogSnapshot catalog,

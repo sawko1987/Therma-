@@ -13,7 +13,23 @@ abstract interface class ProjectRepository {
   Future<List<Project>> listProjects();
   Future<Project?> getProject(String id);
   Future<void> saveProject(Project project);
+  Future<void> deleteProject(String id);
   Future<void> seedDemoProjectIfEmpty();
+}
+
+abstract interface class ConstructionLibraryRepository {
+  Future<List<Construction>> listConstructions();
+  Future<Construction?> getConstruction(String id);
+  Future<void> saveConstruction(Construction construction);
+  Future<void> deleteConstruction(String id);
+}
+
+abstract interface class ObjectRepository {
+  Future<List<DesignObject>> listObjects();
+  Future<DesignObject?> getObject(String id);
+  Future<void> saveObject(DesignObject object);
+  Future<void> deleteObject(String id);
+  Future<void> seedObjectsIfEmpty();
 }
 
 abstract interface class ThermalCalculationEngine {
