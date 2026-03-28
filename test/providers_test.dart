@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:smartcalc_mobile/src/core/models/catalog.dart';
 import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
@@ -98,5 +99,52 @@ void main() {
       selectedGroundFloorCalculationProvider.future,
     );
     expect(selected?.id, 'b');
+  });
+
+  test('catalogSnapshotProvider merges project custom materials', () async {
+    final project = buildTestProject().copyWith(
+      customMaterials: const [
+        MaterialEntry(
+          id: 'custom-material-1',
+          name: 'Мой утеплитель',
+          category: 'Пользовательские',
+          thermalConductivity: 0.031,
+          vaporPermeability: 0.12,
+          aliases: ['мой'],
+        ),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+        projectRepositoryProvider.overrideWithValue(
+          FakeProjectRepository(projects: [project]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final catalog = await container.read(catalogSnapshotProvider.future);
+
+    expect(
+      catalog.materials.any((item) => item.id == 'custom-material-1'),
+      isTrue,
+    );
+    expect(catalog.constructionTemplates, isNotEmpty);
+  });
+
+  test('constructionLibraryProvider includes seeded templates', () async {
+    final container = ProviderContainer(
+      overrides: [
+        catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+        projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final library = await container.read(constructionLibraryProvider.future);
+
+    expect(library.any((item) => item.id == 'template-wall'), isTrue);
+    expect(library.any((item) => item.id == 'wall'), isTrue);
   });
 }

@@ -5,6 +5,7 @@ import 'package:drift/drift.dart'
     show OpeningDetails, QueryExecutor, QueryExecutorUser, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smartcalc_mobile/src/core/models/catalog.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/models/versioning.dart';
 import 'package:smartcalc_mobile/src/core/services/drift_project_repository.dart';
@@ -26,10 +27,22 @@ void main() {
   });
 
   test('project json round-trip preserves layers and enum values', () {
-    final source = buildTestProject(
-      climatePointId: 'novosibirsk',
-      roomPreset: RoomPreset.attic,
-    );
+    final source =
+        buildTestProject(
+          climatePointId: 'novosibirsk',
+          roomPreset: RoomPreset.attic,
+        ).copyWith(
+          customMaterials: const [
+            MaterialEntry(
+              id: 'custom-material-1',
+              name: 'Мой материал',
+              category: 'Пользовательские',
+              thermalConductivity: 0.031,
+              vaporPermeability: 0.1,
+              aliases: ['тест'],
+            ),
+          ],
+        );
 
     final restored = Project.fromJson(source.toJson());
 
@@ -58,6 +71,8 @@ void main() {
     expect(restored.houseModel.elements.single.wallPlacement, isNotNull);
     expect(restored.houseModel.rooms.single.layout.xMeters, 0);
     expect(restored.houseModel.rooms.single.layout.widthMeters, 4);
+    expect(restored.customMaterials, hasLength(1));
+    expect(restored.customMaterials.single.id, 'custom-material-1');
     expect(restored.datasetVersion, currentDatasetVersion);
     expect(restored.migratedFromDatasetVersion, isNull);
   });
@@ -92,6 +107,7 @@ void main() {
     expect(restored.datasetVersion, isNull);
     expect(restored.migratedFromDatasetVersion, isNull);
     expect(restored.houseModel.elements, hasLength(1));
+    expect(restored.customMaterials, isEmpty);
     expect(restored.sourceProjectFormatVersion, 1);
   });
 
@@ -248,7 +264,10 @@ void main() {
         legacyUnversionedDatasetVersion,
       );
       expect(projects.single.houseModel.elements, hasLength(1));
-      expect(projects.single.houseModel.elements.single.wallPlacement, isNotNull);
+      expect(
+        projects.single.houseModel.elements.single.wallPlacement,
+        isNotNull,
+      );
       expect(
         projects.single.sourceProjectFormatVersion,
         currentProjectFormatVersion,
@@ -324,6 +343,14 @@ void main() {
       storedRow.migratedFromDatasetVersion,
       legacyUnversionedDatasetVersion,
     );
+  });
+
+  test('favorite materials are stored globally', () async {
+    await repository.saveFavoriteMaterialIds({'custom-material-1', 'aac_d500'});
+
+    final restored = await repository.listFavoriteMaterialIds();
+
+    expect(restored, containsAll(['custom-material-1', 'aac_d500']));
   });
 }
 

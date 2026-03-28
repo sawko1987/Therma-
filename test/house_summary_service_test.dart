@@ -14,9 +14,7 @@ void main() {
         houseModel: HouseModel(
           id: 'house-model',
           title: 'Конструктор дома',
-          rooms: [
-            Room.defaultRoom(),
-          ],
+          rooms: [Room.defaultRoom()],
           elements: const [
             HouseEnvelopeElement(
               id: 'element-wall',
@@ -71,80 +69,78 @@ void main() {
     },
   );
 
-  test('building heat loss uses room kind conditions for indoor temperature', () async {
-    final project = buildTestProject(
-      houseModel: HouseModel(
-        id: 'house-model',
-        title: 'РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ РґРѕРјР°',
-        rooms: [
-          buildRoom(
-            id: 'living',
-            title: 'Гостиная',
-            kind: RoomKind.livingRoom,
-          ),
-          buildRoom(
-            id: 'bedroom',
-            title: 'Спальня',
-            kind: RoomKind.bedroom,
-            layout: buildRoomLayout(xMeters: 6, yMeters: 0),
-          ),
-        ],
-        elements: const [
-          HouseEnvelopeElement(
-            id: 'element-living',
-            roomId: 'living',
-            title: 'Стена гостиной',
-            elementKind: ConstructionElementKind.wall,
-            areaSquareMeters: 10,
-            constructionId: 'wall',
-          ),
-          HouseEnvelopeElement(
-            id: 'element-bedroom',
-            roomId: 'bedroom',
-            title: 'Стена спальни',
-            elementKind: ConstructionElementKind.wall,
-            areaSquareMeters: 10,
-            constructionId: 'wall',
-          ),
-        ],
-        openings: const [],
-      ),
-    );
-    final catalog = CatalogSnapshot(
-      climatePoints: testCatalogSnapshot.climatePoints,
-      materials: testCatalogSnapshot.materials,
-      norms: testCatalogSnapshot.norms,
-      moistureRules: testCatalogSnapshot.moistureRules,
-      roomKindConditions: const [
-        RoomKindCondition(
-          roomKindId: 'livingRoom',
-          insideTemperature: 20,
+  test(
+    'building heat loss uses room kind conditions for indoor temperature',
+    () async {
+      final project = buildTestProject(
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ РґРѕРјР°',
+          rooms: [
+            buildRoom(
+              id: 'living',
+              title: 'Гостиная',
+              kind: RoomKind.livingRoom,
+            ),
+            buildRoom(
+              id: 'bedroom',
+              title: 'Спальня',
+              kind: RoomKind.bedroom,
+              layout: buildRoomLayout(xMeters: 6, yMeters: 0),
+            ),
+          ],
+          elements: const [
+            HouseEnvelopeElement(
+              id: 'element-living',
+              roomId: 'living',
+              title: 'Стена гостиной',
+              elementKind: ConstructionElementKind.wall,
+              areaSquareMeters: 10,
+              constructionId: 'wall',
+            ),
+            HouseEnvelopeElement(
+              id: 'element-bedroom',
+              roomId: 'bedroom',
+              title: 'Стена спальни',
+              elementKind: ConstructionElementKind.wall,
+              areaSquareMeters: 10,
+              constructionId: 'wall',
+            ),
+          ],
+          openings: const [],
         ),
-        RoomKindCondition(
-          roomKindId: 'bedroom',
-          insideTemperature: 18,
-        ),
-      ],
-      heatingDevices: testCatalogSnapshot.heatingDevices,
-      datasetVersion: testCatalogSnapshot.datasetVersion,
-    );
-    const service = NormativeBuildingHeatLossService(
-      NormativeThermalCalculationEngine(),
-    );
+      );
+      final catalog = CatalogSnapshot(
+        climatePoints: testCatalogSnapshot.climatePoints,
+        materials: testCatalogSnapshot.materials,
+        constructionTemplates: testCatalogSnapshot.constructionTemplates,
+        norms: testCatalogSnapshot.norms,
+        moistureRules: testCatalogSnapshot.moistureRules,
+        roomKindConditions: const [
+          RoomKindCondition(roomKindId: 'livingRoom', insideTemperature: 20),
+          RoomKindCondition(roomKindId: 'bedroom', insideTemperature: 18),
+        ],
+        heatingDevices: testCatalogSnapshot.heatingDevices,
+        datasetVersion: testCatalogSnapshot.datasetVersion,
+      );
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
 
-    final summary = await service.calculate(
-      catalog: catalog,
-      project: project,
-    );
-    final livingRoom = summary.roomResults.firstWhere(
-      (item) => item.room.id == 'living',
-    );
-    final bedroom = summary.roomResults.firstWhere(
-      (item) => item.room.id == 'bedroom',
-    );
+      final summary = await service.calculate(
+        catalog: catalog,
+        project: project,
+      );
+      final livingRoom = summary.roomResults.firstWhere(
+        (item) => item.room.id == 'living',
+      );
+      final bedroom = summary.roomResults.firstWhere(
+        (item) => item.room.id == 'bedroom',
+      );
 
-    expect(livingRoom.insideAirTemperature, 20);
-    expect(bedroom.insideAirTemperature, 18);
-    expect(livingRoom.heatLossWatts, greaterThan(bedroom.heatLossWatts));
-  });
+      expect(livingRoom.insideAirTemperature, 20);
+      expect(bedroom.insideAirTemperature, 18);
+      expect(livingRoom.heatLossWatts, greaterThan(bedroom.heatLossWatts));
+    },
+  );
 }

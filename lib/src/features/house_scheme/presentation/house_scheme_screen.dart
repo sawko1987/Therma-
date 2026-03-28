@@ -396,9 +396,7 @@ class HouseSchemeScreen extends ConsumerWidget {
 
   void _handleOpenBuildingHeatLoss(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const BuildingHeatLossScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const BuildingHeatLossScreen()),
     );
   }
 
@@ -580,10 +578,7 @@ class _StatusCard extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          text,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -1768,6 +1763,17 @@ Future<Construction?> _showConstructionEditor(
   return showConstructionEditor(
     context,
     catalog: catalog,
+    materialEntries: catalog.materials
+        .map(
+          (material) => MaterialCatalogEntry(
+            material: material,
+            source: material.isCustom
+                ? MaterialCatalogSource.custom
+                : MaterialCatalogSource.seed,
+            isFavorite: false,
+          ),
+        )
+        .toList(growable: false),
     construction: construction,
   );
 }
@@ -2140,9 +2146,7 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
                 const SizedBox(height: 12),
                 TextField(
                   controller: notesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Примечание',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Примечание'),
                   minLines: 1,
                   maxLines: 3,
                 ),
@@ -2157,9 +2161,7 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
                   onPressed: () {
                     Navigator.of(context).pop(
                       HeatingDevice(
-                        id:
-                            heatingDevice?.id ??
-                            _buildId('heating-device'),
+                        id: heatingDevice?.id ?? _buildId('heating-device'),
                         roomId: roomId,
                         title: _requiredText(
                           titleController.text,

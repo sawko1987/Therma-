@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import '../models/catalog.dart';
+import '../models/project.dart';
 import '../models/versioning.dart';
 import 'interfaces.dart';
 
@@ -16,6 +17,9 @@ class AssetCatalogRepository implements CatalogRepository {
     final climateRaw = await bundle.loadString('assets/data/climate.seed.json');
     final materialsRaw = await bundle.loadString(
       'assets/data/materials.seed.json',
+    );
+    final constructionTemplatesRaw = await bundle.loadString(
+      'assets/data/construction_templates.seed.json',
     );
     final normsRaw = await bundle.loadString('assets/data/norms.seed.json');
     final moistureRulesRaw = await bundle.loadString(
@@ -36,6 +40,11 @@ class AssetCatalogRepository implements CatalogRepository {
         .cast<Map<String, dynamic>>()
         .map(MaterialEntry.fromJson)
         .toList();
+    final constructionTemplates =
+        (jsonDecode(constructionTemplatesRaw) as List<dynamic>)
+            .cast<Map<String, dynamic>>()
+            .map(Construction.fromJson)
+            .toList();
     final norms = (jsonDecode(normsRaw) as List<dynamic>)
         .cast<Map<String, dynamic>>()
         .map(NormReference.fromJson)
@@ -43,10 +52,11 @@ class AssetCatalogRepository implements CatalogRepository {
     final moistureRules = MoistureRuleSet.fromJson(
       jsonDecode(moistureRulesRaw) as Map<String, dynamic>,
     );
-    final roomKindConditions = (jsonDecode(roomKindConditionsRaw) as List<dynamic>)
-        .cast<Map<String, dynamic>>()
-        .map(RoomKindCondition.fromJson)
-        .toList();
+    final roomKindConditions =
+        (jsonDecode(roomKindConditionsRaw) as List<dynamic>)
+            .cast<Map<String, dynamic>>()
+            .map(RoomKindCondition.fromJson)
+            .toList();
     final heatingDevices = (jsonDecode(heatingDevicesRaw) as List<dynamic>)
         .cast<Map<String, dynamic>>()
         .map(HeatingDeviceCatalogEntry.fromJson)
@@ -55,6 +65,7 @@ class AssetCatalogRepository implements CatalogRepository {
     return CatalogSnapshot(
       climatePoints: climate,
       materials: materials,
+      constructionTemplates: constructionTemplates,
       norms: norms,
       moistureRules: moistureRules,
       roomKindConditions: roomKindConditions,

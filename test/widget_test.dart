@@ -56,6 +56,29 @@ void main() {
     expect(find.text('Конструкции проекта'), findsOneWidget);
   });
 
+  testWidgets('step 1 opens material management screen', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const SmartCalcApp(),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Demo project'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Материалы'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Каталог материалов'), findsOneWidget);
+  });
+
   testWidgets('creating object from step 0 opens step 1', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -139,9 +162,7 @@ void main() {
           projectRepositoryProvider.overrideWithValue(
             FakeProjectRepository(
               projects: [
-                buildTestProject(
-                  constructions: [floorConstruction],
-                ),
+                buildTestProject(constructions: [floorConstruction]),
               ],
             ),
           ),

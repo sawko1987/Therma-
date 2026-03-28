@@ -4,12 +4,17 @@ import 'interfaces.dart';
 import 'project_migration_service.dart';
 
 class InMemoryProjectRepository
-    implements ProjectRepository, ConstructionLibraryRepository, ObjectRepository {
+    implements
+        ProjectRepository,
+        ConstructionLibraryRepository,
+        ObjectRepository,
+        FavoriteMaterialsRepository {
   InMemoryProjectRepository({required List<Project> projects})
     : _projects = [...projects],
       _library = {
         for (final project in projects)
-          for (final construction in project.constructions) construction.id: construction,
+          for (final construction in project.constructions)
+            construction.id: construction,
       },
       _objects = {
         for (final project in projects)
@@ -31,7 +36,9 @@ class InMemoryProjectRepository
   final List<Project> _projects;
   final Map<String, Construction> _library;
   final Map<String, DesignObject> _objects;
-  final ProjectMigrationService _migrationService = const ProjectMigrationService();
+  final Set<String> _favoriteMaterialIds = <String>{};
+  final ProjectMigrationService _migrationService =
+      const ProjectMigrationService();
 
   @override
   Future<List<Project>> listProjects() async {
@@ -142,5 +149,17 @@ class InMemoryProjectRepository
         updatedAtEpochMs: 0,
       );
     }
+  }
+
+  @override
+  Future<Set<String>> listFavoriteMaterialIds() async {
+    return Set<String>.from(_favoriteMaterialIds);
+  }
+
+  @override
+  Future<void> saveFavoriteMaterialIds(Set<String> ids) async {
+    _favoriteMaterialIds
+      ..clear()
+      ..addAll(ids);
   }
 }

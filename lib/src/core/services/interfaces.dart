@@ -32,6 +32,11 @@ abstract interface class ObjectRepository {
   Future<void> seedObjectsIfEmpty();
 }
 
+abstract interface class FavoriteMaterialsRepository {
+  Future<Set<String>> listFavoriteMaterialIds();
+  Future<void> saveFavoriteMaterialIds(Set<String> ids);
+}
+
 abstract interface class ThermalCalculationEngine {
   Future<CalculationResult> calculate({
     required CatalogSnapshot catalog,

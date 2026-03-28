@@ -7,6 +7,7 @@ import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 import 'construction_editor_sheet.dart';
+import 'material_management_screen.dart';
 
 class ConstructionStepScreen extends ConsumerWidget {
   const ConstructionStepScreen({super.key});
@@ -16,27 +17,31 @@ class ConstructionStepScreen extends ConsumerWidget {
     final projectAsync = ref.watch(selectedProjectProvider);
     final catalogAsync = ref.watch(catalogSnapshotProvider);
     final libraryAsync = ref.watch(constructionLibraryProvider);
+    final materialEntriesAsync = ref.watch(materialCatalogEntriesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Шаг 1. Конструкции'),
-      ),
+      appBar: AppBar(title: const Text('Шаг 1. Конструкции')),
       body: projectAsync.when(
         data: (project) {
           if (project == null) {
             return const Center(child: Text('Активный проект не найден.'));
           }
           return catalogAsync.when(
-            data: (catalog) => libraryAsync.when(
-              data: (library) => _ConstructionStepBody(
-                project: project,
-                catalog: catalog,
-                library: library,
+            data: (catalog) => materialEntriesAsync.when(
+              data: (materialEntries) => libraryAsync.when(
+                data: (library) => _ConstructionStepBody(
+                  project: project,
+                  catalog: catalog,
+                  library: library,
+                  materialEntries: materialEntries,
+                ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) =>
+                    Center(child: Text('Ошибка загрузки библиотеки: $error')),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Text('Ошибка загрузки библиотеки: $error'),
-              ),
+              error: (error, _) =>
+                  Center(child: Text('Ошибка загрузки материалов: $error')),
             ),
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) =>
@@ -56,11 +61,13 @@ class _ConstructionStepBody extends ConsumerStatefulWidget {
     required this.project,
     required this.catalog,
     required this.library,
+    required this.materialEntries,
   });
 
   final Project project;
   final CatalogSnapshot catalog;
   final List<Construction> library;
+  final List<MaterialCatalogEntry> materialEntries;
 
   @override
   ConsumerState<_ConstructionStepBody> createState() =>
@@ -69,15 +76,27 @@ class _ConstructionStepBody extends ConsumerStatefulWidget {
 
 class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
   ConstructionElementKind? _filterKind;
+  String _searchQuery = '';
+  _ConstructionLibraryScope _libraryScope = _ConstructionLibraryScope.all;
 
   @override
   Widget build(BuildContext context) {
     final messenger = ScaffoldMessenger.of(context);
     final selectedIds = widget.project.effectiveSelectedConstructionIds.toSet();
+    final materialMap = {
+      for (final entry in widget.materialEntries)
+        entry.material.id: entry.material,
+    };
+    final templateIds = widget.catalog.constructionTemplates
+        .map((item) => item.id)
+        .toSet();
     final filteredLibrary = widget.library
+        .where((item) => _filterKind == null || item.elementKind == _filterKind)
         .where(
-          (item) => _filterKind == null || item.elementKind == _filterKind,
+          (item) =>
+              _libraryScope.matches(isTemplate: templateIds.contains(item.id)),
         )
+        .where((item) => _matchesConstruction(item, _searchQuery, materialMap))
         .toList(growable: false);
     final selectedConstructions = widget.project.constructions
         .where((item) => selectedIds.contains(item.id))
@@ -134,7 +153,11 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  alignment: WrapAlignment.spaceBetween,
                   children: [
                     Text(
                       'Конструкции проекта',
@@ -142,14 +165,26 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const Spacer(),
-                    FilledButton.icon(
-                      onPressed: () => _handleCreateConstruction(
-                        context,
-                        messenger,
-                      ),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Создать'),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () =>
+                              _handleCreateConstruction(context, messenger),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Создать'),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const MaterialManagementScreen(),
+                            ),
+                          ),
+                          icon: const Icon(Icons.inventory_2_outlined),
+                          label: const Text('Материалы'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -168,6 +203,7 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _ConstructionCard(
                         construction: construction,
+                        materialMap: materialMap,
                         selected: true,
                         onTapPrimary: () async {
                           await _handleRemoveFromProject(
@@ -192,8 +228,10 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
                         ),
                         footer: _ConstructionStatusFooter(
                           constructionId: construction.id,
-                          onOpenCalculation: () =>
-                              _openConstructionCalculation(context, construction),
+                          onOpenCalculation: () => _openConstructionCalculation(
+                            context,
+                            construction,
+                          ),
                         ),
                       ),
                     ),
@@ -232,24 +270,43 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
                         onSelected: (_) => setState(() => _filterKind = kind),
                       ),
                     ),
+                    ..._ConstructionLibraryScope.values.map(
+                      (scope) => FilterChip(
+                        label: Text(scope.label),
+                        selected: _libraryScope == scope,
+                        onSelected: (_) =>
+                            setState(() => _libraryScope = scope),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
+                TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'Поиск по названию и материалам',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                ),
+                const SizedBox(height: 16),
                 if (filteredLibrary.isEmpty)
-                  const Text('В библиотеке нет конструкций по текущему фильтру.')
+                  const Text(
+                    'В библиотеке нет конструкций по текущему фильтру.',
+                  )
                 else
                   ...filteredLibrary.map(
                     (construction) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _ConstructionCard(
                         construction: construction,
+                        materialMap: materialMap,
                         selected: selectedIds.contains(construction.id),
                         onTapPrimary: selectedIds.contains(construction.id)
                             ? null
                             : () => _handleSelectForProject(
-                                  messenger,
-                                  construction,
-                                ),
+                                messenger,
+                                construction,
+                              ),
                         primaryLabel: selectedIds.contains(construction.id)
                             ? 'Уже выбрана'
                             : 'Выбрать в проект',
@@ -269,8 +326,10 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
                         ),
                         footer: _ConstructionStatusFooter(
                           constructionId: construction.id,
-                          onOpenCalculation: () =>
-                              _openConstructionCalculation(context, construction),
+                          onOpenCalculation: () => _openConstructionCalculation(
+                            context,
+                            construction,
+                          ),
                         ),
                       ),
                     ),
@@ -313,6 +372,11 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
     final created = await showConstructionEditor(
       context,
       catalog: widget.catalog,
+      materialEntries: widget.materialEntries,
+      onSaveCustomMaterial: (material) async {
+        await ref.read(projectEditorProvider).saveCustomMaterial(material);
+        return material;
+      },
     );
     if (!context.mounted || created == null) {
       return;
@@ -332,7 +396,12 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
     final updated = await showConstructionEditor(
       context,
       catalog: widget.catalog,
+      materialEntries: widget.materialEntries,
       construction: construction,
+      onSaveCustomMaterial: (material) async {
+        await ref.read(projectEditorProvider).saveCustomMaterial(material);
+        return material;
+      },
     );
     if (!context.mounted || updated == null) {
       return;
@@ -356,7 +425,12 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
     final copied = await showConstructionEditor(
       context,
       catalog: widget.catalog,
+      materialEntries: widget.materialEntries,
       construction: draft,
+      onSaveCustomMaterial: (material) async {
+        await ref.read(projectEditorProvider).saveCustomMaterial(material);
+        return material;
+      },
     );
     if (!context.mounted || copied == null) {
       return;
@@ -373,9 +447,9 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
     Construction construction,
   ) async {
     try {
-      await ref.read(projectEditorProvider).selectConstructionForProject(
-        construction,
-      );
+      await ref
+          .read(projectEditorProvider)
+          .selectConstructionForProject(construction);
     } catch (error) {
       _showError(messenger, error);
     }
@@ -386,9 +460,9 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
     String constructionId,
   ) async {
     try {
-      await ref.read(projectEditorProvider).unselectConstructionFromProject(
-        constructionId,
-      );
+      await ref
+          .read(projectEditorProvider)
+          .unselectConstructionFromProject(constructionId);
     } catch (error) {
       _showError(messenger, error);
     }
@@ -399,9 +473,9 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
     String constructionId,
   ) async {
     try {
-      await ref.read(projectEditorProvider).deleteConstructionFromLibrary(
-        constructionId,
-      );
+      await ref
+          .read(projectEditorProvider)
+          .deleteConstructionFromLibrary(constructionId);
     } catch (error) {
       _showError(messenger, error);
     }
@@ -424,15 +498,59 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
   }
 
   void _showError(ScaffoldMessengerState messenger, Object error) {
-    messenger.showSnackBar(
-      SnackBar(content: Text(error.toString())),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(error.toString())));
   }
+}
+
+bool _matchesConstruction(
+  Construction construction,
+  String query,
+  Map<String, MaterialEntry> materialMap,
+) {
+  final normalized = query.trim().toLowerCase();
+  if (normalized.isEmpty) {
+    return true;
+  }
+  final haystack = [
+    construction.title,
+    construction.elementKind.label,
+    ...construction.layers.expand((layer) {
+      final material = materialMap[layer.materialId];
+      return [
+        layer.materialId,
+        material?.name,
+        material?.category,
+        material?.subcategory,
+        material?.manufacturer,
+        material?.notes,
+        ...?material?.aliases,
+        ...?material?.tags,
+      ];
+    }),
+  ].join(' ').toLowerCase();
+  return haystack.contains(normalized);
+}
+
+enum _ConstructionLibraryScope { all, templates, custom }
+
+extension on _ConstructionLibraryScope {
+  String get label => switch (this) {
+    _ConstructionLibraryScope.all => 'Все конструкции',
+    _ConstructionLibraryScope.templates => 'Шаблоны',
+    _ConstructionLibraryScope.custom => 'Свои',
+  };
+
+  bool matches({required bool isTemplate}) => switch (this) {
+    _ConstructionLibraryScope.all => true,
+    _ConstructionLibraryScope.templates => isTemplate,
+    _ConstructionLibraryScope.custom => !isTemplate,
+  };
 }
 
 class _ConstructionCard extends StatelessWidget {
   const _ConstructionCard({
     required this.construction,
+    required this.materialMap,
     required this.selected,
     required this.onTapPrimary,
     required this.primaryLabel,
@@ -443,6 +561,7 @@ class _ConstructionCard extends StatelessWidget {
   });
 
   final Construction construction;
+  final Map<String, MaterialEntry> materialMap;
   final bool selected;
   final VoidCallback? onTapPrimary;
   final String primaryLabel;
@@ -453,8 +572,9 @@ class _ConstructionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final layerTitles =
-        construction.layers.map((layer) => layer.materialId).join(', ');
+    final layerTitles = construction.layers
+        .map((layer) => materialMap[layer.materialId]?.name ?? layer.materialId)
+        .join(', ');
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -505,10 +625,7 @@ class _ConstructionCard extends StatelessWidget {
             '${construction.elementKind.label} • слоёв ${construction.layers.length}',
           ),
           const SizedBox(height: 4),
-          Text(
-            layerTitles,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text(layerTitles, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
@@ -517,10 +634,7 @@ class _ConstructionCard extends StatelessWidget {
               child: Text(primaryLabel),
             ),
           ),
-          if (footer != null) ...[
-            const SizedBox(height: 12),
-            footer!,
-          ],
+          if (footer != null) ...[const SizedBox(height: 12), footer!],
         ],
       ),
     );
@@ -580,11 +694,7 @@ class _ConstructionStatusFooter extends ConsumerWidget {
                           : 'Теплозащита: проверить',
                     ),
                   ),
-                  Chip(
-                    label: Text(
-                      'Влага: ${moistureVerdict.label}',
-                    ),
-                  ),
+                  Chip(label: Text('Влага: ${moistureVerdict.label}')),
                   Chip(
                     label: Text(
                       'R ${result.totalResistance.toStringAsFixed(2)} / ${result.requiredResistance.toStringAsFixed(2)}',
@@ -604,9 +714,7 @@ class _ConstructionStatusFooter extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const _StatusContainer(
-        child: LinearProgressIndicator(),
-      ),
+      loading: () => const _StatusContainer(child: LinearProgressIndicator()),
       error: (error, _) => _StatusContainer(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -661,10 +769,7 @@ class _MetricChip extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
           Text(
             value,
             style: Theme.of(

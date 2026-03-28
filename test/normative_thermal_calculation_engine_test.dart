@@ -194,6 +194,7 @@ void main() {
           vaporPermeability: 0,
         ),
       ],
+      constructionTemplates: const [],
       norms: testCatalogSnapshot.norms,
       moistureRules: testCatalogSnapshot.moistureRules,
       roomKindConditions: testCatalogSnapshot.roomKindConditions,

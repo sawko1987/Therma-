@@ -72,6 +72,8 @@ class ProjectEditor {
 
   Future<void> saveProject(Project project) async {
     await _ref.read(projectRepositoryProvider).saveProject(project);
+    _ref.invalidate(catalogSnapshotProvider);
+    _ref.invalidate(materialCatalogEntriesProvider);
     _ref.invalidate(projectListProvider);
     _ref.invalidate(selectedProjectProvider);
     _ref.invalidate(selectedEnvelopeElementProvider);
@@ -120,13 +122,13 @@ class ProjectEditor {
 
   Future<void> updateObject(DesignObject object) async {
     await _ref.read(objectRepositoryProvider).saveObject(object);
-    final project = await _ref.read(projectRepositoryProvider).getProject(
-      object.projectId,
-    );
+    final project = await _ref
+        .read(projectRepositoryProvider)
+        .getProject(object.projectId);
     if (project != null && project.name != object.title) {
-      await _ref.read(projectRepositoryProvider).saveProject(
-        project.copyWith(name: object.title),
-      );
+      await _ref
+          .read(projectRepositoryProvider)
+          .saveProject(project.copyWith(name: object.title));
     }
     _ref.invalidate(projectListProvider);
     _ref.invalidate(objectListProvider);
@@ -135,7 +137,9 @@ class ProjectEditor {
   }
 
   Future<void> deleteObject(String objectId) async {
-    final object = await _ref.read(objectRepositoryProvider).getObject(objectId);
+    final object = await _ref
+        .read(objectRepositoryProvider)
+        .getObject(objectId);
     if (object == null) {
       return;
     }
@@ -288,14 +292,55 @@ class ProjectEditor {
 
   Future<void> addConstruction(Construction construction) async {
     final project = await _requireProject();
-    await _ref.read(constructionLibraryRepositoryProvider).saveConstruction(
-      construction,
-    );
+    await _ref
+        .read(constructionLibraryRepositoryProvider)
+        .saveConstruction(construction);
     final updated = _ref
         .read(projectEditingServiceProvider)
         .selectConstruction(project, construction);
     await saveProject(updated);
     _ref.read(selectedConstructionIdProvider.notifier).select(construction.id);
+  }
+
+  Future<void> saveCustomMaterial(MaterialEntry material) async {
+    final project = await _requireProject();
+    final updatedMaterials = [
+      for (final item in project.customMaterials)
+        if (item.id == material.id) material else item,
+      if (!project.customMaterials.any((item) => item.id == material.id))
+        material,
+    ];
+    await saveProject(project.copyWith(customMaterials: updatedMaterials));
+  }
+
+  Future<void> deleteCustomMaterial(String materialId) async {
+    final project = await _requireProject();
+    final isUsed = project.constructions.any(
+      (construction) =>
+          construction.layers.any((layer) => layer.materialId == materialId),
+    );
+    if (isUsed) {
+      throw StateError(
+        'Нельзя удалить материал, пока он используется в конструкции.',
+      );
+    }
+    final updatedMaterials = [
+      for (final item in project.customMaterials)
+        if (item.id != materialId) item,
+    ];
+    await saveProject(project.copyWith(customMaterials: updatedMaterials));
+  }
+
+  Future<void> toggleFavoriteMaterial(String materialId) async {
+    final repository = _ref.read(favoriteMaterialsRepositoryProvider);
+    final current = await repository.listFavoriteMaterialIds();
+    final updated = Set<String>.from(current);
+    if (!updated.add(materialId)) {
+      updated.remove(materialId);
+    }
+    await repository.saveFavoriteMaterialIds(updated);
+    _ref.invalidate(favoriteMaterialIdsProvider);
+    _ref.invalidate(materialCatalogEntriesProvider);
   }
 
   Future<void> updateConstruction(Construction construction) async {
@@ -324,15 +369,15 @@ class ProjectEditor {
         .unselectConstruction(project, constructionId);
     await saveProject(updated);
     final remainingIds = updated.effectiveSelectedConstructionIds;
-    _ref.read(selectedConstructionIdProvider.notifier).select(
-      remainingIds.isEmpty ? null : remainingIds.first,
-    );
+    _ref
+        .read(selectedConstructionIdProvider.notifier)
+        .select(remainingIds.isEmpty ? null : remainingIds.first);
   }
 
   Future<void> saveConstructionToLibrary(Construction construction) async {
-    await _ref.read(constructionLibraryRepositoryProvider).saveConstruction(
-      construction,
-    );
+    await _ref
+        .read(constructionLibraryRepositoryProvider)
+        .saveConstruction(construction);
     _ref.invalidate(constructionLibraryProvider);
   }
 
@@ -345,7 +390,9 @@ class ProjectEditor {
       if (!project.effectiveSelectedConstructionIds.contains(libraryId)) {
         continue;
       }
-      final existing = project.constructions.any((item) => item.id == libraryId);
+      final existing = project.constructions.any(
+        (item) => item.id == libraryId,
+      );
       final updatedProject = existing
           ? _ref
                 .read(projectEditingServiceProvider)
@@ -368,9 +415,8 @@ class ProjectEditor {
   Future<void> deleteConstructionFromLibrary(String constructionId) async {
     final projects = await _ref.read(projectRepositoryProvider).listProjects();
     final inUse = projects.any(
-      (project) => project.effectiveSelectedConstructionIds.contains(
-        constructionId,
-      ),
+      (project) =>
+          project.effectiveSelectedConstructionIds.contains(constructionId),
     );
     if (inUse) {
       throw StateError(
@@ -523,6 +569,15 @@ final constructionLibraryRepositoryProvider =
       return DriftProjectRepository(ref.watch(appDatabaseProvider));
     });
 
+final favoriteMaterialsRepositoryProvider =
+    Provider<FavoriteMaterialsRepository>((ref) {
+      final repository = ref.watch(projectRepositoryProvider);
+      if (repository is FavoriteMaterialsRepository) {
+        return repository as FavoriteMaterialsRepository;
+      }
+      return DriftProjectRepository(ref.watch(appDatabaseProvider));
+    });
+
 final thermalCalculationEngineProvider = Provider<ThermalCalculationEngine>(
   (ref) => const NormativeThermalCalculationEngine(),
 );
@@ -565,9 +620,52 @@ final reportExportControllerProvider =
       ReportExportController.new,
     );
 
-final catalogSnapshotProvider = FutureProvider<CatalogSnapshot>(
-  (ref) => ref.read(catalogRepositoryProvider).loadSnapshot(),
-);
+final catalogSnapshotProvider = FutureProvider<CatalogSnapshot>((ref) async {
+  final baseCatalog = await ref.read(catalogRepositoryProvider).loadSnapshot();
+  final project = await ref.watch(selectedProjectProvider.future);
+  final materials = _mergeMaterials(
+    baseCatalog.materials,
+    project?.customMaterials ?? const [],
+  );
+  return CatalogSnapshot(
+    climatePoints: baseCatalog.climatePoints,
+    materials: materials,
+    constructionTemplates: baseCatalog.constructionTemplates,
+    norms: baseCatalog.norms,
+    moistureRules: baseCatalog.moistureRules,
+    roomKindConditions: baseCatalog.roomKindConditions,
+    heatingDevices: baseCatalog.heatingDevices,
+    datasetVersion: baseCatalog.datasetVersion,
+  );
+});
+
+final favoriteMaterialIdsProvider = FutureProvider<Set<String>>((ref) async {
+  return ref
+      .read(favoriteMaterialsRepositoryProvider)
+      .listFavoriteMaterialIds();
+});
+
+final materialCatalogEntriesProvider =
+    FutureProvider<List<MaterialCatalogEntry>>((ref) async {
+      final catalog = await ref.watch(catalogSnapshotProvider.future);
+      final project = await ref.watch(selectedProjectProvider.future);
+      final favorites = await ref.watch(favoriteMaterialIdsProvider.future);
+      final customIds = {
+        for (final item in project?.customMaterials ?? const <MaterialEntry>[])
+          item.id,
+      };
+      return catalog.materials
+          .map(
+            (material) => MaterialCatalogEntry(
+              material: material,
+              source: customIds.contains(material.id)
+                  ? MaterialCatalogSource.custom
+                  : MaterialCatalogSource.seed,
+              isFavorite: favorites.contains(material.id),
+            ),
+          )
+          .toList(growable: false);
+    });
 
 final selectedProjectIdProvider =
     NotifierProvider<SelectedProjectIdNotifier, String?>(
@@ -641,8 +739,38 @@ final selectedObjectProvider = FutureProvider<DesignObject?>((ref) async {
 final constructionLibraryProvider = FutureProvider<List<Construction>>((
   ref,
 ) async {
-  return ref.read(constructionLibraryRepositoryProvider).listConstructions();
+  final catalog = await ref.watch(catalogSnapshotProvider.future);
+  final library = await ref
+      .read(constructionLibraryRepositoryProvider)
+      .listConstructions();
+  return _mergeConstructions(catalog.constructionTemplates, library);
 });
+
+List<MaterialEntry> _mergeMaterials(
+  List<MaterialEntry> seeded,
+  List<MaterialEntry> custom,
+) {
+  final merged = <String, MaterialEntry>{
+    for (final item in seeded) item.id: item,
+  };
+  for (final item in custom) {
+    merged[item.id] = item;
+  }
+  return merged.values.toList(growable: false);
+}
+
+List<Construction> _mergeConstructions(
+  List<Construction> seeded,
+  List<Construction> saved,
+) {
+  final merged = <String, Construction>{
+    for (final item in seeded) item.id: item,
+  };
+  for (final item in saved) {
+    merged[item.id] = item;
+  }
+  return merged.values.toList(growable: false);
+}
 
 final selectedProjectProvider = FutureProvider<Project?>((ref) async {
   final selectedObject = await ref.watch(selectedObjectProvider.future);
@@ -713,7 +841,9 @@ class MethodChannelCustomerPhonePicker implements CustomerPhonePicker {
       return const [];
     }
     final items =
-        await _channel.invokeListMethod<Map<dynamic, dynamic>>('loadContacts') ??
+        await _channel.invokeListMethod<Map<dynamic, dynamic>>(
+          'loadContacts',
+        ) ??
         const [];
     return items
         .map(
@@ -824,7 +954,10 @@ final constructionByIdProvider = FutureProvider.family<Construction?, String>((
 });
 
 final calculationResultForConstructionProvider =
-    FutureProvider.family<CalculationResult?, String>((ref, constructionId) async {
+    FutureProvider.family<CalculationResult?, String>((
+      ref,
+      constructionId,
+    ) async {
       final catalog = await ref.watch(catalogSnapshotProvider.future);
       final project = await ref.watch(selectedProjectProvider.future);
       final construction = await ref.watch(

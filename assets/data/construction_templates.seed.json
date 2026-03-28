@@ -1,0 +1,95 @@
+[
+  {
+    "id": "template-wall-aac-wool-brick",
+    "title": "Стена: газобетон + минвата + облицовочный кирпич",
+    "elementKind": "wall",
+    "layers": [
+      {"id": "plaster", "materialId": "gypsum_plaster", "kind": "solid", "thicknessMm": 20, "enabled": true},
+      {"id": "aac", "materialId": "aac_d400", "kind": "masonry", "thicknessMm": 375, "enabled": true},
+      {"id": "wool", "materialId": "mineral_wool", "kind": "frame", "thicknessMm": 100, "enabled": true},
+      {"id": "vent-gap", "materialId": "ventilated_air_gap", "kind": "ventilatedGap", "thicknessMm": 40, "enabled": true},
+      {"id": "brick", "materialId": "facing_brick", "kind": "masonry", "thicknessMm": 120, "enabled": true}
+    ]
+  },
+  {
+    "id": "template-wall-ceramic-block",
+    "title": "Стена: керамический блок + штукатурка",
+    "elementKind": "wall",
+    "layers": [
+      {"id": "inside-plaster", "materialId": "gypsum_plaster", "kind": "solid", "thicknessMm": 20, "enabled": true},
+      {"id": "ceramic", "materialId": "ceramic_block_380", "kind": "masonry", "thicknessMm": 380, "enabled": true},
+      {"id": "outside-plaster", "materialId": "cement_sand_plaster", "kind": "solid", "thicknessMm": 20, "enabled": true}
+    ]
+  },
+  {
+    "id": "template-wall-frame-minwool",
+    "title": "Стена: каркас 150 + перекрестное утепление 50",
+    "elementKind": "wall",
+    "layers": [
+      {"id": "gkl", "materialId": "gypsum_board", "kind": "solid", "thicknessMm": 12.5, "enabled": true},
+      {"id": "vapor", "materialId": "vapor_barrier_film", "kind": "solid", "thicknessMm": 1, "enabled": true},
+      {"id": "frame", "materialId": "mineral_wool", "kind": "frame", "thicknessMm": 150, "enabled": true},
+      {"id": "cross", "materialId": "mineral_wool", "kind": "crossFrame", "thicknessMm": 50, "enabled": true},
+      {"id": "osb", "materialId": "osb_board", "kind": "solid", "thicknessMm": 12, "enabled": true},
+      {"id": "wind", "materialId": "wind_protection_membrane", "kind": "solid", "thicknessMm": 1, "enabled": true},
+      {"id": "vent", "materialId": "ventilated_air_gap", "kind": "ventilatedGap", "thicknessMm": 40, "enabled": true},
+      {"id": "board", "materialId": "planed_board", "kind": "solid", "thicknessMm": 20, "enabled": true}
+    ]
+  },
+  {
+    "id": "template-roof-minwool",
+    "title": "Кровля: скатная с минватой 250",
+    "elementKind": "roof",
+    "layers": [
+      {"id": "gkl", "materialId": "gypsum_board", "kind": "solid", "thicknessMm": 12.5, "enabled": true},
+      {"id": "vapor", "materialId": "vapor_barrier_film", "kind": "solid", "thicknessMm": 1, "enabled": true},
+      {"id": "wool-main", "materialId": "mineral_wool", "kind": "frame", "thicknessMm": 200, "enabled": true},
+      {"id": "wool-cross", "materialId": "mineral_wool", "kind": "crossFrame", "thicknessMm": 50, "enabled": true},
+      {"id": "wind", "materialId": "wind_protection_membrane", "kind": "solid", "thicknessMm": 1, "enabled": true},
+      {"id": "vent", "materialId": "ventilated_air_gap", "kind": "ventilatedGap", "thicknessMm": 50, "enabled": true},
+      {"id": "roof", "materialId": "metal_tile", "kind": "solid", "thicknessMm": 1, "enabled": true}
+    ]
+  },
+  {
+    "id": "template-roof-flat-pir",
+    "title": "Кровля: плоская с PIR",
+    "elementKind": "roof",
+    "layers": [
+      {"id": "slab", "materialId": "reinforced_concrete", "kind": "solid", "thicknessMm": 180, "enabled": true},
+      {"id": "vapor", "materialId": "vapor_barrier_film", "kind": "solid", "thicknessMm": 1, "enabled": true},
+      {"id": "pir", "materialId": "pir_board", "kind": "solid", "thicknessMm": 180, "enabled": true},
+      {"id": "membrane", "materialId": "roofing_membrane", "kind": "solid", "thicknessMm": 3, "enabled": true}
+    ]
+  },
+  {
+    "id": "template-floor-ground-xps",
+    "title": "Пол по грунту: плита + XPS + стяжка",
+    "elementKind": "floor",
+    "layers": [
+      {"id": "screed", "materialId": "cement_sand_screed", "kind": "solid", "thicknessMm": 70, "enabled": true},
+      {"id": "xps", "materialId": "xps", "kind": "solid", "thicknessMm": 100, "enabled": true},
+      {"id": "slab", "materialId": "reinforced_concrete", "kind": "solid", "thicknessMm": 180, "enabled": true}
+    ]
+  },
+  {
+    "id": "template-floor-wood",
+    "title": "Пол: лаги с утеплением минватой",
+    "elementKind": "floor",
+    "layers": [
+      {"id": "board", "materialId": "planed_board", "kind": "solid", "thicknessMm": 35, "enabled": true},
+      {"id": "plywood", "materialId": "plywood", "kind": "solid", "thicknessMm": 18, "enabled": true},
+      {"id": "frame", "materialId": "mineral_wool", "kind": "frame", "thicknessMm": 200, "enabled": true},
+      {"id": "wind", "materialId": "wind_protection_membrane", "kind": "solid", "thicknessMm": 1, "enabled": true}
+    ]
+  },
+  {
+    "id": "template-ceiling-minwool",
+    "title": "Перекрытие: балочное с минватой",
+    "elementKind": "ceiling",
+    "layers": [
+      {"id": "gkl", "materialId": "gypsum_board", "kind": "solid", "thicknessMm": 12.5, "enabled": true},
+      {"id": "frame", "materialId": "mineral_wool", "kind": "frame", "thicknessMm": 200, "enabled": true},
+      {"id": "board", "materialId": "planed_board", "kind": "solid", "thicknessMm": 25, "enabled": true}
+    ]
+  }
+]

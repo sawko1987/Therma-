@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 
+import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 8;
+const int currentProjectFormatVersion = 9;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -931,6 +932,7 @@ class Project {
     required this.climatePointId,
     required this.roomPreset,
     required this.constructions,
+    this.customMaterials = const [],
     required this.houseModel,
     this.selectedConstructionIds = const [],
     this.groundFloorCalculations = const [],
@@ -960,6 +962,9 @@ class Project {
       climatePointId: json['climatePointId'] as String,
       roomPreset: parseRoomPreset(json['roomPreset'] as String),
       constructions: constructions,
+      customMaterials: ((json['customMaterials'] as List<dynamic>?) ?? const [])
+          .map((item) => MaterialEntry.fromJson(_asJsonMap(item)))
+          .toList(growable: false),
       houseModel: houseModelJson == null
           ? HouseModel.bootstrapFromConstructions(constructions)
           : HouseModel.fromJson(_asJsonMap(houseModelJson)),
@@ -979,6 +984,7 @@ class Project {
   final String climatePointId;
   final RoomPreset roomPreset;
   final List<Construction> constructions;
+  final List<MaterialEntry> customMaterials;
   final HouseModel houseModel;
   final List<String> selectedConstructionIds;
   final List<GroundFloorCalculation> groundFloorCalculations;
@@ -1008,6 +1014,7 @@ class Project {
     String? climatePointId,
     RoomPreset? roomPreset,
     List<Construction>? constructions,
+    List<MaterialEntry>? customMaterials,
     HouseModel? houseModel,
     List<String>? selectedConstructionIds,
     List<GroundFloorCalculation>? groundFloorCalculations,
@@ -1022,6 +1029,7 @@ class Project {
       climatePointId: climatePointId ?? this.climatePointId,
       roomPreset: roomPreset ?? this.roomPreset,
       constructions: constructions ?? this.constructions,
+      customMaterials: customMaterials ?? this.customMaterials,
       houseModel: houseModel ?? this.houseModel,
       selectedConstructionIds:
           selectedConstructionIds ?? this.selectedConstructionIds,
@@ -1043,6 +1051,9 @@ class Project {
     'climatePointId': climatePointId,
     'roomPreset': roomPreset.storageKey,
     'constructions': constructions
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'customMaterials': customMaterials
         .map((item) => item.toJson())
         .toList(growable: false),
     'houseModel': houseModel.toJson(),

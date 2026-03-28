@@ -109,6 +109,27 @@ const testCatalogSnapshot = CatalogSnapshot(
       vaporPermeability: 0.11,
     ),
   ],
+  constructionTemplates: [
+    Construction(
+      id: 'template-wall',
+      title: 'Шаблон стены',
+      elementKind: ConstructionElementKind.wall,
+      layers: [
+        ConstructionLayer(
+          id: 'plaster',
+          materialId: 'gypsum_plaster',
+          kind: LayerKind.solid,
+          thicknessMm: 20,
+        ),
+        ConstructionLayer(
+          id: 'aac',
+          materialId: 'aac_d500',
+          kind: LayerKind.masonry,
+          thicknessMm: 300,
+        ),
+      ],
+    ),
+  ],
   norms: [
     NormReference(
       id: 'sp_50',
@@ -357,12 +378,17 @@ class FakeCatalogRepository implements CatalogRepository {
 }
 
 class FakeProjectRepository
-    implements ProjectRepository, ConstructionLibraryRepository, ObjectRepository {
+    implements
+        ProjectRepository,
+        ConstructionLibraryRepository,
+        ObjectRepository,
+        FavoriteMaterialsRepository {
   FakeProjectRepository({List<Project>? projects})
     : _projects = projects ?? [buildTestProject()],
       _library = {
         for (final project in (projects ?? [buildTestProject()]))
-          for (final construction in project.constructions) construction.id: construction,
+          for (final construction in project.constructions)
+            construction.id: construction,
       },
       _objects = {
         for (final project in (projects ?? [buildTestProject()]))
@@ -380,6 +406,7 @@ class FakeProjectRepository
   final List<Project> _projects;
   final Map<String, Construction> _library;
   final Map<String, DesignObject> _objects;
+  final Set<String> _favoriteMaterialIds = <String>{};
 
   @override
   Future<List<Project>> listProjects() async => List.unmodifiable(_projects);
@@ -475,6 +502,18 @@ class FakeProjectRepository
         updatedAtEpochMs: 0,
       );
     }
+  }
+
+  @override
+  Future<Set<String>> listFavoriteMaterialIds() async {
+    return Set<String>.from(_favoriteMaterialIds);
+  }
+
+  @override
+  Future<void> saveFavoriteMaterialIds(Set<String> ids) async {
+    _favoriteMaterialIds
+      ..clear()
+      ..addAll(ids);
   }
 }
 

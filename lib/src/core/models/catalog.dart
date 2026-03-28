@@ -1,3 +1,5 @@
+import 'project.dart';
+
 class ClimateSeason {
   const ClimateSeason({
     required this.id,
@@ -68,6 +70,12 @@ class MaterialEntry {
     required this.category,
     required this.thermalConductivity,
     required this.vaporPermeability,
+    this.aliases = const [],
+    this.tags = const [],
+    this.manufacturer,
+    this.subcategory,
+    this.densityKgM3,
+    this.notes,
   });
 
   factory MaterialEntry.fromJson(Map<String, dynamic> json) => MaterialEntry(
@@ -76,6 +84,16 @@ class MaterialEntry {
     category: json['category'] as String,
     thermalConductivity: (json['thermalConductivity'] as num).toDouble(),
     vaporPermeability: (json['vaporPermeability'] as num).toDouble(),
+    aliases: ((json['aliases'] as List<dynamic>?) ?? const [])
+        .map((item) => item as String)
+        .toList(growable: false),
+    tags: ((json['tags'] as List<dynamic>?) ?? const [])
+        .map((item) => item as String)
+        .toList(growable: false),
+    manufacturer: json['manufacturer'] as String?,
+    subcategory: json['subcategory'] as String?,
+    densityKgM3: (json['densityKgM3'] as num?)?.toDouble(),
+    notes: json['notes'] as String?,
   );
 
   final String id;
@@ -83,6 +101,74 @@ class MaterialEntry {
   final String category;
   final double thermalConductivity;
   final double vaporPermeability;
+  final List<String> aliases;
+  final List<String> tags;
+  final String? manufacturer;
+  final String? subcategory;
+  final double? densityKgM3;
+  final String? notes;
+
+  MaterialEntry copyWith({
+    String? id,
+    String? name,
+    String? category,
+    double? thermalConductivity,
+    double? vaporPermeability,
+    List<String>? aliases,
+    List<String>? tags,
+    String? manufacturer,
+    String? subcategory,
+    double? densityKgM3,
+    String? notes,
+  }) {
+    return MaterialEntry(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      thermalConductivity: thermalConductivity ?? this.thermalConductivity,
+      vaporPermeability: vaporPermeability ?? this.vaporPermeability,
+      aliases: aliases ?? this.aliases,
+      tags: tags ?? this.tags,
+      manufacturer: manufacturer ?? this.manufacturer,
+      subcategory: subcategory ?? this.subcategory,
+      densityKgM3: densityKgM3 ?? this.densityKgM3,
+      notes: notes ?? this.notes,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'category': category,
+    'thermalConductivity': thermalConductivity,
+    'vaporPermeability': vaporPermeability,
+    'aliases': aliases,
+    'tags': tags,
+    'manufacturer': manufacturer,
+    'subcategory': subcategory,
+    'densityKgM3': densityKgM3,
+    'notes': notes,
+  };
+
+  bool get isCustom => id.startsWith('custom-material-');
+}
+
+enum MaterialCatalogSource { seed, custom }
+
+enum MaterialSortOption { name, category, lambdaAscending, lambdaDescending }
+
+class MaterialCatalogEntry {
+  const MaterialCatalogEntry({
+    required this.material,
+    required this.source,
+    required this.isFavorite,
+  });
+
+  final MaterialEntry material;
+  final MaterialCatalogSource source;
+  final bool isFavorite;
+
+  bool get isCustom => source == MaterialCatalogSource.custom;
 }
 
 class NormReference {
@@ -213,6 +299,7 @@ class CatalogSnapshot {
   const CatalogSnapshot({
     required this.climatePoints,
     required this.materials,
+    required this.constructionTemplates,
     required this.norms,
     required this.moistureRules,
     required this.roomKindConditions,
@@ -222,6 +309,7 @@ class CatalogSnapshot {
 
   final List<ClimatePoint> climatePoints;
   final List<MaterialEntry> materials;
+  final List<Construction> constructionTemplates;
   final List<NormReference> norms;
   final MoistureRuleSet moistureRules;
   final List<RoomKindCondition> roomKindConditions;

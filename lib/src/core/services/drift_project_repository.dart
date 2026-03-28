@@ -11,6 +11,8 @@ import 'project_migration_service.dart';
 
 const _constructionLibraryEntryId = '__construction_library__';
 const _constructionLibraryPayloadVersion = 1;
+const _favoriteMaterialsEntryId = '__favorite_materials__';
+const _favoriteMaterialsPayloadVersion = 1;
 const _objectEntryIdPrefix = '__object__';
 const _objectPayloadVersion = 1;
 
@@ -18,11 +20,13 @@ class DriftProjectRepository
     implements
         ProjectRepository,
         ConstructionLibraryRepository,
-        ObjectRepository {
+        ObjectRepository,
+        FavoriteMaterialsRepository {
   DriftProjectRepository(this._database);
 
   final AppDatabase _database;
-  final ProjectMigrationService _migrationService = const ProjectMigrationService();
+  final ProjectMigrationService _migrationService =
+      const ProjectMigrationService();
 
   @override
   Future<List<Project>> listProjects() async {
@@ -139,7 +143,8 @@ class DriftProjectRepository
     final updated = [
       for (final item in constructions)
         if (item.id == construction.id) construction else item,
-      if (!constructions.any((item) => item.id == construction.id)) construction,
+      if (!constructions.any((item) => item.id == construction.id))
+        construction,
     ];
     await _saveLibrary(updated);
   }
@@ -151,6 +156,46 @@ class DriftProjectRepository
       for (final item in constructions)
         if (item.id != id) item,
     ]);
+  }
+
+  @override
+  Future<Set<String>> listFavoriteMaterialIds() async {
+    final query = _database.select(_database.projectEntries)
+      ..where((table) => table.id.equals(_favoriteMaterialsEntryId));
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return <String>{};
+    }
+    final payload = Map<String, dynamic>.from(
+      jsonDecode(row.payloadJson) as Map,
+    );
+    return ((payload['favoriteMaterialIds'] as List<dynamic>?) ?? const [])
+        .map((item) => item as String)
+        .toSet();
+  }
+
+  @override
+  Future<void> saveFavoriteMaterialIds(Set<String> ids) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _database
+        .into(_database.projectEntries)
+        .insertOnConflictUpdate(
+          ProjectEntriesCompanion.insert(
+            id: _favoriteMaterialsEntryId,
+            name: 'Favorite materials',
+            climatePointId: 'favorites',
+            roomPreset: RoomPreset.livingRoom.storageKey,
+            payloadJson: jsonEncode({
+              'type': 'favoriteMaterials',
+              'payloadVersion': _favoriteMaterialsPayloadVersion,
+              'favoriteMaterialIds': ids.toList(growable: false),
+            }),
+            projectFormatVersion: currentProjectFormatVersion,
+            datasetVersion: const Value(currentDatasetVersion),
+            migratedFromDatasetVersion: const Value(null),
+            updatedAtEpochMs: now,
+          ),
+        );
   }
 
   @override
@@ -287,10 +332,15 @@ class DriftProjectRepository
   }
 
   List<Construction> _decodeLibraryRow(ProjectEntry row) {
-    final payload = Map<String, dynamic>.from(jsonDecode(row.payloadJson) as Map);
+    final payload = Map<String, dynamic>.from(
+      jsonDecode(row.payloadJson) as Map,
+    );
     final items = (payload['constructions'] as List<dynamic>? ?? const []);
     return items
-        .map((item) => Construction.fromJson(Map<String, dynamic>.from(item as Map)))
+        .map(
+          (item) =>
+              Construction.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
         .toList(growable: false);
   }
 
@@ -320,15 +370,20 @@ class DriftProjectRepository
   }
 
   DesignObject _decodeObjectRow(ProjectEntry row) {
-    final payload = Map<String, dynamic>.from(jsonDecode(row.payloadJson) as Map);
+    final payload = Map<String, dynamic>.from(
+      jsonDecode(row.payloadJson) as Map,
+    );
     return DesignObject.fromJson(
       Map<String, dynamic>.from(payload['object'] as Map),
     );
   }
 
   bool _isTechnicalEntry(String id) {
-    return id == _constructionLibraryEntryId || id.startsWith(_objectEntryIdPrefix);
+    return id == _constructionLibraryEntryId ||
+        id == _favoriteMaterialsEntryId ||
+        id.startsWith(_objectEntryIdPrefix);
   }
 
-  String _buildObjectEntryId(String objectId) => '$_objectEntryIdPrefix$objectId';
+  String _buildObjectEntryId(String objectId) =>
+      '$_objectEntryIdPrefix$objectId';
 }
