@@ -1,0 +1,37 @@
+[
+  {
+    "roomKindId": "livingRoom",
+    "insideTemperature": 20.0,
+    "insideRelativeHumidity": 0.55
+  },
+  {
+    "roomKindId": "bedroom",
+    "insideTemperature": 20.0,
+    "insideRelativeHumidity": 0.5
+  },
+  {
+    "roomKindId": "kitchen",
+    "insideTemperature": 20.0,
+    "insideRelativeHumidity": 0.6
+  },
+  {
+    "roomKindId": "bathroom",
+    "insideTemperature": 24.0,
+    "insideRelativeHumidity": 0.65
+  },
+  {
+    "roomKindId": "hall",
+    "insideTemperature": 18.0,
+    "insideRelativeHumidity": 0.45
+  },
+  {
+    "roomKindId": "boilerRoom",
+    "insideTemperature": 18.0,
+    "insideRelativeHumidity": 0.45
+  },
+  {
+    "roomKindId": "other",
+    "insideTemperature": 18.0,
+    "insideRelativeHumidity": 0.5
+  }
+]

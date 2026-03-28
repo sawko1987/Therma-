@@ -196,6 +196,7 @@ void main() {
       ],
       norms: testCatalogSnapshot.norms,
       moistureRules: testCatalogSnapshot.moistureRules,
+      roomKindConditions: testCatalogSnapshot.roomKindConditions,
       heatingDevices: testCatalogSnapshot.heatingDevices,
       datasetVersion: 'invalid',
     );

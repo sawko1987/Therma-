@@ -3,10 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/models/building_heat_loss.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
-import '../../../core/services/house_summary_service.dart';
+import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
 import 'floor_plan_geometry.dart';
 import 'widgets/floor_plan_editor_card.dart';
 import 'widgets/heating_devices_card.dart';
@@ -377,11 +378,19 @@ class HouseSchemeScreen extends ConsumerWidget {
     ).push(MaterialPageRoute<void>(builder: (_) => const ThermocalcScreen()));
   }
 
+  void _handleOpenBuildingHeatLoss(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const BuildingHeatLossScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectAsync = ref.watch(selectedProjectProvider);
     final catalogAsync = ref.watch(catalogSnapshotProvider);
-    final summaryAsync = ref.watch(houseThermalSummaryProvider);
+    final summaryAsync = ref.watch(buildingHeatLossResultProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -404,6 +413,8 @@ class HouseSchemeScreen extends ConsumerWidget {
                 return _SummaryCard(
                   project: project,
                   summary: summary,
+                  onOpenBuildingHeatLoss: () =>
+                      _handleOpenBuildingHeatLoss(context),
                 );
               },
               loading: () => const LinearProgressIndicator(),
@@ -531,10 +542,15 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.project, required this.summary});
+  const _SummaryCard({
+    required this.project,
+    required this.summary,
+    required this.onOpenBuildingHeatLoss,
+  });
 
   final Project project;
-  final HouseThermalSummary summary;
+  final BuildingHeatLossResult summary;
+  final VoidCallback onOpenBuildingHeatLoss;
 
   @override
   Widget build(BuildContext context) {
@@ -553,6 +569,10 @@ class _SummaryCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text('Проект: ${project.name}'),
             Text('Режим помещения для норм: ${project.roomPreset.label}'),
+            Text(
+              'Расчетная наружная температура: '
+              '${summary.outsideAirTemperature.toStringAsFixed(0)} °C',
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -560,11 +580,11 @@ class _SummaryCard extends StatelessWidget {
               children: [
                 _MetricTile(
                   label: 'Помещения',
-                  value: '${project.houseModel.rooms.length}',
+                  value: '${summary.totalRoomCount}',
                 ),
                 _MetricTile(
                   label: 'Ограждения',
-                  value: '${project.houseModel.elements.length}',
+                  value: '${summary.totalElementCount}',
                 ),
                 _MetricTile(
                   label: 'Конструкции',
@@ -601,6 +621,24 @@ class _SummaryCard extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  onPressed: onOpenBuildingHeatLoss,
+                  icon: const Icon(Icons.home_work_outlined),
+                  label: const Text('Открыть расчет потерь'),
+                ),
+                if (summary.unresolvedElements.isNotEmpty)
+                  Chip(
+                    label: Text(
+                      'Пропущено элементов: ${summary.unresolvedElements.length}',
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -632,7 +670,7 @@ class _PlanAndRoomsSection extends StatefulWidget {
 
   final Project project;
   final CatalogSnapshot catalog;
-  final HouseThermalSummary? summary;
+  final BuildingHeatLossResult? summary;
   final VoidCallback onAddRoom;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;

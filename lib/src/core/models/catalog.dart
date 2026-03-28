@@ -167,6 +167,26 @@ class MoistureRuleSet {
   final double maximumSeasonalAccumulationKgPerSquareMeter;
 }
 
+class RoomKindCondition {
+  const RoomKindCondition({
+    required this.roomKindId,
+    required this.insideTemperature,
+    this.insideRelativeHumidity,
+  });
+
+  factory RoomKindCondition.fromJson(Map<String, dynamic> json) =>
+      RoomKindCondition(
+        roomKindId: json['roomKindId'] as String,
+        insideTemperature: (json['insideTemperature'] as num).toDouble(),
+        insideRelativeHumidity: (json['insideRelativeHumidity'] as num?)
+            ?.toDouble(),
+      );
+
+  final String roomKindId;
+  final double insideTemperature;
+  final double? insideRelativeHumidity;
+}
+
 class HeatingDeviceCatalogEntry {
   const HeatingDeviceCatalogEntry({
     required this.id,
@@ -195,6 +215,7 @@ class CatalogSnapshot {
     required this.materials,
     required this.norms,
     required this.moistureRules,
+    required this.roomKindConditions,
     required this.heatingDevices,
     required this.datasetVersion,
   });
@@ -203,6 +224,7 @@ class CatalogSnapshot {
   final List<MaterialEntry> materials;
   final List<NormReference> norms;
   final MoistureRuleSet moistureRules;
+  final List<RoomKindCondition> roomKindConditions;
   final List<HeatingDeviceCatalogEntry> heatingDevices;
   final String datasetVersion;
 }

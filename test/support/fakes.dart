@@ -155,6 +155,43 @@ const testCatalogSnapshot = CatalogSnapshot(
     seasonalDryingRecoveryFactor: 0.65,
     maximumSeasonalAccumulationKgPerSquareMeter: 0.2,
   ),
+  roomKindConditions: [
+    RoomKindCondition(
+      roomKindId: 'livingRoom',
+      insideTemperature: 20,
+      insideRelativeHumidity: 0.55,
+    ),
+    RoomKindCondition(
+      roomKindId: 'bedroom',
+      insideTemperature: 18,
+      insideRelativeHumidity: 0.5,
+    ),
+    RoomKindCondition(
+      roomKindId: 'kitchen',
+      insideTemperature: 20,
+      insideRelativeHumidity: 0.6,
+    ),
+    RoomKindCondition(
+      roomKindId: 'bathroom',
+      insideTemperature: 24,
+      insideRelativeHumidity: 0.65,
+    ),
+    RoomKindCondition(
+      roomKindId: 'hall',
+      insideTemperature: 16,
+      insideRelativeHumidity: 0.45,
+    ),
+    RoomKindCondition(
+      roomKindId: 'boilerRoom',
+      insideTemperature: 18,
+      insideRelativeHumidity: 0.45,
+    ),
+    RoomKindCondition(
+      roomKindId: 'other',
+      insideTemperature: 18,
+      insideRelativeHumidity: 0.5,
+    ),
+  ],
   heatingDevices: [
     HeatingDeviceCatalogEntry(
       id: 'rad-panel-22-500x1000',

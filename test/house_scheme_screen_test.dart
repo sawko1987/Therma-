@@ -33,6 +33,23 @@ void main() {
     },
   );
 
+  testWidgets('house builder opens building heat loss screen', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpHouseScheme(
+      tester,
+      projectRepository: FakeProjectRepository(),
+    );
+
+    await tester.scrollUntilVisible(find.text('Открыть расчет потерь'), 200);
+    await tester.tap(find.text('Открыть расчет потерь'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Теплопотери здания'), findsOneWidget);
+    expect(find.textContaining('Итого потерь'), findsOneWidget);
+  });
+
   testWidgets('house builder screen renders heating devices card', (
     tester,
   ) async {

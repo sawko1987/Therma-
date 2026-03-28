@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/models/building_heat_loss.dart';
 import '../../../../core/models/catalog.dart';
 import '../../../../core/models/project.dart';
-import '../../../../core/services/house_summary_service.dart';
 
 class HeatingDevicesCard extends StatelessWidget {
   const HeatingDevicesCard({
@@ -19,7 +19,7 @@ class HeatingDevicesCard extends StatelessWidget {
 
   final Project project;
   final CatalogSnapshot catalog;
-  final HouseThermalSummary? summary;
+  final BuildingHeatLossResult? summary;
   final String? selectedRoomId;
   final ValueChanged<String> onSelectRoom;
   final ValueChanged<Room> onAddHeatingDevice;
@@ -29,7 +29,8 @@ class HeatingDevicesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final roomSummaryMap = {
-      for (final roomSummary in summary?.roomSummaries ?? const <RoomThermalSummary>[])
+      for (final roomSummary
+          in summary?.roomResults ?? const <BuildingRoomHeatLossResult>[])
         roomSummary.room.id: roomSummary,
     };
 

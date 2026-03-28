@@ -1,4 +1,5 @@
 import '../models/calculation.dart';
+import '../models/building_heat_loss.dart';
 import '../models/catalog.dart';
 import '../models/project.dart';
 import '../models/report.dart';
@@ -19,6 +20,13 @@ abstract interface class ThermalCalculationEngine {
     required CatalogSnapshot catalog,
     required Project project,
     required Construction construction,
+  });
+}
+
+abstract interface class BuildingHeatLossService {
+  Future<BuildingHeatLossResult> calculate({
+    required CatalogSnapshot catalog,
+    required Project project,
   });
 }
 

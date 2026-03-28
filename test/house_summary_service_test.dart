@@ -1,13 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smartcalc_mobile/src/core/models/catalog.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
-import 'package:smartcalc_mobile/src/core/services/house_summary_service.dart';
+import 'package:smartcalc_mobile/src/core/services/building_heat_loss_service.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
 
 import 'support/fakes.dart';
 
 void main() {
   test(
-    'buildSummary subtracts openings, counts opening loss and heating balance',
+    'building heat loss subtracts openings and tracks heating balance',
     () async {
       final project = buildTestProject(
         houseModel: HouseModel(
@@ -47,9 +48,11 @@ void main() {
           ],
         ),
       );
-      const service = HouseSummaryService(NormativeThermalCalculationEngine());
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
 
-      final summary = await service.buildSummary(
+      final summary = await service.calculate(
         catalog: testCatalogSnapshot,
         project: project,
       );
@@ -63,8 +66,85 @@ void main() {
       expect(summary.totalHeatingDeviceCount, 1);
       expect(summary.totalInstalledHeatingPowerWatts, 450);
       expect(summary.totalHeatingPowerDeltaWatts, closeTo(156, 3));
-      expect(summary.roomSummaries.single.totalOpaqueAreaSquareMeters, 16);
-      expect(summary.roomSummaries.single.installedHeatingPowerWatts, 450);
+      expect(summary.roomResults.single.totalOpaqueAreaSquareMeters, 16);
+      expect(summary.roomResults.single.installedHeatingPowerWatts, 450);
     },
   );
+
+  test('building heat loss uses room kind conditions for indoor temperature', () async {
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ РґРѕРјР°',
+        rooms: [
+          buildRoom(
+            id: 'living',
+            title: 'Гостиная',
+            kind: RoomKind.livingRoom,
+          ),
+          buildRoom(
+            id: 'bedroom',
+            title: 'Спальня',
+            kind: RoomKind.bedroom,
+            layout: buildRoomLayout(xMeters: 6, yMeters: 0),
+          ),
+        ],
+        elements: const [
+          HouseEnvelopeElement(
+            id: 'element-living',
+            roomId: 'living',
+            title: 'Стена гостиной',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters: 10,
+            constructionId: 'wall',
+          ),
+          HouseEnvelopeElement(
+            id: 'element-bedroom',
+            roomId: 'bedroom',
+            title: 'Стена спальни',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters: 10,
+            constructionId: 'wall',
+          ),
+        ],
+        openings: const [],
+      ),
+    );
+    final catalog = CatalogSnapshot(
+      climatePoints: testCatalogSnapshot.climatePoints,
+      materials: testCatalogSnapshot.materials,
+      norms: testCatalogSnapshot.norms,
+      moistureRules: testCatalogSnapshot.moistureRules,
+      roomKindConditions: const [
+        RoomKindCondition(
+          roomKindId: 'livingRoom',
+          insideTemperature: 20,
+        ),
+        RoomKindCondition(
+          roomKindId: 'bedroom',
+          insideTemperature: 18,
+        ),
+      ],
+      heatingDevices: testCatalogSnapshot.heatingDevices,
+      datasetVersion: testCatalogSnapshot.datasetVersion,
+    );
+    const service = NormativeBuildingHeatLossService(
+      NormativeThermalCalculationEngine(),
+    );
+
+    final summary = await service.calculate(
+      catalog: catalog,
+      project: project,
+    );
+    final livingRoom = summary.roomResults.firstWhere(
+      (item) => item.room.id == 'living',
+    );
+    final bedroom = summary.roomResults.firstWhere(
+      (item) => item.room.id == 'bedroom',
+    );
+
+    expect(livingRoom.insideAirTemperature, 20);
+    expect(bedroom.insideAirTemperature, 18);
+    expect(livingRoom.heatLossWatts, greaterThan(bedroom.heatLossWatts));
+  });
 }

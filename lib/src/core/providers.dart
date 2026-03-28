@@ -1,13 +1,14 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'models/building_heat_loss.dart';
 import 'models/calculation.dart';
 import 'models/catalog.dart';
 import 'models/project.dart';
 import 'models/report.dart';
 import 'services/asset_catalog_repository.dart';
+import 'services/building_heat_loss_service.dart';
 import 'services/drift_project_repository.dart';
-import 'services/house_summary_service.dart';
 import 'services/interfaces.dart';
 import 'services/local_report_file_store.dart';
 import 'services/normative_thermal_calculation_engine.dart';
@@ -54,7 +55,7 @@ class ProjectEditor {
     _ref.invalidate(selectedProjectProvider);
     _ref.invalidate(selectedEnvelopeElementProvider);
     _ref.invalidate(selectedConstructionProvider);
-    _ref.invalidate(houseThermalSummaryProvider);
+    _ref.invalidate(buildingHeatLossResultProvider);
   }
 
   Future<void> addRoom(Room room) async {
@@ -297,8 +298,10 @@ final projectEditingServiceProvider = Provider<ProjectEditingService>(
   (ref) => const ProjectEditingService(),
 );
 
-final houseSummaryServiceProvider = Provider<HouseSummaryService>(
-  (ref) => HouseSummaryService(ref.watch(thermalCalculationEngineProvider)),
+final buildingHeatLossServiceProvider = Provider<BuildingHeatLossService>(
+  (ref) => NormativeBuildingHeatLossService(
+    ref.watch(thermalCalculationEngineProvider),
+  ),
 );
 
 final projectEditorProvider = Provider<ProjectEditor>(
@@ -428,7 +431,7 @@ final selectedConstructionProvider = FutureProvider<Construction?>((ref) async {
   return fallback;
 });
 
-final houseThermalSummaryProvider = FutureProvider<HouseThermalSummary?>((
+final buildingHeatLossResultProvider = FutureProvider<BuildingHeatLossResult?>((
   ref,
 ) async {
   final catalog = await ref.watch(catalogSnapshotProvider.future);
@@ -437,8 +440,8 @@ final houseThermalSummaryProvider = FutureProvider<HouseThermalSummary?>((
     return null;
   }
   return ref
-      .read(houseSummaryServiceProvider)
-      .buildSummary(catalog: catalog, project: project);
+      .read(buildingHeatLossServiceProvider)
+      .calculate(catalog: catalog, project: project);
 });
 
 final calculationResultProvider = FutureProvider<CalculationResult?>((
