@@ -7,6 +7,8 @@ import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 import '../../../core/services/house_summary_service.dart';
+import 'floor_plan_geometry.dart';
+import 'widgets/floor_plan_editor_card.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 
 class HouseSchemeScreen extends ConsumerWidget {
@@ -20,7 +22,7 @@ class HouseSchemeScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final room = await _showRoomEditor(
       context,
-      initialLayout: _buildNextRoomLayout(project.houseModel.rooms),
+      initialLayout: buildNextRoomLayout(project.houseModel.rooms),
     );
     if (!context.mounted) {
       return;
@@ -71,7 +73,7 @@ class HouseSchemeScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _handleUpdateRoomLayout(
+  Future<String?> _handleUpdateRoomLayout(
     BuildContext context,
     WidgetRef ref,
     String roomId,
@@ -80,8 +82,10 @@ class HouseSchemeScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(projectEditorProvider).updateRoomLayout(roomId, layout);
+      return null;
     } catch (error) {
       _showError(messenger, error);
+      return _describeError(error);
     }
   }
 
@@ -156,7 +160,7 @@ class HouseSchemeScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _handleUpdateElementWallPlacement(
+  Future<String?> _handleUpdateElementWallPlacement(
     BuildContext context,
     WidgetRef ref,
     HouseEnvelopeElement element,
@@ -167,8 +171,10 @@ class HouseSchemeScreen extends ConsumerWidget {
       await ref
           .read(projectEditorProvider)
           .updateEnvelopeWallPlacement(element.id, wallPlacement);
+      return null;
     } catch (error) {
       _showError(messenger, error);
+      return _describeError(error);
     }
   }
 
@@ -537,13 +543,13 @@ class _PlanAndRoomsSection extends StatefulWidget {
 
   final Project project;
   final VoidCallback onAddRoom;
-  final Future<void> Function(String roomId, RoomLayoutRect layout)
+  final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
   final ValueChanged<Room> onEditRoom;
   final ValueChanged<Room> onDeleteRoom;
   final ValueChanged<Room> onAddElement;
   final ValueChanged<HouseEnvelopeElement> onEditElement;
-  final Future<void> Function(
+  final Future<String?> Function(
     HouseEnvelopeElement element,
     EnvelopeWallPlacement wallPlacement,
   )
@@ -588,7 +594,7 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
     final selectedRoomId = _effectiveSelectedRoomId;
     return Column(
       children: [
-        _FloorPlanCard(
+        FloorPlanEditorCard(
           project: widget.project,
           selectedRoomId: selectedRoomId,
           selectedElementId: _selectedElementId,
@@ -617,599 +623,6 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
         ),
       ],
     );
-  }
-}
-
-class _FloorPlanCard extends StatefulWidget {
-  const _FloorPlanCard({
-    required this.project,
-    required this.selectedRoomId,
-    required this.selectedElementId,
-    required this.onAddRoom,
-    required this.onSelectRoom,
-    required this.onSelectElement,
-    required this.onUpdateRoomLayout,
-    required this.onUpdateElementWallPlacement,
-  });
-
-  final Project project;
-  final String? selectedRoomId;
-  final String? selectedElementId;
-  final VoidCallback onAddRoom;
-  final ValueChanged<String> onSelectRoom;
-  final void Function(String elementId, String roomId) onSelectElement;
-  final Future<void> Function(String roomId, RoomLayoutRect layout)
-  onUpdateRoomLayout;
-  final Future<void> Function(
-    HouseEnvelopeElement element,
-    EnvelopeWallPlacement wallPlacement,
-  )
-  onUpdateElementWallPlacement;
-
-  @override
-  State<_FloorPlanCard> createState() => _FloorPlanCardState();
-}
-
-class _FloorPlanCardState extends State<_FloorPlanCard> {
-  static const double _pixelsPerMeter = 32;
-  static const double _canvasPadding = 24;
-  static const double _minimumCanvasWidthMeters = 14;
-  static const double _minimumCanvasHeightMeters = 10;
-  static const double _wallThicknessPixels = 10;
-
-  final Map<String, RoomLayoutRect> _draftLayouts = {};
-  final Map<String, EnvelopeWallPlacement> _draftWallPlacements = {};
-  String? _activeRoomId;
-  _RoomGestureMode? _activeMode;
-  String? _activeElementId;
-  _WallGestureMode? _activeWallMode;
-
-  RoomLayoutRect _layoutForRoom(Room room) {
-    return _draftLayouts[room.id] ?? room.layout;
-  }
-
-  EnvelopeWallPlacement _wallPlacementForElement(HouseEnvelopeElement element) {
-    return _draftWallPlacements[element.id] ?? element.wallPlacement!;
-  }
-
-  void _startGesture(Room room, _RoomGestureMode mode) {
-    widget.onSelectRoom(room.id);
-    setState(() {
-      _activeRoomId = room.id;
-      _activeMode = mode;
-      _draftLayouts[room.id] = _layoutForRoom(room);
-    });
-  }
-
-  void _updateGesture(Room room, DragUpdateDetails details) {
-    if (_activeRoomId != room.id || _activeMode == null) {
-      return;
-    }
-    final currentLayout = _layoutForRoom(room);
-    final deltaXMeters = details.delta.dx / _pixelsPerMeter;
-    final deltaYMeters = details.delta.dy / _pixelsPerMeter;
-    final nextLayout = switch (_activeMode!) {
-      _RoomGestureMode.move => _snapRoomLayout(
-        currentLayout.copyWith(
-          xMeters: currentLayout.xMeters + deltaXMeters,
-          yMeters: currentLayout.yMeters + deltaYMeters,
-        ),
-      ),
-      _RoomGestureMode.resize => _snapRoomLayout(
-        currentLayout.copyWith(
-          widthMeters: currentLayout.widthMeters + deltaXMeters,
-          heightMeters: currentLayout.heightMeters + deltaYMeters,
-        ),
-      ),
-    };
-    setState(() {
-      _draftLayouts[room.id] = nextLayout;
-    });
-  }
-
-  Future<void> _commitGesture(Room room) async {
-    final draftLayout = _draftLayouts.remove(room.id);
-    setState(() {
-      _activeRoomId = null;
-      _activeMode = null;
-    });
-    if (draftLayout == null || _layoutsEqual(draftLayout, room.layout)) {
-      return;
-    }
-    await widget.onUpdateRoomLayout(room.id, draftLayout);
-  }
-
-  void _startWallGesture(HouseEnvelopeElement element, _WallGestureMode mode) {
-    widget.onSelectElement(element.id, element.roomId);
-    setState(() {
-      _activeElementId = element.id;
-      _activeWallMode = mode;
-      _draftWallPlacements[element.id] = _wallPlacementForElement(element);
-    });
-  }
-
-  void _updateWallGesture(
-    HouseEnvelopeElement element,
-    Room room,
-    DragUpdateDetails details,
-  ) {
-    if (_activeElementId != element.id || _activeWallMode == null) {
-      return;
-    }
-    final currentPlacement = _wallPlacementForElement(element);
-    final deltaMeters = _deltaMetersForSide(
-      currentPlacement.side,
-      details.delta,
-      _pixelsPerMeter,
-    );
-    final sideLength = room.layout.sideLength(currentPlacement.side);
-
-    final nextPlacement = switch (_activeWallMode!) {
-      _WallGestureMode.move => _snapWallPlacement(
-        currentPlacement.copyWith(
-          offsetMeters: (currentPlacement.offsetMeters + deltaMeters)
-              .clamp(
-                0.0,
-                math.max(0.0, sideLength - currentPlacement.lengthMeters),
-              )
-              .toDouble(),
-        ),
-        sideLength: sideLength,
-      ),
-      _WallGestureMode.resize => _snapWallPlacement(
-        currentPlacement.copyWith(
-          lengthMeters: (currentPlacement.lengthMeters + deltaMeters)
-              .clamp(
-                roomLayoutSnapStepMeters,
-                math.max(
-                  roomLayoutSnapStepMeters,
-                  sideLength - currentPlacement.offsetMeters,
-                ),
-              )
-              .toDouble(),
-        ),
-        sideLength: sideLength,
-      ),
-    };
-
-    setState(() {
-      _draftWallPlacements[element.id] = nextPlacement;
-    });
-  }
-
-  Future<void> _commitWallGesture(HouseEnvelopeElement element) async {
-    final draftPlacement = _draftWallPlacements.remove(element.id);
-    setState(() {
-      _activeElementId = null;
-      _activeWallMode = null;
-    });
-    if (draftPlacement == null ||
-        _wallPlacementsEqual(draftPlacement, element.wallPlacement!)) {
-      return;
-    }
-    await widget.onUpdateElementWallPlacement(element, draftPlacement);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final rooms = widget.project.houseModel.rooms;
-    final roomMap = {for (final room in rooms) room.id: room};
-    final wallElements = widget.project.houseModel.elements
-        .where(
-          (element) =>
-              element.elementKind == ConstructionElementKind.wall &&
-              element.wallPlacement != null &&
-              roomMap.containsKey(element.roomId),
-        )
-        .toList(growable: false);
-    final maxRightMeters = math.max(
-      _minimumCanvasWidthMeters,
-      rooms.fold<double>(
-            0,
-            (maxValue, room) =>
-                math.max(maxValue, _layoutForRoom(room).rightMeters),
-          ) +
-          2,
-    );
-    final maxBottomMeters = math.max(
-      _minimumCanvasHeightMeters,
-      rooms.fold<double>(
-            0,
-            (maxValue, room) =>
-                math.max(maxValue, _layoutForRoom(room).bottomMeters),
-          ) +
-          2,
-    );
-    final canvasWidth = maxRightMeters * _pixelsPerMeter + _canvasPadding * 2;
-    final canvasHeight = maxBottomMeters * _pixelsPerMeter + _canvasPadding * 2;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _CardHeader(
-              title: 'План дома',
-              actionLabel: 'Добавить помещение',
-              onAction: widget.onAddRoom,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Комнаты редактируются как прямоугольники на сетке 0.5 м. Наружные стены живут на сторонах помещений: сегмент можно сдвигать вдоль стороны и растягивать за маркер.',
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F3EA),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-                child: SizedBox(
-                  height: 360,
-                  child: InteractiveViewer(
-                    minScale: 0.7,
-                    maxScale: 2.5,
-                    boundaryMargin: const EdgeInsets.all(48),
-                    child: SizedBox(
-                      width: canvasWidth,
-                      height: canvasHeight,
-                      child: Stack(
-                        children: [
-                          CustomPaint(
-                            size: Size(canvasWidth, canvasHeight),
-                            painter: _FloorPlanGridPainter(
-                              pixelsPerMeter: _pixelsPerMeter,
-                              canvasPadding: _canvasPadding,
-                            ),
-                          ),
-                          for (final room in rooms)
-                            _PositionedRoomTile(
-                              room: room,
-                              layout: _layoutForRoom(room),
-                              pixelsPerMeter: _pixelsPerMeter,
-                              canvasPadding: _canvasPadding,
-                              selected: widget.selectedRoomId == room.id,
-                              onTap: () => widget.onSelectRoom(room.id),
-                              onMoveStart: () =>
-                                  _startGesture(room, _RoomGestureMode.move),
-                              onMoveUpdate: (details) =>
-                                  _updateGesture(room, details),
-                              onMoveEnd: () => _commitGesture(room),
-                              onResizeStart: () =>
-                                  _startGesture(room, _RoomGestureMode.resize),
-                              onResizeUpdate: (details) =>
-                                  _updateGesture(room, details),
-                              onResizeEnd: () => _commitGesture(room),
-                            ),
-                          for (final element in wallElements)
-                            _PositionedWallSegment(
-                              room: roomMap[element.roomId]!,
-                              placement: _wallPlacementForElement(element),
-                              pixelsPerMeter: _pixelsPerMeter,
-                              canvasPadding: _canvasPadding,
-                              thicknessPixels: _wallThicknessPixels,
-                              selected: widget.selectedElementId == element.id,
-                              label: element.title,
-                              onTap: () =>
-                                  widget.onSelectElement(element.id, element.roomId),
-                              onMoveStart: () =>
-                                  _startWallGesture(element, _WallGestureMode.move),
-                              onMoveUpdate: (details) => _updateWallGesture(
-                                element,
-                                roomMap[element.roomId]!,
-                                details,
-                              ),
-                              onMoveEnd: () => _commitWallGesture(element),
-                              onResizeStart: () => _startWallGesture(
-                                element,
-                                _WallGestureMode.resize,
-                              ),
-                              onResizeUpdate: (details) => _updateWallGesture(
-                                element,
-                                roomMap[element.roomId]!,
-                                details,
-                              ),
-                              onResizeEnd: () => _commitWallGesture(element),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-enum _RoomGestureMode { move, resize }
-enum _WallGestureMode { move, resize }
-
-class _PositionedRoomTile extends StatelessWidget {
-  const _PositionedRoomTile({
-    required this.room,
-    required this.layout,
-    required this.pixelsPerMeter,
-    required this.canvasPadding,
-    required this.selected,
-    required this.onTap,
-    required this.onMoveStart,
-    required this.onMoveUpdate,
-    required this.onMoveEnd,
-    required this.onResizeStart,
-    required this.onResizeUpdate,
-    required this.onResizeEnd,
-  });
-
-  final Room room;
-  final RoomLayoutRect layout;
-  final double pixelsPerMeter;
-  final double canvasPadding;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback onMoveStart;
-  final GestureDragUpdateCallback onMoveUpdate;
-  final VoidCallback onMoveEnd;
-  final VoidCallback onResizeStart;
-  final GestureDragUpdateCallback onResizeUpdate;
-  final VoidCallback onResizeEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: canvasPadding + layout.xMeters * pixelsPerMeter,
-      top: canvasPadding + layout.yMeters * pixelsPerMeter,
-      width: layout.widthMeters * pixelsPerMeter,
-      height: layout.heightMeters * pixelsPerMeter,
-      child: GestureDetector(
-        onTap: onTap,
-        onPanStart: (_) => onMoveStart(),
-        onPanUpdate: onMoveUpdate,
-        onPanEnd: (_) => onMoveEnd(),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xFFE9D5A8).withValues(alpha: 0.9)
-                : const Color(0xFFDCC9A0).withValues(alpha: 0.8),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : const Color(0xFF6D6048),
-              width: selected ? 2 : 1.2,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        room.title,
-                        maxLines: 2,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${layout.widthMeters.toStringAsFixed(1)} x ${layout.heightMeters.toStringAsFixed(1)} м',
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 6,
-                bottom: 6,
-                child: GestureDetector(
-                  onPanStart: (_) => onResizeStart(),
-                  onPanUpdate: onResizeUpdate,
-                  onPanEnd: (_) => onResizeEnd(),
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.open_in_full, size: 12),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PositionedWallSegment extends StatelessWidget {
-  const _PositionedWallSegment({
-    required this.room,
-    required this.placement,
-    required this.pixelsPerMeter,
-    required this.canvasPadding,
-    required this.thicknessPixels,
-    required this.selected,
-    required this.label,
-    required this.onTap,
-    required this.onMoveStart,
-    required this.onMoveUpdate,
-    required this.onMoveEnd,
-    required this.onResizeStart,
-    required this.onResizeUpdate,
-    required this.onResizeEnd,
-  });
-
-  final Room room;
-  final EnvelopeWallPlacement placement;
-  final double pixelsPerMeter;
-  final double canvasPadding;
-  final double thicknessPixels;
-  final bool selected;
-  final String label;
-  final VoidCallback onTap;
-  final VoidCallback onMoveStart;
-  final GestureDragUpdateCallback onMoveUpdate;
-  final VoidCallback onMoveEnd;
-  final VoidCallback onResizeStart;
-  final GestureDragUpdateCallback onResizeUpdate;
-  final VoidCallback onResizeEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    final rect = _wallSegmentRect(
-      room: room,
-      placement: placement,
-      pixelsPerMeter: pixelsPerMeter,
-      canvasPadding: canvasPadding,
-      thicknessPixels: thicknessPixels,
-    );
-    final isHorizontal = placement.side.isHorizontal;
-
-    return Positioned(
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-      child: GestureDetector(
-        onTap: onTap,
-        onPanStart: (_) => onMoveStart(),
-        onPanUpdate: onMoveUpdate,
-        onPanEnd: (_) => onMoveEnd(),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xFF8A5530)
-                : const Color(0xFFB36A3C),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? const Color(0xFFFFE7C2) : const Color(0xFF5A3116),
-              width: selected ? 2 : 1.2,
-            ),
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              if ((isHorizontal ? rect.width : rect.height) > 56)
-                Center(
-                  child: RotatedBox(
-                    quarterTurns: isHorizontal ? 0 : 3,
-                    child: Text(
-                      '$label • ${placement.lengthMeters.toStringAsFixed(1)} м',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              Positioned(
-                right: isHorizontal ? -6 : null,
-                bottom: isHorizontal ? null : -6,
-                top: isHorizontal ? null : 6,
-                left: isHorizontal ? null : 6,
-                child: GestureDetector(
-                  onPanStart: (_) => onResizeStart(),
-                  onPanUpdate: onResizeUpdate,
-                  onPanEnd: (_) => onResizeEnd(),
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFE7C2),
-                      borderRadius: BorderRadius.circular(5),
-                      border: Border.all(color: const Color(0xFF5A3116)),
-                    ),
-                    child: Icon(
-                      isHorizontal ? Icons.drag_handle : Icons.more_horiz,
-                      size: 12,
-                      color: const Color(0xFF5A3116),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FloorPlanGridPainter extends CustomPainter {
-  const _FloorPlanGridPainter({
-    required this.pixelsPerMeter,
-    required this.canvasPadding,
-  });
-
-  final double pixelsPerMeter;
-  final double canvasPadding;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final backgroundPaint = Paint()..color = const Color(0xFFF7F3EA);
-    final minorPaint = Paint()
-      ..color = const Color(0xFFE6DDCB)
-      ..strokeWidth = 1;
-    final majorPaint = Paint()
-      ..color = const Color(0xFFD0C3AA)
-      ..strokeWidth = 1.2;
-
-    canvas.drawRect(Offset.zero & size, backgroundPaint);
-
-    for (
-      double x = canvasPadding;
-      x <= size.width - canvasPadding;
-      x += pixelsPerMeter * roomLayoutSnapStepMeters
-    ) {
-      final index =
-          ((x - canvasPadding) / (pixelsPerMeter * roomLayoutSnapStepMeters))
-              .round();
-      final paint = index.isEven ? majorPaint : minorPaint;
-      canvas.drawLine(
-        Offset(x, canvasPadding),
-        Offset(x, size.height - canvasPadding),
-        paint,
-      );
-    }
-
-    for (
-      double y = canvasPadding;
-      y <= size.height - canvasPadding;
-      y += pixelsPerMeter * roomLayoutSnapStepMeters
-    ) {
-      final index =
-          ((y - canvasPadding) / (pixelsPerMeter * roomLayoutSnapStepMeters))
-              .round();
-      final paint = index.isEven ? majorPaint : minorPaint;
-      canvas.drawLine(
-        Offset(canvasPadding, y),
-        Offset(size.width - canvasPadding, y),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _FloorPlanGridPainter oldDelegate) {
-    return oldDelegate.pixelsPerMeter != pixelsPerMeter ||
-        oldDelegate.canvasPadding != canvasPadding;
   }
 }
 
@@ -1418,8 +831,10 @@ class _RoomsCard extends StatelessWidget {
                                                 horizontal: 4,
                                                 vertical: 0,
                                               ),
-                                          onTap: () =>
-                                              onSelectElement(element.id, room.id),
+                                          onTap: () => onSelectElement(
+                                            element.id,
+                                            room.id,
+                                          ),
                                           title: Text(
                                             element.title,
                                             style: const TextStyle(
@@ -1881,7 +1296,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
             fallback: 0,
           );
           final wallPlacement = selectedKind == ConstructionElementKind.wall
-              ? _snapWallPlacement(
+              ? snapWallPlacement(
                   EnvelopeWallPlacement(
                     side: selectedSide,
                     offsetMeters: effectiveOffset,
@@ -1938,25 +1353,34 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                           (item) => item.id == selectedRoomId,
                         );
                         if (selectedKind == ConstructionElementKind.wall) {
-                          final sideLength = room.layout.sideLength(selectedSide);
-                          lengthController.text = math.min(
-                            _parseDouble(
-                              lengthController.text,
-                              fallback: sideLength,
-                            ),
-                            sideLength,
-                          ).toString();
-                          offsetController.text = math.min(
-                            _parseDouble(offsetController.text, fallback: 0),
-                            math.max(
-                              0,
-                              sideLength -
-                                  _parseDouble(
-                                    lengthController.text,
-                                    fallback: sideLength,
-                                  ),
-                            ),
-                          ).toString();
+                          final sideLength = room.layout.sideLength(
+                            selectedSide,
+                          );
+                          lengthController.text = math
+                              .min(
+                                _parseDouble(
+                                  lengthController.text,
+                                  fallback: sideLength,
+                                ),
+                                sideLength,
+                              )
+                              .toString();
+                          offsetController.text = math
+                              .min(
+                                _parseDouble(
+                                  offsetController.text,
+                                  fallback: 0,
+                                ),
+                                math.max(
+                                  0,
+                                  sideLength -
+                                      _parseDouble(
+                                        lengthController.text,
+                                        fallback: sideLength,
+                                      ),
+                                ),
+                              )
+                              .toString();
                         }
                       });
                     }
@@ -2015,7 +1439,9 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                 if (selectedKind == ConstructionElementKind.wall) ...[
                   DropdownButtonFormField<RoomSide>(
                     initialValue: selectedSide,
-                    decoration: const InputDecoration(labelText: 'Сторона комнаты'),
+                    decoration: const InputDecoration(
+                      labelText: 'Сторона комнаты',
+                    ),
                     items: RoomSide.values
                         .map(
                           (side) => DropdownMenuItem(
@@ -2028,14 +1454,18 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                       if (value != null) {
                         setState(() {
                           selectedSide = value;
-                          final sideLength = selectedRoom.layout.sideLength(value);
-                          lengthController.text = math.min(
-                            _parseDouble(
-                              lengthController.text,
-                              fallback: sideLength,
-                            ),
-                            sideLength,
-                          ).toString();
+                          final sideLength = selectedRoom.layout.sideLength(
+                            value,
+                          );
+                          lengthController.text = math
+                              .min(
+                                _parseDouble(
+                                  lengthController.text,
+                                  fallback: sideLength,
+                                ),
+                                sideLength,
+                              )
+                              .toString();
                         });
                       }
                     },
@@ -2105,7 +1535,8 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                                           defaultHouseElementAreaSquareMeters,
                                     ),
                               constructionId: selectedConstruction.id,
-                              wallPlacement: selectedConstruction.elementKind ==
+                              wallPlacement:
+                                  selectedConstruction.elementKind ==
                                       ConstructionElementKind.wall
                                   ? wallPlacement
                                   : null,
@@ -2593,129 +2024,6 @@ String _buildId(String prefix) {
   return '$prefix-${DateTime.now().microsecondsSinceEpoch}';
 }
 
-RoomLayoutRect _buildNextRoomLayout(List<Room> rooms) {
-  if (rooms.isEmpty) {
-    return RoomLayoutRect.defaultRect();
-  }
-  final lastRoom = rooms.last;
-  return RoomLayoutRect.defaultRect(
-    xMeters: lastRoom.layout.rightMeters + roomLayoutGapMeters,
-    yMeters: lastRoom.layout.yMeters,
-  );
-}
-
-RoomLayoutRect _snapRoomLayout(RoomLayoutRect layout) {
-  return RoomLayoutRect(
-    xMeters: math.max(0, _snapToStep(layout.xMeters)),
-    yMeters: math.max(0, _snapToStep(layout.yMeters)),
-    widthMeters: math.max(
-      minimumRoomLayoutDimensionMeters,
-      _snapToStep(layout.widthMeters),
-    ),
-    heightMeters: math.max(
-      minimumRoomLayoutDimensionMeters,
-      _snapToStep(layout.heightMeters),
-    ),
-  );
-}
-
-double _snapToStep(double value) {
-  return (value / roomLayoutSnapStepMeters).round() * roomLayoutSnapStepMeters;
-}
-
-bool _layoutsEqual(RoomLayoutRect left, RoomLayoutRect right) {
-  return left.xMeters == right.xMeters &&
-      left.yMeters == right.yMeters &&
-      left.widthMeters == right.widthMeters &&
-      left.heightMeters == right.heightMeters;
-}
-
-double _deltaMetersForSide(
-  RoomSide side,
-  Offset delta,
-  double pixelsPerMeter,
-) {
-  return switch (side) {
-    RoomSide.top || RoomSide.bottom => delta.dx,
-    RoomSide.left || RoomSide.right => delta.dy,
-  } /
-      pixelsPerMeter;
-}
-
-EnvelopeWallPlacement _snapWallPlacement(
-  EnvelopeWallPlacement placement, {
-  required double sideLength,
-}) {
-  final snappedLength = math.min(
-    sideLength,
-    math.max(
-      roomLayoutSnapStepMeters,
-      _snapToStep(placement.lengthMeters),
-    ),
-  );
-  final maxOffset = math.max(0.0, sideLength - snappedLength);
-  return EnvelopeWallPlacement(
-    side: placement.side,
-    offsetMeters: math.min(
-      maxOffset,
-      math.max(0.0, _snapToStep(placement.offsetMeters)),
-    ),
-    lengthMeters: snappedLength,
-  );
-}
-
-bool _wallPlacementsEqual(
-  EnvelopeWallPlacement left,
-  EnvelopeWallPlacement right,
-) {
-  return left.side == right.side &&
-      left.offsetMeters == right.offsetMeters &&
-      left.lengthMeters == right.lengthMeters;
-}
-
-Rect _wallSegmentRect({
-  required Room room,
-  required EnvelopeWallPlacement placement,
-  required double pixelsPerMeter,
-  required double canvasPadding,
-  required double thicknessPixels,
-}) {
-  final layout = room.layout;
-  final roomLeft = canvasPadding + layout.xMeters * pixelsPerMeter;
-  final roomTop = canvasPadding + layout.yMeters * pixelsPerMeter;
-  final widthPixels = layout.widthMeters * pixelsPerMeter;
-  final heightPixels = layout.heightMeters * pixelsPerMeter;
-  final offsetPixels = placement.offsetMeters * pixelsPerMeter;
-  final lengthPixels = placement.lengthMeters * pixelsPerMeter;
-
-  return switch (placement.side) {
-    RoomSide.top => Rect.fromLTWH(
-      roomLeft + offsetPixels,
-      roomTop - thicknessPixels / 2,
-      lengthPixels,
-      thicknessPixels,
-    ),
-    RoomSide.bottom => Rect.fromLTWH(
-      roomLeft + offsetPixels,
-      roomTop + heightPixels - thicknessPixels / 2,
-      lengthPixels,
-      thicknessPixels,
-    ),
-    RoomSide.left => Rect.fromLTWH(
-      roomLeft - thicknessPixels / 2,
-      roomTop + offsetPixels,
-      thicknessPixels,
-      lengthPixels,
-    ),
-    RoomSide.right => Rect.fromLTWH(
-      roomLeft + widthPixels - thicknessPixels / 2,
-      roomTop + offsetPixels,
-      thicknessPixels,
-      lengthPixels,
-    ),
-  };
-}
-
 double _parseDouble(String value, {required double fallback}) {
   return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
 }
@@ -2725,8 +2033,14 @@ String _requiredText(String value, {required String fallback}) {
   return trimmed.isEmpty ? fallback : trimmed;
 }
 
+String _describeError(Object error) {
+  return error.toString().replaceFirst(RegExp(r'^Bad state: '), '');
+}
+
 void _showError(ScaffoldMessengerState messenger, Object error) {
   messenger.showSnackBar(
-    SnackBar(content: Text('Не удалось выполнить действие: $error')),
+    SnackBar(
+      content: Text('Не удалось выполнить действие: ${_describeError(error)}'),
+    ),
   );
 }

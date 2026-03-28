@@ -168,7 +168,10 @@ void main() {
       project.houseModel.rooms.single.copyWith(heightMeters: 3.1),
     );
 
-    expect(updated.houseModel.elements.single.areaSquareMeters, closeTo(12.4, 0.001));
+    expect(
+      updated.houseModel.elements.single.areaSquareMeters,
+      closeTo(12.4, 0.001),
+    );
   });
 
   test('updateEnvelopeWallPlacement updates derived area', () {
@@ -184,7 +187,10 @@ void main() {
       ),
     );
 
-    expect(updated.houseModel.elements.single.wallPlacement?.side, RoomSide.right);
+    expect(
+      updated.houseModel.elements.single.wallPlacement?.side,
+      RoomSide.right,
+    );
     expect(updated.houseModel.elements.single.areaSquareMeters, 6.75);
   });
 
@@ -196,6 +202,19 @@ void main() {
         project,
         defaultRoomId,
         buildRoomLayout(widthMeters: 3, heightMeters: 4),
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('updateRoomLayout rejects negative coordinates', () {
+    final project = buildTestProject();
+
+    expect(
+      () => service.updateRoomLayout(
+        project,
+        defaultRoomId,
+        buildRoomLayout(xMeters: -0.5),
       ),
       throwsStateError,
     );
@@ -251,7 +270,9 @@ void main() {
             elementKind: ConstructionElementKind.wall,
             areaSquareMeters: 5,
             constructionId: 'wall',
-            wallPlacement: buildWallPlacement(lengthMeters: 5 / defaultRoomHeightMeters),
+            wallPlacement: buildWallPlacement(
+              lengthMeters: 5 / defaultRoomHeightMeters,
+            ),
           ),
         ],
         openings: const [],
@@ -319,4 +340,17 @@ void main() {
       );
     },
   );
+
+  test('updateEnvelopeWallPlacement rejects segment outside room side', () {
+    final project = buildTestProject();
+
+    expect(
+      () => service.updateEnvelopeWallPlacement(
+        project,
+        project.houseModel.elements.single.id,
+        buildWallPlacement(offsetMeters: 1.5, lengthMeters: 3),
+      ),
+      throwsStateError,
+    );
+  });
 }
