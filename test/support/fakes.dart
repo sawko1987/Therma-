@@ -207,6 +207,18 @@ RoomLayoutRect buildRoomLayout({
   );
 }
 
+EnvelopeWallPlacement buildWallPlacement({
+  RoomSide side = RoomSide.top,
+  double offsetMeters = 0,
+  double lengthMeters = defaultRoomLayoutWidthMeters,
+}) {
+  return EnvelopeWallPlacement(
+    side: side,
+    offsetMeters: offsetMeters,
+    lengthMeters: lengthMeters,
+  );
+}
+
 Room buildRoom({
   String id = defaultRoomId,
   String title = 'Основное помещение',

@@ -113,6 +113,18 @@ class ProjectEditor {
         .select(element.constructionId);
   }
 
+  Future<void> updateEnvelopeWallPlacement(
+    String elementId,
+    EnvelopeWallPlacement wallPlacement,
+  ) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateEnvelopeWallPlacement(project, elementId, wallPlacement);
+    await saveProject(updated);
+    _ref.read(selectedEnvelopeElementIdProvider.notifier).select(elementId);
+  }
+
   Future<void> deleteEnvelopeElement(String elementId) async {
     final project = await _requireProject();
     final updated = _ref

@@ -55,6 +55,7 @@ void main() {
       restored.houseModel.elements.single.constructionId,
       source.constructions.single.id,
     );
+    expect(restored.houseModel.elements.single.wallPlacement, isNotNull);
     expect(restored.houseModel.rooms.single.layout.xMeters, 0);
     expect(restored.houseModel.rooms.single.layout.widthMeters, 4);
     expect(restored.datasetVersion, currentDatasetVersion);
@@ -206,6 +207,7 @@ void main() {
       expect(migrated?.datasetVersion, currentDatasetVersion);
       expect(migrated?.migratedFromDatasetVersion, 'seed-2025-12-01');
       expect(migrated?.houseModel.elements, hasLength(1));
+      expect(migrated?.houseModel.elements.single.wallPlacement, isNotNull);
       expect(migrated?.houseModel.rooms.single.layout.widthMeters, 4);
       expect(storedRow.datasetVersion, currentDatasetVersion);
       expect(storedRow.migratedFromDatasetVersion, 'seed-2025-12-01');
@@ -246,6 +248,7 @@ void main() {
         legacyUnversionedDatasetVersion,
       );
       expect(projects.single.houseModel.elements, hasLength(1));
+      expect(projects.single.houseModel.elements.single.wallPlacement, isNotNull);
       expect(
         projects.single.sourceProjectFormatVersion,
         currentProjectFormatVersion,

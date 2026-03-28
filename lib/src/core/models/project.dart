@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-const int currentProjectFormatVersion = 5;
+const int currentProjectFormatVersion = 6;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -15,6 +15,8 @@ const String defaultRoomId = 'room-main';
 enum ConstructionElementKind { wall, roof, floor, ceiling }
 
 enum OpeningKind { window, door }
+
+enum RoomSide { top, right, bottom, left }
 
 enum LayerKind { solid, frame, crossFrame, masonry, ventilatedGap }
 
@@ -61,6 +63,24 @@ extension OpeningKindX on OpeningKind {
     OpeningKind.window => 1.0,
     OpeningKind.door => 1.5,
   };
+}
+
+extension RoomSideX on RoomSide {
+  String get label => switch (this) {
+    RoomSide.top => 'Сверху',
+    RoomSide.right => 'Справа',
+    RoomSide.bottom => 'Снизу',
+    RoomSide.left => 'Слева',
+  };
+
+  String get storageKey => switch (this) {
+    RoomSide.top => 'top',
+    RoomSide.right => 'right',
+    RoomSide.bottom => 'bottom',
+    RoomSide.left => 'left',
+  };
+
+  bool get isHorizontal => this == RoomSide.top || this == RoomSide.bottom;
 }
 
 extension LayerKindX on LayerKind {
@@ -150,6 +170,16 @@ RoomPreset parseRoomPreset(String value) {
     'attic' => RoomPreset.attic,
     'basement' => RoomPreset.basement,
     _ => throw StateError('Unknown RoomPreset: $value'),
+  };
+}
+
+RoomSide parseRoomSide(String value) {
+  return switch (value) {
+    'top' => RoomSide.top,
+    'right' => RoomSide.right,
+    'bottom' => RoomSide.bottom,
+    'left' => RoomSide.left,
+    _ => throw StateError('Unknown RoomSide: $value'),
   };
 }
 
@@ -318,6 +348,10 @@ class RoomLayoutRect {
   double get bottomMeters => yMeters + heightMeters;
   double get areaSquareMeters => widthMeters * heightMeters;
 
+  double sideLength(RoomSide side) {
+    return side.isHorizontal ? widthMeters : heightMeters;
+  }
+
   RoomLayoutRect copyWith({
     double? xMeters,
     double? yMeters,
@@ -337,6 +371,45 @@ class RoomLayoutRect {
     'yMeters': yMeters,
     'widthMeters': widthMeters,
     'heightMeters': heightMeters,
+  };
+}
+
+class EnvelopeWallPlacement {
+  const EnvelopeWallPlacement({
+    required this.side,
+    required this.offsetMeters,
+    required this.lengthMeters,
+  });
+
+  factory EnvelopeWallPlacement.fromJson(Map<String, dynamic> json) =>
+      EnvelopeWallPlacement(
+        side: parseRoomSide(json['side'] as String),
+        offsetMeters: (json['offsetMeters'] as num).toDouble(),
+        lengthMeters: (json['lengthMeters'] as num).toDouble(),
+      );
+
+  final RoomSide side;
+  final double offsetMeters;
+  final double lengthMeters;
+
+  double get endMeters => offsetMeters + lengthMeters;
+
+  EnvelopeWallPlacement copyWith({
+    RoomSide? side,
+    double? offsetMeters,
+    double? lengthMeters,
+  }) {
+    return EnvelopeWallPlacement(
+      side: side ?? this.side,
+      offsetMeters: offsetMeters ?? this.offsetMeters,
+      lengthMeters: lengthMeters ?? this.lengthMeters,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'side': side.storageKey,
+    'offsetMeters': offsetMeters,
+    'lengthMeters': lengthMeters,
   };
 }
 
@@ -427,6 +500,7 @@ class HouseEnvelopeElement {
     required this.elementKind,
     required this.areaSquareMeters,
     required this.constructionId,
+    this.wallPlacement,
   });
 
   factory HouseEnvelopeElement.fromJson(Map<String, dynamic> json) =>
@@ -439,19 +513,38 @@ class HouseEnvelopeElement {
         ),
         areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
         constructionId: json['constructionId'] as String,
+        wallPlacement: json['wallPlacement'] == null
+            ? null
+            : EnvelopeWallPlacement.fromJson(
+                _asJsonMap(json['wallPlacement']),
+              ),
       );
 
   factory HouseEnvelopeElement.fromConstruction(
     Construction construction, {
     String roomId = defaultRoomId,
-  }) => HouseEnvelopeElement(
-    id: 'house-element-${construction.id}',
-    roomId: roomId,
-    title: construction.title,
-    elementKind: construction.elementKind,
-    areaSquareMeters: defaultHouseElementAreaSquareMeters,
-    constructionId: construction.id,
-  );
+    Room? room,
+  }) {
+    final effectiveRoom = room ?? Room.defaultRoom();
+    final wallPlacement = construction.elementKind == ConstructionElementKind.wall
+        ? EnvelopeWallPlacement(
+            side: RoomSide.top,
+            offsetMeters: 0,
+            lengthMeters: effectiveRoom.layout.widthMeters,
+          )
+        : null;
+    return HouseEnvelopeElement(
+      id: 'house-element-${construction.id}',
+      roomId: roomId,
+      title: construction.title,
+      elementKind: construction.elementKind,
+      areaSquareMeters: construction.elementKind == ConstructionElementKind.wall
+          ? effectiveRoom.layout.widthMeters * effectiveRoom.heightMeters
+          : defaultHouseElementAreaSquareMeters,
+      constructionId: construction.id,
+      wallPlacement: wallPlacement,
+    );
+  }
 
   final String id;
   final String roomId;
@@ -459,6 +552,7 @@ class HouseEnvelopeElement {
   final ConstructionElementKind elementKind;
   final double areaSquareMeters;
   final String constructionId;
+  final EnvelopeWallPlacement? wallPlacement;
 
   HouseEnvelopeElement copyWith({
     String? id,
@@ -467,6 +561,8 @@ class HouseEnvelopeElement {
     ConstructionElementKind? elementKind,
     double? areaSquareMeters,
     String? constructionId,
+    EnvelopeWallPlacement? wallPlacement,
+    bool clearWallPlacement = false,
   }) {
     return HouseEnvelopeElement(
       id: id ?? this.id,
@@ -475,6 +571,9 @@ class HouseEnvelopeElement {
       elementKind: elementKind ?? this.elementKind,
       areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
       constructionId: constructionId ?? this.constructionId,
+      wallPlacement: clearWallPlacement
+          ? null
+          : wallPlacement ?? this.wallPlacement,
     );
   }
 
@@ -485,6 +584,7 @@ class HouseEnvelopeElement {
     'elementKind': elementKind.storageKey,
     'areaSquareMeters': areaSquareMeters,
     'constructionId': constructionId,
+    'wallPlacement': wallPlacement?.toJson(),
   };
 }
 
@@ -588,14 +688,18 @@ class HouseModel {
   factory HouseModel.bootstrapFromConstructions(
     List<Construction> constructions,
   ) {
+    final defaultRoom = Room.defaultRoom();
     return HouseModel(
       id: 'house-model',
       title: 'Конструктор дома',
-      rooms: [Room.defaultRoom()],
+      rooms: [defaultRoom],
       elements: constructions
           .map(
             (construction) =>
-                HouseEnvelopeElement.fromConstruction(construction),
+                HouseEnvelopeElement.fromConstruction(
+                  construction,
+                  room: defaultRoom,
+                ),
           )
           .toList(growable: false),
       openings: const [],

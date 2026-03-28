@@ -30,8 +30,13 @@ const Project demoProject = Project(
         roomId: defaultRoomId,
         title: 'Наружная стена',
         elementKind: ConstructionElementKind.wall,
-        areaSquareMeters: 140,
+        areaSquareMeters: 14,
         constructionId: 'outer-wall',
+        wallPlacement: EnvelopeWallPlacement(
+          side: RoomSide.top,
+          offsetMeters: 0,
+          lengthMeters: 5,
+        ),
       ),
     ],
     openings: [

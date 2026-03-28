@@ -4,6 +4,7 @@ class ProjectEditingService {
   const ProjectEditingService();
 
   Project addRoom(Project project, Room room) {
+    _validateRoomLayout(project.houseModel.rooms, room);
     return project.copyWith(
       houseModel: project.houseModel.copyWith(
         rooms: [...project.houseModel.rooms, room],
@@ -12,13 +13,14 @@ class ProjectEditingService {
   }
 
   Project updateRoom(Project project, Room room) {
-    return project.copyWith(
-      houseModel: project.houseModel.copyWith(
-        rooms: [
-          for (final item in project.houseModel.rooms)
-            if (item.id == room.id) room else item,
-        ],
-      ),
+    _ensureRoomExists(project, room.id);
+    final updatedRooms = [
+      for (final item in project.houseModel.rooms)
+        if (item.id == room.id) room else item,
+    ];
+    _validateRoomLayout(updatedRooms, room, roomId: room.id);
+    return _syncElementsForRooms(
+      project.copyWith(houseModel: project.houseModel.copyWith(rooms: updatedRooms)),
     );
   }
 
@@ -28,13 +30,14 @@ class ProjectEditingService {
     RoomLayoutRect layout,
   ) {
     _ensureRoomExists(project, roomId);
-    return project.copyWith(
-      houseModel: project.houseModel.copyWith(
-        rooms: [
-          for (final item in project.houseModel.rooms)
-            if (item.id == roomId) item.copyWith(layout: layout) else item,
-        ],
-      ),
+    final updatedRooms = [
+      for (final item in project.houseModel.rooms)
+        if (item.id == roomId) item.copyWith(layout: layout) else item,
+    ];
+    final updatedRoom = updatedRooms.firstWhere((item) => item.id == roomId);
+    _validateRoomLayout(updatedRooms, updatedRoom, roomId: roomId);
+    return _syncElementsForRooms(
+      project.copyWith(houseModel: project.houseModel.copyWith(rooms: updatedRooms)),
     );
   }
 
@@ -62,28 +65,41 @@ class ProjectEditingService {
   }
 
   Project addEnvelopeElement(Project project, HouseEnvelopeElement element) {
-    _ensureRoomExists(project, element.roomId);
-    _ensureConstructionExists(project, element.constructionId);
-
-    return project.copyWith(
+    final normalized = _normalizeElement(project, element);
+    final updatedProject = project.copyWith(
       houseModel: project.houseModel.copyWith(
-        elements: [...project.houseModel.elements, element],
+        elements: [...project.houseModel.elements, normalized],
       ),
     );
+    _ensureAllOpeningsFit(updatedProject);
+    return updatedProject;
   }
 
   Project updateEnvelopeElement(Project project, HouseEnvelopeElement element) {
-    _ensureRoomExists(project, element.roomId);
-    _ensureConstructionExists(project, element.constructionId);
-    _ensureElementOpeningsFitArea(project, element);
-
-    return project.copyWith(
+    final normalized = _normalizeElement(project, element);
+    final updatedProject = project.copyWith(
       houseModel: project.houseModel.copyWith(
         elements: [
           for (final item in project.houseModel.elements)
-            if (item.id == element.id) element else item,
+            if (item.id == normalized.id) normalized else item,
         ],
       ),
+    );
+    _ensureAllOpeningsFit(updatedProject);
+    return updatedProject;
+  }
+
+  Project updateEnvelopeWallPlacement(
+    Project project,
+    String elementId,
+    EnvelopeWallPlacement wallPlacement,
+  ) {
+    final element = project.houseModel.elements.firstWhere(
+      (item) => item.id == elementId,
+    );
+    return updateEnvelopeElement(
+      project,
+      element.copyWith(wallPlacement: wallPlacement),
     );
   }
 
@@ -145,7 +161,7 @@ class ProjectEditingService {
   }
 
   Project updateConstruction(Project project, Construction construction) {
-    return project.copyWith(
+    final updatedProject = project.copyWith(
       constructions: [
         for (final item in project.constructions)
           if (item.id == construction.id) construction else item,
@@ -154,15 +170,17 @@ class ProjectEditingService {
         elements: [
           for (final element in project.houseModel.elements)
             if (element.constructionId == construction.id)
-              element.copyWith(
-                title: element.title,
-                elementKind: construction.elementKind,
+              _retargetElementForConstruction(
+                project: project,
+                element: element,
+                construction: construction,
               )
             else
               element,
         ],
       ),
     );
+    return _syncElementsForRooms(updatedProject);
   }
 
   Project deleteConstruction(Project project, String constructionId) {
@@ -184,6 +202,112 @@ class ProjectEditingService {
           if (item.id != constructionId) item,
       ],
     );
+  }
+
+  Project _syncElementsForRooms(Project project) {
+    final updatedProject = project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        elements: [
+          for (final element in project.houseModel.elements)
+            _normalizeElement(project, element),
+        ],
+      ),
+    );
+    _ensureAllOpeningsFit(updatedProject);
+    return updatedProject;
+  }
+
+  HouseEnvelopeElement _normalizeElement(
+    Project project,
+    HouseEnvelopeElement element,
+  ) {
+    _ensureRoomExists(project, element.roomId);
+    _ensureConstructionExists(project, element.constructionId);
+    final construction = project.constructions.firstWhere(
+      (item) => item.id == element.constructionId,
+    );
+    final effectiveKind = construction.elementKind;
+    final room = project.houseModel.rooms.firstWhere(
+      (item) => item.id == element.roomId,
+    );
+
+    if (effectiveKind != ConstructionElementKind.wall) {
+      return element.copyWith(
+        elementKind: effectiveKind,
+        clearWallPlacement: true,
+      );
+    }
+
+    final placement = element.wallPlacement;
+    if (placement == null) {
+      throw StateError('Для наружной стены нужна привязка к стороне комнаты.');
+    }
+    _ensureWallPlacementFitsRoom(room, placement);
+    return element.copyWith(
+      elementKind: effectiveKind,
+      areaSquareMeters: placement.lengthMeters * room.heightMeters,
+      wallPlacement: placement,
+    );
+  }
+
+  HouseEnvelopeElement _retargetElementForConstruction({
+    required Project project,
+    required HouseEnvelopeElement element,
+    required Construction construction,
+  }) {
+    if (construction.elementKind != ConstructionElementKind.wall) {
+      return element.copyWith(
+        elementKind: construction.elementKind,
+        clearWallPlacement: true,
+      );
+    }
+
+    final room = project.houseModel.rooms.firstWhere((item) => item.id == element.roomId);
+    return element.copyWith(
+      elementKind: construction.elementKind,
+      wallPlacement:
+          element.wallPlacement ??
+          EnvelopeWallPlacement(
+            side: RoomSide.top,
+            offsetMeters: 0,
+            lengthMeters: room.layout.widthMeters,
+          ),
+    );
+  }
+
+  void _validateRoomLayout(
+    List<Room> rooms,
+    Room room, {
+    String? roomId,
+  }) {
+    final layout = room.layout;
+    if (layout.xMeters < 0 || layout.yMeters < 0) {
+      throw StateError('Комната не может выходить в отрицательные координаты.');
+    }
+    if (layout.widthMeters < minimumRoomLayoutDimensionMeters ||
+        layout.heightMeters < minimumRoomLayoutDimensionMeters) {
+      throw StateError(
+        'Размер комнаты не может быть меньше ${minimumRoomLayoutDimensionMeters.toStringAsFixed(1)} м.',
+      );
+    }
+
+    for (final other in rooms) {
+      if (other.id == roomId || other.id == room.id) {
+        continue;
+      }
+      if (_rectanglesOverlap(layout, other.layout)) {
+        throw StateError(
+          'Комнаты не должны пересекаться на плане: ${room.title} и ${other.title}.',
+        );
+      }
+    }
+  }
+
+  bool _rectanglesOverlap(RoomLayoutRect left, RoomLayoutRect right) {
+    return left.xMeters < right.rightMeters &&
+        left.rightMeters > right.xMeters &&
+        left.yMeters < right.bottomMeters &&
+        left.bottomMeters > right.yMeters;
   }
 
   void _ensureRoomExists(Project project, String roomId) {
@@ -208,6 +332,29 @@ class ProjectEditingService {
     );
     if (!exists) {
       throw StateError('Ограждение $elementId не найдено в проекте.');
+    }
+  }
+
+  void _ensureWallPlacementFitsRoom(Room room, EnvelopeWallPlacement placement) {
+    if (placement.offsetMeters < 0) {
+      throw StateError('Смещение стены по стороне не может быть отрицательным.');
+    }
+    if (placement.lengthMeters < roomLayoutSnapStepMeters) {
+      throw StateError(
+        'Длина сегмента стены должна быть не меньше ${roomLayoutSnapStepMeters.toStringAsFixed(1)} м.',
+      );
+    }
+    final sideLength = room.layout.sideLength(placement.side);
+    if (placement.endMeters > sideLength + 0.0001) {
+      throw StateError(
+        'Сегмент стены выходит за пределы стороны комнаты ${room.title}.',
+      );
+    }
+  }
+
+  void _ensureAllOpeningsFit(Project project) {
+    for (final element in project.houseModel.elements) {
+      _ensureElementOpeningsFitArea(project, element);
     }
   }
 
