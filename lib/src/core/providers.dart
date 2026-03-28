@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'models/building_heat_loss.dart';
 import 'models/calculation.dart';
 import 'models/catalog.dart';
+import 'models/ground_floor_calculation.dart';
 import 'models/project.dart';
 import 'models/report.dart';
 import 'services/asset_catalog_repository.dart';
 import 'services/building_heat_loss_service.dart';
 import 'services/drift_project_repository.dart';
+import 'services/ground_floor_calculation_service.dart';
 import 'services/interfaces.dart';
 import 'services/local_report_file_store.dart';
 import 'services/normative_thermal_calculation_engine.dart';
@@ -44,6 +46,15 @@ class SelectedEnvelopeElementIdNotifier extends Notifier<String?> {
   }
 }
 
+class SelectedGroundFloorCalculationIdNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String? calculationId) {
+    state = calculationId;
+  }
+}
+
 class ProjectEditor {
   ProjectEditor(this._ref);
 
@@ -56,6 +67,8 @@ class ProjectEditor {
     _ref.invalidate(selectedEnvelopeElementProvider);
     _ref.invalidate(selectedConstructionProvider);
     _ref.invalidate(buildingHeatLossResultProvider);
+    _ref.invalidate(selectedGroundFloorCalculationProvider);
+    _ref.invalidate(groundFloorCalculationResultProvider);
   }
 
   Future<void> addRoom(Room room) async {
@@ -222,6 +235,50 @@ class ProjectEditor {
     _ref.read(selectedConstructionIdProvider.notifier).select(null);
   }
 
+  Future<void> addGroundFloorCalculation(
+    GroundFloorCalculation calculation,
+  ) async {
+    final project = await _requireProject();
+    final updated = project.copyWith(
+      groundFloorCalculations: [
+        ...project.groundFloorCalculations,
+        calculation,
+      ],
+    );
+    await saveProject(updated);
+    _ref
+        .read(selectedGroundFloorCalculationIdProvider.notifier)
+        .select(calculation.id);
+  }
+
+  Future<void> updateGroundFloorCalculation(
+    GroundFloorCalculation calculation,
+  ) async {
+    final project = await _requireProject();
+    final updated = project.copyWith(
+      groundFloorCalculations: [
+        for (final item in project.groundFloorCalculations)
+          if (item.id == calculation.id) calculation else item,
+      ],
+    );
+    await saveProject(updated);
+    _ref
+        .read(selectedGroundFloorCalculationIdProvider.notifier)
+        .select(calculation.id);
+  }
+
+  Future<void> deleteGroundFloorCalculation(String calculationId) async {
+    final project = await _requireProject();
+    final updated = project.copyWith(
+      groundFloorCalculations: [
+        for (final item in project.groundFloorCalculations)
+          if (item.id != calculationId) item,
+      ],
+    );
+    await saveProject(updated);
+    _ref.read(selectedGroundFloorCalculationIdProvider.notifier).select(null);
+  }
+
   void selectEnvelopeElement(HouseEnvelopeElement element) {
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(element.id);
     _ref
@@ -304,6 +361,13 @@ final buildingHeatLossServiceProvider = Provider<BuildingHeatLossService>(
   ),
 );
 
+final groundFloorCalculationServiceProvider =
+    Provider<GroundFloorCalculationService>(
+      (ref) => NormativeGroundFloorCalculationService(
+        ref.watch(thermalCalculationEngineProvider),
+      ),
+    );
+
 final projectEditorProvider = Provider<ProjectEditor>(
   (ref) => ProjectEditor(ref),
 );
@@ -342,6 +406,11 @@ final selectedConstructionIdProvider =
 final selectedEnvelopeElementIdProvider =
     NotifierProvider<SelectedEnvelopeElementIdNotifier, String?>(
       SelectedEnvelopeElementIdNotifier.new,
+    );
+
+final selectedGroundFloorCalculationIdProvider =
+    NotifierProvider<SelectedGroundFloorCalculationIdNotifier, String?>(
+      SelectedGroundFloorCalculationIdNotifier.new,
     );
 
 final projectListProvider = FutureProvider<List<Project>>((ref) async {
@@ -431,6 +500,29 @@ final selectedConstructionProvider = FutureProvider<Construction?>((ref) async {
   return fallback;
 });
 
+final selectedGroundFloorCalculationProvider =
+    FutureProvider<GroundFloorCalculation?>((ref) async {
+      final project = await ref.watch(selectedProjectProvider.future);
+      if (project == null || project.groundFloorCalculations.isEmpty) {
+        return null;
+      }
+
+      final selectedCalculationId = ref.watch(
+        selectedGroundFloorCalculationIdProvider,
+      );
+      for (final calculation in project.groundFloorCalculations) {
+        if (calculation.id == selectedCalculationId) {
+          return calculation;
+        }
+      }
+
+      final fallback = project.groundFloorCalculations.first;
+      ref
+          .read(selectedGroundFloorCalculationIdProvider.notifier)
+          .select(fallback.id);
+      return fallback;
+    });
+
 final buildingHeatLossResultProvider = FutureProvider<BuildingHeatLossResult?>((
   ref,
 ) async {
@@ -443,6 +535,25 @@ final buildingHeatLossResultProvider = FutureProvider<BuildingHeatLossResult?>((
       .read(buildingHeatLossServiceProvider)
       .calculate(catalog: catalog, project: project);
 });
+
+final groundFloorCalculationResultProvider =
+    FutureProvider<GroundFloorCalculationResult?>((ref) async {
+      final catalog = await ref.watch(catalogSnapshotProvider.future);
+      final project = await ref.watch(selectedProjectProvider.future);
+      final calculation = await ref.watch(
+        selectedGroundFloorCalculationProvider.future,
+      );
+      if (project == null || calculation == null) {
+        return null;
+      }
+      return ref
+          .read(groundFloorCalculationServiceProvider)
+          .calculate(
+            catalog: catalog,
+            project: project,
+            calculation: calculation,
+          );
+    });
 
 final calculationResultProvider = FutureProvider<CalculationResult?>((
   ref,

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
 
@@ -41,5 +42,59 @@ void main() {
     );
     expect(selectedProject?.id, 'roof-project');
     expect(selectedProject?.name, 'Новосибирск / кровля');
+  });
+
+  test('selectedGroundFloorCalculationProvider respects selected id', () async {
+    final floor = Construction(
+      id: 'floor',
+      title: 'Пол',
+      elementKind: ConstructionElementKind.floor,
+      layers: buildWallConstruction().layers,
+    );
+    final project = buildTestProject(
+      constructions: [floor],
+      groundFloorCalculations: const [
+        GroundFloorCalculation(
+          id: 'a',
+          title: 'A',
+          kind: GroundFloorCalculationKind.slabOnGround,
+          constructionId: 'floor',
+          areaSquareMeters: 25,
+          perimeterMeters: 20,
+          slabWidthMeters: 5,
+          slabLengthMeters: 5,
+          edgeInsulationWidthMeters: 0.6,
+          edgeInsulationResistance: 1.5,
+        ),
+        GroundFloorCalculation(
+          id: 'b',
+          title: 'B',
+          kind: GroundFloorCalculationKind.slabOnGround,
+          constructionId: 'floor',
+          areaSquareMeters: 36,
+          perimeterMeters: 24,
+          slabWidthMeters: 6,
+          slabLengthMeters: 6,
+          edgeInsulationWidthMeters: 0.8,
+          edgeInsulationResistance: 2.1,
+        ),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        projectRepositoryProvider.overrideWithValue(
+          FakeProjectRepository(projects: [project]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container
+        .read(selectedGroundFloorCalculationIdProvider.notifier)
+        .select('b');
+    final selected = await container.read(
+      selectedGroundFloorCalculationProvider.future,
+    );
+    expect(selected?.id, 'b');
   });
 }

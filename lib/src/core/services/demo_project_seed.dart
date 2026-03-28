@@ -1,3 +1,4 @@
+import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
 import '../models/versioning.dart';
 
@@ -60,6 +61,31 @@ const Project demoProject = Project(
   ),
   constructions: [
     Construction(
+      id: 'floor-on-ground',
+      title: 'Пол по грунту',
+      elementKind: ConstructionElementKind.floor,
+      layers: [
+        ConstructionLayer(
+          id: 'screed',
+          materialId: 'gypsum_plaster',
+          kind: LayerKind.solid,
+          thicknessMm: 50,
+        ),
+        ConstructionLayer(
+          id: 'floor-wool',
+          materialId: 'mineral_wool',
+          kind: LayerKind.frame,
+          thicknessMm: 150,
+        ),
+        ConstructionLayer(
+          id: 'floor-aac',
+          materialId: 'aac_d500',
+          kind: LayerKind.solid,
+          thicknessMm: 120,
+        ),
+      ],
+    ),
+    Construction(
       id: 'outer-wall',
       title: 'Наружная стена',
       elementKind: ConstructionElementKind.wall,
@@ -89,6 +115,21 @@ const Project demoProject = Project(
           thicknessMm: 120,
         ),
       ],
+    ),
+  ],
+  groundFloorCalculations: [
+    GroundFloorCalculation(
+      id: 'ground-floor-main',
+      title: 'Пол по грунту / гостиная',
+      kind: GroundFloorCalculationKind.slabOnGround,
+      constructionId: 'floor-on-ground',
+      areaSquareMeters: 38,
+      perimeterMeters: 25.2,
+      slabWidthMeters: 5,
+      slabLengthMeters: 7.6,
+      edgeInsulationWidthMeters: 0.8,
+      edgeInsulationResistance: 2.1,
+      notes: 'Демо-кейс для ground floor v1.',
     ),
   ],
 );

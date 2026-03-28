@@ -1,4 +1,5 @@
 import 'package:smartcalc_mobile/src/core/models/catalog.dart';
+import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/models/report.dart';
 import 'package:smartcalc_mobile/src/core/models/versioning.dart';
@@ -298,9 +299,7 @@ HouseModel buildHouseModel({
   List<HeatingDevice>? heatingDevices,
 }) {
   final effectiveConstructions = constructions ?? [buildWallConstruction()];
-  return HouseModel.bootstrapFromConstructions(
-    effectiveConstructions,
-  ).copyWith(
+  return HouseModel.bootstrapFromConstructions(effectiveConstructions).copyWith(
     openings: openings ?? const [],
     heatingDevices: heatingDevices ?? const [],
   );
@@ -330,21 +329,25 @@ Project buildTestProject({
   String climatePointId = 'moscow',
   RoomPreset roomPreset = RoomPreset.livingRoom,
   Construction? construction,
+  List<Construction>? constructions,
   HouseModel? houseModel,
+  List<GroundFloorCalculation>? groundFloorCalculations,
   String datasetVersion = currentDatasetVersion,
   String? migratedFromDatasetVersion,
 }) {
-  final effectiveConstruction = construction ?? buildWallConstruction();
+  final effectiveConstructions =
+      constructions ?? [construction ?? buildWallConstruction()];
   return Project(
     id: 'demo',
     name: 'Demo project',
     climatePointId: climatePointId,
     roomPreset: roomPreset,
     houseModel:
-        houseModel ?? buildHouseModel(constructions: [effectiveConstruction]),
+        houseModel ?? buildHouseModel(constructions: effectiveConstructions),
+    groundFloorCalculations: groundFloorCalculations ?? const [],
     datasetVersion: datasetVersion,
     migratedFromDatasetVersion: migratedFromDatasetVersion,
-    constructions: [effectiveConstruction],
+    constructions: effectiveConstructions,
   );
 }
 

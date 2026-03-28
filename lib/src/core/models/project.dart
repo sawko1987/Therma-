@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
-const int currentProjectFormatVersion = 7;
+import 'ground_floor_calculation.dart';
+
+const int currentProjectFormatVersion = 8;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -546,9 +548,7 @@ class HouseEnvelopeElement {
         constructionId: json['constructionId'] as String,
         wallPlacement: json['wallPlacement'] == null
             ? null
-            : EnvelopeWallPlacement.fromJson(
-                _asJsonMap(json['wallPlacement']),
-              ),
+            : EnvelopeWallPlacement.fromJson(_asJsonMap(json['wallPlacement'])),
       );
 
   factory HouseEnvelopeElement.fromConstruction(
@@ -557,7 +557,8 @@ class HouseEnvelopeElement {
     Room? room,
   }) {
     final effectiveRoom = room ?? Room.defaultRoom();
-    final wallPlacement = construction.elementKind == ConstructionElementKind.wall
+    final wallPlacement =
+        construction.elementKind == ConstructionElementKind.wall
         ? EnvelopeWallPlacement(
             side: RoomSide.top,
             offsetMeters: 0,
@@ -766,9 +767,10 @@ class HouseModel {
     final openings = ((json['openings'] as List<dynamic>?) ?? const [])
         .map((item) => EnvelopeOpening.fromJson(_asJsonMap(item)))
         .toList(growable: false);
-    final heatingDevices = ((json['heatingDevices'] as List<dynamic>?) ?? const [])
-        .map((item) => HeatingDevice.fromJson(_asJsonMap(item)))
-        .toList(growable: false);
+    final heatingDevices =
+        ((json['heatingDevices'] as List<dynamic>?) ?? const [])
+            .map((item) => HeatingDevice.fromJson(_asJsonMap(item)))
+            .toList(growable: false);
     return HouseModel(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -805,11 +807,10 @@ class HouseModel {
       rooms: [defaultRoom],
       elements: constructions
           .map(
-            (construction) =>
-                HouseEnvelopeElement.fromConstruction(
-                  construction,
-                  room: defaultRoom,
-                ),
+            (construction) => HouseEnvelopeElement.fromConstruction(
+              construction,
+              room: defaultRoom,
+            ),
           )
           .toList(growable: false),
       openings: const [],
@@ -871,6 +872,7 @@ class Project {
     required this.roomPreset,
     required this.constructions,
     required this.houseModel,
+    this.groundFloorCalculations = const [],
     this.datasetVersion,
     this.migratedFromDatasetVersion,
     this.sourceProjectFormatVersion = currentProjectFormatVersion,
@@ -886,6 +888,10 @@ class Project {
         .map((item) => Construction.fromJson(_asJsonMap(item)))
         .toList(growable: false);
     final houseModelJson = json['houseModel'];
+    final groundFloorCalculations =
+        ((json['groundFloorCalculations'] as List<dynamic>?) ?? const [])
+            .map((item) => GroundFloorCalculation.fromJson(_asJsonMap(item)))
+            .toList(growable: false);
 
     return Project(
       id: json['id'] as String,
@@ -896,6 +902,7 @@ class Project {
       houseModel: houseModelJson == null
           ? HouseModel.bootstrapFromConstructions(constructions)
           : HouseModel.fromJson(_asJsonMap(houseModelJson)),
+      groundFloorCalculations: groundFloorCalculations,
       datasetVersion: json['datasetVersion'] as String?,
       migratedFromDatasetVersion: json['migratedFromDatasetVersion'] as String?,
       sourceProjectFormatVersion: formatVersion,
@@ -908,6 +915,7 @@ class Project {
   final RoomPreset roomPreset;
   final List<Construction> constructions;
   final HouseModel houseModel;
+  final List<GroundFloorCalculation> groundFloorCalculations;
   final String? datasetVersion;
   final String? migratedFromDatasetVersion;
   final int sourceProjectFormatVersion;
@@ -930,6 +938,7 @@ class Project {
     RoomPreset? roomPreset,
     List<Construction>? constructions,
     HouseModel? houseModel,
+    List<GroundFloorCalculation>? groundFloorCalculations,
     String? datasetVersion,
     String? migratedFromDatasetVersion,
     int? sourceProjectFormatVersion,
@@ -942,6 +951,8 @@ class Project {
       roomPreset: roomPreset ?? this.roomPreset,
       constructions: constructions ?? this.constructions,
       houseModel: houseModel ?? this.houseModel,
+      groundFloorCalculations:
+          groundFloorCalculations ?? this.groundFloorCalculations,
       datasetVersion: datasetVersion ?? this.datasetVersion,
       migratedFromDatasetVersion: clearMigratedFromDatasetVersion
           ? null
@@ -961,6 +972,9 @@ class Project {
         .map((item) => item.toJson())
         .toList(growable: false),
     'houseModel': houseModel.toJson(),
+    'groundFloorCalculations': groundFloorCalculations
+        .map((item) => item.toJson())
+        .toList(growable: false),
     'datasetVersion': datasetVersion,
     'migratedFromDatasetVersion': migratedFromDatasetVersion,
   };

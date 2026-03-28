@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smartcalc_mobile/src/app/app.dart';
+import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/models/versioning.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
@@ -98,5 +99,59 @@ void main() {
 
     expect(find.text('Сборка дома'), findsOneWidget);
     expect(find.text('Помещения и ограждения'), findsOneWidget);
+  });
+
+  testWidgets('dashboard opens ground floor screen', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final floorConstruction = Construction(
+      id: 'floor',
+      title: 'Пол',
+      elementKind: ConstructionElementKind.floor,
+      layers: buildWallConstruction().layers,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(
+              projects: [
+                buildTestProject(
+                  constructions: [floorConstruction],
+                  groundFloorCalculations: const [
+                    GroundFloorCalculation(
+                      id: 'gf',
+                      title: 'Пол по грунту',
+                      kind: GroundFloorCalculationKind.slabOnGround,
+                      constructionId: 'floor',
+                      areaSquareMeters: 36,
+                      perimeterMeters: 24,
+                      slabWidthMeters: 6,
+                      slabLengthMeters: 6,
+                      edgeInsulationWidthMeters: 0.6,
+                      edgeInsulationResistance: 1.5,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const SmartCalcApp(),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Открыть полы по грунту'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Полы по грунту'), findsOneWidget);
+    expect(find.text('Результат'), findsOneWidget);
   });
 }

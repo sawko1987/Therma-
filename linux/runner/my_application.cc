@@ -52,7 +52,9 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "smartcalc_mobile");
   }
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // Linux is used here as a development host for the phone UI, so default to
+  // a mobile-sized window instead of a desktop layout.
+  gtk_window_set_default_size(window, 412, 915);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

@@ -1,3 +1,4 @@
+import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
 import '../models/versioning.dart';
 
@@ -30,6 +31,7 @@ class ProjectMigrationService {
     return MigratedProject(
       project: project.copyWith(
         houseModel: _migrateHouseModel(project),
+        groundFloorCalculations: _migrateGroundFloorCalculations(project),
         datasetVersion: currentDatasetVersion,
         migratedFromDatasetVersion: requiresDatasetMigration
             ? effectiveSourceDatasetVersion
@@ -38,6 +40,15 @@ class ProjectMigrationService {
       ),
       wasMigrated: true,
     );
+  }
+
+  List<GroundFloorCalculation> _migrateGroundFloorCalculations(
+    Project project,
+  ) {
+    if (project.sourceProjectFormatVersion >= 8) {
+      return project.groundFloorCalculations;
+    }
+    return const [];
   }
 
   HouseModel _migrateHouseModel(Project project) {
@@ -104,33 +115,32 @@ class ProjectMigrationService {
     final roomMap = {for (final room in rooms) room.id: room};
     final roomWallIndexes = <String, int>{};
 
-    return elements.map((element) {
-      if (element.elementKind != ConstructionElementKind.wall) {
-        return element.copyWith(clearWallPlacement: true);
-      }
-      final room = roomMap[element.roomId] ?? rooms.first;
-      final wallIndex = roomWallIndexes.update(
-        room.id,
-        (value) => value + 1,
-        ifAbsent: () => 0,
-      );
-      final side = RoomSide.values[wallIndex % RoomSide.values.length];
-      final sideLength = room.layout.sideLength(side);
-      final requestedLength = element.areaSquareMeters / room.heightMeters;
-      final lengthMeters = requestedLength
-          .clamp(
-            roomLayoutSnapStepMeters,
-            sideLength,
-          )
-          .toDouble();
-      return element.copyWith(
-        wallPlacement: EnvelopeWallPlacement(
-          side: side,
-          offsetMeters: 0,
-          lengthMeters: lengthMeters,
-        ),
-        areaSquareMeters: lengthMeters * room.heightMeters,
-      );
-    }).toList(growable: false);
+    return elements
+        .map((element) {
+          if (element.elementKind != ConstructionElementKind.wall) {
+            return element.copyWith(clearWallPlacement: true);
+          }
+          final room = roomMap[element.roomId] ?? rooms.first;
+          final wallIndex = roomWallIndexes.update(
+            room.id,
+            (value) => value + 1,
+            ifAbsent: () => 0,
+          );
+          final side = RoomSide.values[wallIndex % RoomSide.values.length];
+          final sideLength = room.layout.sideLength(side);
+          final requestedLength = element.areaSquareMeters / room.heightMeters;
+          final lengthMeters = requestedLength
+              .clamp(roomLayoutSnapStepMeters, sideLength)
+              .toDouble();
+          return element.copyWith(
+            wallPlacement: EnvelopeWallPlacement(
+              side: side,
+              offsetMeters: 0,
+              lengthMeters: lengthMeters,
+            ),
+            areaSquareMeters: lengthMeters * room.heightMeters,
+          );
+        })
+        .toList(growable: false);
   }
 }

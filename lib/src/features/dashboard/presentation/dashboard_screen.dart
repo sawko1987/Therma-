@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
+import '../../ground_floor/presentation/ground_floor_screen.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 
@@ -51,6 +52,13 @@ class DashboardScreen extends ConsumerWidget {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const ThermocalcScreen(),
+                ),
+              );
+            },
+            onOpenGroundFloor: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const GroundFloorScreen(),
                 ),
               );
             },
@@ -290,10 +298,12 @@ class _RoadmapCard extends StatelessWidget {
   const _RoadmapCard({
     required this.onOpenHouseScheme,
     required this.onOpenPreview,
+    required this.onOpenGroundFloor,
   });
 
   final VoidCallback onOpenHouseScheme;
   final VoidCallback onOpenPreview;
+  final VoidCallback onOpenGroundFloor;
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +321,7 @@ class _RoadmapCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Открываются экран thermocalc с расчётом теплозащиты v1 и конструктор дома из Phase 2: помещения, ограждения, конструкции и запуск расчёта из выбранного элемента.',
+              'Открываются экран thermocalc, отдельный модуль полов по грунту v1 и конструктор дома из Phase 2: помещения, ограждения, конструкции и запуск расчёта из выбранного элемента.',
             ),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
@@ -324,6 +334,12 @@ class _RoadmapCard extends StatelessWidget {
               onPressed: onOpenPreview,
               icon: const Icon(Icons.analytics_outlined),
               label: const Text('Открыть thermocalc'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: onOpenGroundFloor,
+              icon: const Icon(Icons.foundation_outlined),
+              label: const Text('Открыть полы по грунту'),
             ),
           ],
         ),
