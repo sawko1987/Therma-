@@ -7,24 +7,39 @@ import 'package:smartcalc_mobile/src/features/house_scheme/presentation/house_sc
 import 'support/fakes.dart';
 
 void main() {
-  testWidgets('house builder screen renders rooms, elements and constructions', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
-        ],
-        child: const MaterialApp(home: HouseSchemeScreen()),
-      ),
-    );
+  testWidgets(
+    'house builder screen renders rooms, elements and constructions',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            catalogRepositoryProvider.overrideWithValue(
+              FakeCatalogRepository(),
+            ),
+            projectRepositoryProvider.overrideWithValue(
+              FakeProjectRepository(),
+            ),
+          ],
+          child: const MaterialApp(home: HouseSchemeScreen()),
+        ),
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    expect(find.text('Сборка дома'), findsOneWidget);
-    expect(find.text('Конструктор дома'), findsOneWidget);
-    expect(find.text('Конструкции'), findsOneWidget);
-    expect(find.textContaining('помещения, ограждения и переиспользуемые конструкции'), findsOneWidget);
-  });
+      expect(find.text('Сборка дома'), findsOneWidget);
+      expect(find.text('Конструктор дома'), findsOneWidget);
+      expect(find.text('Конструкции'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'помещения, ограждения, окна/двери и переиспользуемые конструкции',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.drag(find.byType(ListView), const Offset(0, -700));
+      await tester.pumpAndSettle();
+
+      expect(find.text('План дома'), findsOneWidget);
+    },
+  );
 }

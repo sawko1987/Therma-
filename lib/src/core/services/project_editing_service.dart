@@ -22,6 +22,22 @@ class ProjectEditingService {
     );
   }
 
+  Project updateRoomLayout(
+    Project project,
+    String roomId,
+    RoomLayoutRect layout,
+  ) {
+    _ensureRoomExists(project, roomId);
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        rooms: [
+          for (final item in project.houseModel.rooms)
+            if (item.id == roomId) item.copyWith(layout: layout) else item,
+        ],
+      ),
+    );
+  }
+
   Project deleteRoom(Project project, String roomId) {
     final linkedElements = project.houseModel.elements
         .where((item) => item.roomId == roomId)
@@ -59,6 +75,7 @@ class ProjectEditingService {
   Project updateEnvelopeElement(Project project, HouseEnvelopeElement element) {
     _ensureRoomExists(project, element.roomId);
     _ensureConstructionExists(project, element.constructionId);
+    _ensureElementOpeningsFitArea(project, element);
 
     return project.copyWith(
       houseModel: project.houseModel.copyWith(
@@ -76,6 +93,46 @@ class ProjectEditingService {
         elements: [
           for (final item in project.houseModel.elements)
             if (item.id != elementId) item,
+        ],
+        openings: [
+          for (final item in project.houseModel.openings)
+            if (item.elementId != elementId) item,
+        ],
+      ),
+    );
+  }
+
+  Project addOpening(Project project, EnvelopeOpening opening) {
+    _ensureElementExists(project, opening.elementId);
+    _ensureOpeningFitsElement(project, opening);
+
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        openings: [...project.houseModel.openings, opening],
+      ),
+    );
+  }
+
+  Project updateOpening(Project project, EnvelopeOpening opening) {
+    _ensureElementExists(project, opening.elementId);
+    _ensureOpeningFitsElement(project, opening);
+
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        openings: [
+          for (final item in project.houseModel.openings)
+            if (item.id == opening.id) opening else item,
+        ],
+      ),
+    );
+  }
+
+  Project deleteOpening(Project project, String openingId) {
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        openings: [
+          for (final item in project.houseModel.openings)
+            if (item.id != openingId) item,
         ],
       ),
     );
@@ -137,9 +194,52 @@ class ProjectEditingService {
   }
 
   void _ensureConstructionExists(Project project, String constructionId) {
-    final exists = project.constructions.any((item) => item.id == constructionId);
+    final exists = project.constructions.any(
+      (item) => item.id == constructionId,
+    );
     if (!exists) {
       throw StateError('Конструкция $constructionId не найдена в проекте.');
+    }
+  }
+
+  void _ensureElementExists(Project project, String elementId) {
+    final exists = project.houseModel.elements.any(
+      (item) => item.id == elementId,
+    );
+    if (!exists) {
+      throw StateError('Ограждение $elementId не найдено в проекте.');
+    }
+  }
+
+  void _ensureElementOpeningsFitArea(
+    Project project,
+    HouseEnvelopeElement element,
+  ) {
+    final openingsArea = project.houseModel.openings
+        .where((item) => item.elementId == element.id)
+        .fold<double>(0, (sum, item) => sum + item.areaSquareMeters);
+    if (openingsArea > element.areaSquareMeters) {
+      throw StateError(
+        'Площадь проёмов (${openingsArea.toStringAsFixed(1)} м²) не может превышать площадь ограждения (${element.areaSquareMeters.toStringAsFixed(1)} м²).',
+      );
+    }
+  }
+
+  void _ensureOpeningFitsElement(Project project, EnvelopeOpening opening) {
+    final element = project.houseModel.elements.firstWhere(
+      (item) => item.id == opening.elementId,
+    );
+    final otherOpeningsArea = project.houseModel.openings
+        .where(
+          (item) =>
+              item.elementId == opening.elementId && item.id != opening.id,
+        )
+        .fold<double>(0, (sum, item) => sum + item.areaSquareMeters);
+    final totalArea = otherOpeningsArea + opening.areaSquareMeters;
+    if (totalArea > element.areaSquareMeters) {
+      throw StateError(
+        'Суммарная площадь проёмов (${totalArea.toStringAsFixed(1)} м²) не может превышать площадь ограждения (${element.areaSquareMeters.toStringAsFixed(1)} м²).',
+      );
     }
   }
 }

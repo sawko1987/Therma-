@@ -193,9 +193,44 @@ Construction buildWallConstruction({bool insulationEnabled = true}) {
   );
 }
 
-HouseModel buildHouseModel({List<Construction>? constructions}) {
+RoomLayoutRect buildRoomLayout({
+  double xMeters = 0,
+  double yMeters = 0,
+  double widthMeters = defaultRoomLayoutWidthMeters,
+  double heightMeters = defaultRoomLayoutHeightMeters,
+}) {
+  return RoomLayoutRect(
+    xMeters: xMeters,
+    yMeters: yMeters,
+    widthMeters: widthMeters,
+    heightMeters: heightMeters,
+  );
+}
+
+Room buildRoom({
+  String id = defaultRoomId,
+  String title = 'Основное помещение',
+  RoomKind kind = RoomKind.livingRoom,
+  double heightMeters = defaultRoomHeightMeters,
+  RoomLayoutRect? layout,
+}) {
+  return Room(
+    id: id,
+    title: title,
+    kind: kind,
+    heightMeters: heightMeters,
+    layout: layout ?? buildRoomLayout(),
+  );
+}
+
+HouseModel buildHouseModel({
+  List<Construction>? constructions,
+  List<EnvelopeOpening>? openings,
+}) {
   final effectiveConstructions = constructions ?? [buildWallConstruction()];
-  return HouseModel.bootstrapFromConstructions(effectiveConstructions);
+  return HouseModel.bootstrapFromConstructions(
+    effectiveConstructions,
+  ).copyWith(openings: openings ?? const []);
 }
 
 Project buildTestProject({

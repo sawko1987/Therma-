@@ -12,12 +12,12 @@ void main() {
 
     final updated = service.addRoom(
       project,
-      const Room(
+      Room(
         id: 'room-bedroom',
         title: 'Спальня',
         kind: RoomKind.bedroom,
-        areaSquareMeters: 16,
         heightMeters: 2.7,
+        layout: buildRoomLayout(xMeters: 5, yMeters: 0),
       ),
     );
 
@@ -34,69 +34,220 @@ void main() {
     );
   });
 
-  test('deleteConstruction rejects removal when construction is still in use', () {
+  test(
+    'deleteConstruction rejects removal when construction is still in use',
+    () {
+      final project = buildTestProject();
+
+      expect(
+        () =>
+            service.deleteConstruction(project, project.constructions.first.id),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
+    'updateEnvelopeElement rebinds element to another room and construction',
+    () {
+      final firstConstruction = buildWallConstruction();
+      final secondConstruction = Construction(
+        id: 'roof',
+        title: 'Кровля',
+        elementKind: ConstructionElementKind.roof,
+        layers: firstConstruction.layers,
+      );
+      final project = buildTestProject(
+        construction: firstConstruction,
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Конструктор дома',
+          rooms: [
+            buildRoom(
+              id: 'room-living',
+              title: 'Гостиная',
+              kind: RoomKind.livingRoom,
+              heightMeters: 2.7,
+              layout: buildRoomLayout(
+                xMeters: 0,
+                yMeters: 0,
+                widthMeters: 4,
+                heightMeters: 5,
+              ),
+            ),
+            buildRoom(
+              id: 'room-attic',
+              title: 'Мансарда',
+              kind: RoomKind.bedroom,
+              heightMeters: 2.5,
+              layout: buildRoomLayout(
+                xMeters: 5,
+                yMeters: 0,
+                widthMeters: 3.5,
+                heightMeters: 4,
+              ),
+            ),
+          ],
+          elements: const [
+            HouseEnvelopeElement(
+              id: 'element-wall',
+              roomId: 'room-living',
+              title: 'Стена гостиной',
+              elementKind: ConstructionElementKind.wall,
+              areaSquareMeters: 24,
+              constructionId: 'wall',
+            ),
+          ],
+          openings: const [],
+        ),
+      ).copyWith(constructions: [firstConstruction, secondConstruction]);
+
+      final updated = service.updateEnvelopeElement(
+        project,
+        project.houseModel.elements.single.copyWith(
+          roomId: 'room-attic',
+          constructionId: 'roof',
+          elementKind: ConstructionElementKind.roof,
+        ),
+      );
+
+      expect(updated.houseModel.elements.single.roomId, 'room-attic');
+      expect(updated.houseModel.elements.single.constructionId, 'roof');
+      expect(
+        updated.houseModel.elements.single.elementKind,
+        ConstructionElementKind.roof,
+      );
+    },
+  );
+
+  test('updateRoomLayout updates geometry and derived room area', () {
     final project = buildTestProject();
 
-    expect(
-      () =>
-          service.deleteConstruction(project, project.constructions.first.id),
-      throwsStateError,
+    final updated = service.updateRoomLayout(
+      project,
+      defaultRoomId,
+      buildRoomLayout(
+        xMeters: 2,
+        yMeters: 1.5,
+        widthMeters: 5,
+        heightMeters: 6,
+      ),
     );
+
+    expect(updated.houseModel.rooms.single.layout.xMeters, 2);
+    expect(updated.houseModel.rooms.single.layout.yMeters, 1.5);
+    expect(updated.houseModel.rooms.single.areaSquareMeters, 30);
   });
 
-  test('updateEnvelopeElement rebinds element to another room and construction', () {
-    final firstConstruction = buildWallConstruction();
-    final secondConstruction = Construction(
-      id: 'roof',
-      title: 'Кровля',
-      elementKind: ConstructionElementKind.roof,
-      layers: firstConstruction.layers,
-    );
+  test('deleteEnvelopeElement also removes linked openings', () {
     final project = buildTestProject(
-      construction: firstConstruction,
       houseModel: HouseModel(
         id: 'house-model',
         title: 'Конструктор дома',
-        rooms: const [
-          Room(
-            id: 'room-living',
-            title: 'Гостиная',
-            kind: RoomKind.livingRoom,
-            areaSquareMeters: 20,
-            heightMeters: 2.7,
-          ),
-          Room(
-            id: 'room-attic',
-            title: 'Мансарда',
-            kind: RoomKind.bedroom,
-            areaSquareMeters: 14,
-            heightMeters: 2.5,
-          ),
-        ],
+        rooms: [Room.defaultRoom()],
         elements: const [
           HouseEnvelopeElement(
             id: 'element-wall',
-            roomId: 'room-living',
-            title: 'Стена гостиной',
+            roomId: defaultRoomId,
+            title: 'Стена',
             elementKind: ConstructionElementKind.wall,
             areaSquareMeters: 24,
             constructionId: 'wall',
           ),
         ],
-      ),
-    ).copyWith(constructions: [firstConstruction, secondConstruction]);
-
-    final updated = service.updateEnvelopeElement(
-      project,
-      project.houseModel.elements.single.copyWith(
-        roomId: 'room-attic',
-        constructionId: 'roof',
-        elementKind: ConstructionElementKind.roof,
+        openings: const [
+          EnvelopeOpening(
+            id: 'opening-window',
+            elementId: 'element-wall',
+            title: 'Окно',
+            kind: OpeningKind.window,
+            areaSquareMeters: 2,
+            heatTransferCoefficient: 1.0,
+          ),
+        ],
       ),
     );
 
-    expect(updated.houseModel.elements.single.roomId, 'room-attic');
-    expect(updated.houseModel.elements.single.constructionId, 'roof');
-    expect(updated.houseModel.elements.single.elementKind, ConstructionElementKind.roof);
+    final updated = service.deleteEnvelopeElement(project, 'element-wall');
+
+    expect(updated.houseModel.elements, isEmpty);
+    expect(updated.houseModel.openings, isEmpty);
   });
+
+  test('addOpening rejects opening area larger than element area', () {
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Конструктор дома',
+        rooms: [Room.defaultRoom()],
+        elements: const [
+          HouseEnvelopeElement(
+            id: 'element-wall',
+            roomId: defaultRoomId,
+            title: 'Стена',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters: 5,
+            constructionId: 'wall',
+          ),
+        ],
+        openings: const [],
+      ),
+    );
+
+    expect(
+      () => service.addOpening(
+        project,
+        const EnvelopeOpening(
+          id: 'opening-window',
+          elementId: 'element-wall',
+          title: 'Панорамное окно',
+          kind: OpeningKind.window,
+          areaSquareMeters: 6,
+          heatTransferCoefficient: 1.0,
+        ),
+      ),
+      throwsStateError,
+    );
+  });
+
+  test(
+    'updateEnvelopeElement rejects shrinking area below linked openings',
+    () {
+      final project = buildTestProject(
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Конструктор дома',
+          rooms: [Room.defaultRoom()],
+          elements: const [
+            HouseEnvelopeElement(
+              id: 'element-wall',
+              roomId: defaultRoomId,
+              title: 'Стена',
+              elementKind: ConstructionElementKind.wall,
+              areaSquareMeters: 10,
+              constructionId: 'wall',
+            ),
+          ],
+          openings: const [
+            EnvelopeOpening(
+              id: 'opening-window',
+              elementId: 'element-wall',
+              title: 'Окно',
+              kind: OpeningKind.window,
+              areaSquareMeters: 4,
+              heatTransferCoefficient: 1.0,
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        () => service.updateEnvelopeElement(
+          project,
+          project.houseModel.elements.single.copyWith(areaSquareMeters: 3),
+        ),
+        throwsStateError,
+      );
+    },
+  );
 }

@@ -59,21 +59,33 @@ class ProjectEditor {
 
   Future<void> addRoom(Room room) async {
     final project = await _requireProject();
-    final updated = _ref.read(projectEditingServiceProvider).addRoom(project, room);
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addRoom(project, room);
     await saveProject(updated);
   }
 
   Future<void> updateRoom(Room room) async {
     final project = await _requireProject();
-    final updated =
-        _ref.read(projectEditingServiceProvider).updateRoom(project, room);
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateRoom(project, room);
     await saveProject(updated);
   }
 
   Future<void> deleteRoom(String roomId) async {
     final project = await _requireProject();
-    final updated =
-        _ref.read(projectEditingServiceProvider).deleteRoom(project, roomId);
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .deleteRoom(project, roomId);
+    await saveProject(updated);
+  }
+
+  Future<void> updateRoomLayout(String roomId, RoomLayoutRect layout) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateRoomLayout(project, roomId, layout);
     await saveProject(updated);
   }
 
@@ -84,9 +96,9 @@ class ProjectEditor {
         .addEnvelopeElement(project, element);
     await saveProject(updated);
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(element.id);
-    _ref.read(selectedConstructionIdProvider.notifier).select(
-      element.constructionId,
-    );
+    _ref
+        .read(selectedConstructionIdProvider.notifier)
+        .select(element.constructionId);
   }
 
   Future<void> updateEnvelopeElement(HouseEnvelopeElement element) async {
@@ -96,9 +108,9 @@ class ProjectEditor {
         .updateEnvelopeElement(project, element);
     await saveProject(updated);
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(element.id);
-    _ref.read(selectedConstructionIdProvider.notifier).select(
-      element.constructionId,
-    );
+    _ref
+        .read(selectedConstructionIdProvider.notifier)
+        .select(element.constructionId);
   }
 
   Future<void> deleteEnvelopeElement(String elementId) async {
@@ -108,6 +120,42 @@ class ProjectEditor {
         .deleteEnvelopeElement(project, elementId);
     await saveProject(updated);
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(null);
+  }
+
+  Future<void> addOpening(EnvelopeOpening opening) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addOpening(project, opening);
+    await saveProject(updated);
+    _ref
+        .read(selectedEnvelopeElementIdProvider.notifier)
+        .select(opening.elementId);
+  }
+
+  Future<void> updateOpening(EnvelopeOpening opening) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateOpening(project, opening);
+    await saveProject(updated);
+    _ref
+        .read(selectedEnvelopeElementIdProvider.notifier)
+        .select(opening.elementId);
+  }
+
+  Future<void> deleteOpening(String openingId) async {
+    final project = await _requireProject();
+    final opening = project.houseModel.openings.firstWhere(
+      (item) => item.id == openingId,
+    );
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .deleteOpening(project, openingId);
+    await saveProject(updated);
+    _ref
+        .read(selectedEnvelopeElementIdProvider.notifier)
+        .select(opening.elementId);
   }
 
   Future<void> addConstruction(Construction construction) async {
@@ -139,9 +187,9 @@ class ProjectEditor {
 
   void selectEnvelopeElement(HouseEnvelopeElement element) {
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(element.id);
-    _ref.read(selectedConstructionIdProvider.notifier).select(
-      element.constructionId,
-    );
+    _ref
+        .read(selectedConstructionIdProvider.notifier)
+        .select(element.constructionId);
   }
 
   Future<Project> _requireProject() async {
@@ -217,7 +265,9 @@ final houseSummaryServiceProvider = Provider<HouseSummaryService>(
   (ref) => HouseSummaryService(ref.watch(thermalCalculationEngineProvider)),
 );
 
-final projectEditorProvider = Provider<ProjectEditor>((ref) => ProjectEditor(ref));
+final projectEditorProvider = Provider<ProjectEditor>(
+  (ref) => ProjectEditor(ref),
+);
 
 final reportContentBuilderProvider = Provider<ReportContentBuilder>(
   (ref) => const ThermalReportContentBuilder(),
@@ -316,7 +366,9 @@ final selectedConstructionProvider = FutureProvider<Construction?>((ref) async {
   }
 
   final selectedConstructionId = ref.watch(selectedConstructionIdProvider);
-  final selectedElement = await ref.watch(selectedEnvelopeElementProvider.future);
+  final selectedElement = await ref.watch(
+    selectedEnvelopeElementProvider.future,
+  );
   final preferredIds = [
     selectedConstructionId,
     selectedElement?.constructionId,

@@ -1,16 +1,34 @@
-const int currentProjectFormatVersion = 3;
+import 'dart:math' as math;
+
+const int currentProjectFormatVersion = 5;
 const double defaultHouseElementAreaSquareMeters = 100.0;
-const double defaultRoomAreaSquareMeters = 24.0;
+const double defaultRoomLayoutWidthMeters = 4.0;
+const double defaultRoomLayoutHeightMeters = 4.0;
+const double defaultRoomAreaSquareMeters =
+    defaultRoomLayoutWidthMeters * defaultRoomLayoutHeightMeters;
 const double defaultRoomHeightMeters = 2.7;
+const double minimumRoomLayoutDimensionMeters = 1.5;
+const double roomLayoutSnapStepMeters = 0.5;
+const double roomLayoutGapMeters = 1.0;
 const String defaultRoomId = 'room-main';
 
 enum ConstructionElementKind { wall, roof, floor, ceiling }
+
+enum OpeningKind { window, door }
 
 enum LayerKind { solid, frame, crossFrame, masonry, ventilatedGap }
 
 enum RoomPreset { livingRoom, attic, basement }
 
-enum RoomKind { livingRoom, bedroom, kitchen, bathroom, hall, boilerRoom, other }
+enum RoomKind {
+  livingRoom,
+  bedroom,
+  kitchen,
+  bathroom,
+  hall,
+  boilerRoom,
+  other,
+}
 
 extension ConstructionElementKindX on ConstructionElementKind {
   String get label => switch (this) {
@@ -25,6 +43,23 @@ extension ConstructionElementKindX on ConstructionElementKind {
     ConstructionElementKind.roof => 'roof',
     ConstructionElementKind.floor => 'floor',
     ConstructionElementKind.ceiling => 'ceiling',
+  };
+}
+
+extension OpeningKindX on OpeningKind {
+  String get label => switch (this) {
+    OpeningKind.window => 'Окно',
+    OpeningKind.door => 'Дверь',
+  };
+
+  String get storageKey => switch (this) {
+    OpeningKind.window => 'window',
+    OpeningKind.door => 'door',
+  };
+
+  double get defaultHeatTransferCoefficient => switch (this) {
+    OpeningKind.window => 1.0,
+    OpeningKind.door => 1.5,
   };
 }
 
@@ -131,6 +166,14 @@ RoomKind parseRoomKind(String value) {
   };
 }
 
+OpeningKind parseOpeningKind(String value) {
+  return switch (value) {
+    'window' => OpeningKind.window,
+    'door' => OpeningKind.door,
+    _ => throw StateError('Unknown OpeningKind: $value'),
+  };
+}
+
 class ConstructionLayer {
   const ConstructionLayer({
     required this.id,
@@ -224,51 +267,145 @@ class Construction {
   };
 }
 
+class RoomLayoutRect {
+  const RoomLayoutRect({
+    required this.xMeters,
+    required this.yMeters,
+    required this.widthMeters,
+    required this.heightMeters,
+  });
+
+  factory RoomLayoutRect.fromJson(Map<String, dynamic> json) => RoomLayoutRect(
+    xMeters: (json['xMeters'] as num).toDouble(),
+    yMeters: (json['yMeters'] as num).toDouble(),
+    widthMeters: (json['widthMeters'] as num).toDouble(),
+    heightMeters: (json['heightMeters'] as num).toDouble(),
+  );
+
+  factory RoomLayoutRect.defaultRect({
+    double xMeters = 0,
+    double yMeters = 0,
+  }) => RoomLayoutRect(
+    xMeters: xMeters,
+    yMeters: yMeters,
+    widthMeters: defaultRoomLayoutWidthMeters,
+    heightMeters: defaultRoomLayoutHeightMeters,
+  );
+
+  factory RoomLayoutRect.squareFromArea(
+    double areaSquareMeters, {
+    required double xMeters,
+    required double yMeters,
+  }) {
+    final normalizedArea = areaSquareMeters > 0
+        ? areaSquareMeters
+        : defaultRoomAreaSquareMeters;
+    final side = math.sqrt(normalizedArea);
+    return RoomLayoutRect(
+      xMeters: xMeters,
+      yMeters: yMeters,
+      widthMeters: side,
+      heightMeters: side,
+    );
+  }
+
+  final double xMeters;
+  final double yMeters;
+  final double widthMeters;
+  final double heightMeters;
+
+  double get rightMeters => xMeters + widthMeters;
+  double get bottomMeters => yMeters + heightMeters;
+  double get areaSquareMeters => widthMeters * heightMeters;
+
+  RoomLayoutRect copyWith({
+    double? xMeters,
+    double? yMeters,
+    double? widthMeters,
+    double? heightMeters,
+  }) {
+    return RoomLayoutRect(
+      xMeters: xMeters ?? this.xMeters,
+      yMeters: yMeters ?? this.yMeters,
+      widthMeters: widthMeters ?? this.widthMeters,
+      heightMeters: heightMeters ?? this.heightMeters,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'xMeters': xMeters,
+    'yMeters': yMeters,
+    'widthMeters': widthMeters,
+    'heightMeters': heightMeters,
+  };
+}
+
 class Room {
   const Room({
     required this.id,
     required this.title,
     required this.kind,
-    required this.areaSquareMeters,
     required this.heightMeters,
+    required this.layout,
   });
 
-  factory Room.fromJson(Map<String, dynamic> json) => Room(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    kind: parseRoomKind((json['kind'] as String?) ?? RoomKind.other.storageKey),
-    areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
-    heightMeters: (json['heightMeters'] as num?)?.toDouble() ??
-        defaultRoomHeightMeters,
-  );
+  factory Room.fromJson(Map<String, dynamic> json) {
+    final areaSquareMeters =
+        (json['areaSquareMeters'] as num?)?.toDouble() ??
+        defaultRoomAreaSquareMeters;
+    final layoutJson = json['layout'];
+    return Room(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      kind: parseRoomKind(
+        (json['kind'] as String?) ?? RoomKind.other.storageKey,
+      ),
+      heightMeters:
+          (json['heightMeters'] as num?)?.toDouble() ?? defaultRoomHeightMeters,
+      layout: layoutJson == null
+          ? RoomLayoutRect.squareFromArea(
+              areaSquareMeters,
+              xMeters: 0,
+              yMeters: 0,
+            )
+          : RoomLayoutRect.fromJson(_asJsonMap(layoutJson)),
+    );
+  }
 
   factory Room.defaultRoom() => const Room(
     id: defaultRoomId,
     title: 'Основное помещение',
     kind: RoomKind.livingRoom,
-    areaSquareMeters: defaultRoomAreaSquareMeters,
     heightMeters: defaultRoomHeightMeters,
+    layout: RoomLayoutRect(
+      xMeters: 0,
+      yMeters: 0,
+      widthMeters: defaultRoomLayoutWidthMeters,
+      heightMeters: defaultRoomLayoutHeightMeters,
+    ),
   );
 
   final String id;
   final String title;
   final RoomKind kind;
-  final double areaSquareMeters;
   final double heightMeters;
+  final RoomLayoutRect layout;
+
+  double get areaSquareMeters => layout.areaSquareMeters;
 
   Room copyWith({
     String? id,
     String? title,
     RoomKind? kind,
-    double? areaSquareMeters,
     double? heightMeters,
+    RoomLayoutRect? layout,
   }) {
     return Room(
       id: id ?? this.id,
       title: title ?? this.title,
       kind: kind ?? this.kind,
-      areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
       heightMeters: heightMeters ?? this.heightMeters,
+      layout: layout ?? this.layout,
     );
   }
 
@@ -278,6 +415,7 @@ class Room {
     'kind': kind.storageKey,
     'areaSquareMeters': areaSquareMeters,
     'heightMeters': heightMeters,
+    'layout': layout.toJson(),
   };
 }
 
@@ -296,7 +434,9 @@ class HouseEnvelopeElement {
         id: json['id'] as String,
         roomId: (json['roomId'] as String?) ?? defaultRoomId,
         title: json['title'] as String,
-        elementKind: parseConstructionElementKind(json['elementKind'] as String),
+        elementKind: parseConstructionElementKind(
+          json['elementKind'] as String,
+        ),
         areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
         constructionId: json['constructionId'] as String,
       );
@@ -348,12 +488,73 @@ class HouseEnvelopeElement {
   };
 }
 
+class EnvelopeOpening {
+  const EnvelopeOpening({
+    required this.id,
+    required this.elementId,
+    required this.title,
+    required this.kind,
+    required this.areaSquareMeters,
+    required this.heatTransferCoefficient,
+  });
+
+  factory EnvelopeOpening.fromJson(Map<String, dynamic> json) =>
+      EnvelopeOpening(
+        id: json['id'] as String,
+        elementId: json['elementId'] as String,
+        title: json['title'] as String,
+        kind: parseOpeningKind(json['kind'] as String),
+        areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
+        heatTransferCoefficient:
+            (json['heatTransferCoefficient'] as num?)?.toDouble() ??
+            parseOpeningKind(
+              json['kind'] as String,
+            ).defaultHeatTransferCoefficient,
+      );
+
+  final String id;
+  final String elementId;
+  final String title;
+  final OpeningKind kind;
+  final double areaSquareMeters;
+  final double heatTransferCoefficient;
+
+  EnvelopeOpening copyWith({
+    String? id,
+    String? elementId,
+    String? title,
+    OpeningKind? kind,
+    double? areaSquareMeters,
+    double? heatTransferCoefficient,
+  }) {
+    return EnvelopeOpening(
+      id: id ?? this.id,
+      elementId: elementId ?? this.elementId,
+      title: title ?? this.title,
+      kind: kind ?? this.kind,
+      areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
+      heatTransferCoefficient:
+          heatTransferCoefficient ?? this.heatTransferCoefficient,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'elementId': elementId,
+    'title': title,
+    'kind': kind.storageKey,
+    'areaSquareMeters': areaSquareMeters,
+    'heatTransferCoefficient': heatTransferCoefficient,
+  };
+}
+
 class HouseModel {
   const HouseModel({
     required this.id,
     required this.title,
     required this.rooms,
     required this.elements,
+    required this.openings,
   });
 
   factory HouseModel.fromJson(Map<String, dynamic> json) {
@@ -363,6 +564,9 @@ class HouseModel {
         .toList(growable: false);
     final elements = (json['elements'] as List<dynamic>)
         .map((item) => HouseEnvelopeElement.fromJson(_asJsonMap(item)))
+        .toList(growable: false);
+    final openings = ((json['openings'] as List<dynamic>?) ?? const [])
+        .map((item) => EnvelopeOpening.fromJson(_asJsonMap(item)))
         .toList(growable: false);
     return HouseModel(
       id: json['id'] as String,
@@ -377,6 +581,7 @@ class HouseModel {
                   ),
                 )
                 .toList(growable: false),
+      openings: openings,
     );
   }
 
@@ -389,11 +594,11 @@ class HouseModel {
       rooms: [Room.defaultRoom()],
       elements: constructions
           .map(
-            (construction) => HouseEnvelopeElement.fromConstruction(
-              construction,
-            ),
+            (construction) =>
+                HouseEnvelopeElement.fromConstruction(construction),
           )
           .toList(growable: false),
+      openings: const [],
     );
   }
 
@@ -401,6 +606,7 @@ class HouseModel {
   final String title;
   final List<Room> rooms;
   final List<HouseEnvelopeElement> elements;
+  final List<EnvelopeOpening> openings;
 
   double get totalRoomAreaSquareMeters =>
       rooms.fold(0, (sum, room) => sum + room.areaSquareMeters);
@@ -408,17 +614,22 @@ class HouseModel {
   double get totalEnvelopeAreaSquareMeters =>
       elements.fold(0, (sum, element) => sum + element.areaSquareMeters);
 
+  double get totalOpeningAreaSquareMeters =>
+      openings.fold(0, (sum, opening) => sum + opening.areaSquareMeters);
+
   HouseModel copyWith({
     String? id,
     String? title,
     List<Room>? rooms,
     List<HouseEnvelopeElement>? elements,
+    List<EnvelopeOpening>? openings,
   }) {
     return HouseModel(
       id: id ?? this.id,
       title: title ?? this.title,
       rooms: rooms ?? this.rooms,
       elements: elements ?? this.elements,
+      openings: openings ?? this.openings,
     );
   }
 
@@ -427,6 +638,7 @@ class HouseModel {
     'title': title,
     'rooms': rooms.map((item) => item.toJson()).toList(growable: false),
     'elements': elements.map((item) => item.toJson()).toList(growable: false),
+    'openings': openings.map((item) => item.toJson()).toList(growable: false),
   };
 }
 

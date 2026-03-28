@@ -49,15 +49,41 @@ class ProjectMigrationService {
     final rooms = houseModel.rooms.isEmpty
         ? [Room.defaultRoom()]
         : houseModel.rooms;
-    final roomIds = rooms.map((item) => item.id).toSet();
+    final normalizedRooms = project.sourceProjectFormatVersion < 5
+        ? _migrateRoomLayouts(rooms)
+        : rooms;
+    final roomIds = normalizedRooms.map((item) => item.id).toSet();
     final elements = houseModel.elements
         .map(
           (item) => roomIds.contains(item.roomId)
               ? item
-              : item.copyWith(roomId: rooms.first.id),
+              : item.copyWith(roomId: normalizedRooms.first.id),
         )
         .toList(growable: false);
+    final elementIds = elements.map((item) => item.id).toSet();
+    final openings = houseModel.openings
+        .where((item) => elementIds.contains(item.elementId))
+        .toList(growable: false);
 
-    return houseModel.copyWith(rooms: rooms, elements: elements);
+    return houseModel.copyWith(
+      rooms: normalizedRooms,
+      elements: elements,
+      openings: openings,
+    );
+  }
+
+  List<Room> _migrateRoomLayouts(List<Room> rooms) {
+    var cursorX = 0.0;
+    final migratedRooms = <Room>[];
+    for (final room in rooms) {
+      final layout = RoomLayoutRect.squareFromArea(
+        room.areaSquareMeters,
+        xMeters: cursorX,
+        yMeters: 0,
+      );
+      migratedRooms.add(room.copyWith(layout: layout));
+      cursorX = layout.rightMeters + roomLayoutGapMeters;
+    }
+    return migratedRooms;
   }
 }

@@ -55,6 +55,8 @@ void main() {
       restored.houseModel.elements.single.constructionId,
       source.constructions.single.id,
     );
+    expect(restored.houseModel.rooms.single.layout.xMeters, 0);
+    expect(restored.houseModel.rooms.single.layout.widthMeters, 4);
     expect(restored.datasetVersion, currentDatasetVersion);
     expect(restored.migratedFromDatasetVersion, isNull);
   });
@@ -204,6 +206,7 @@ void main() {
       expect(migrated?.datasetVersion, currentDatasetVersion);
       expect(migrated?.migratedFromDatasetVersion, 'seed-2025-12-01');
       expect(migrated?.houseModel.elements, hasLength(1));
+      expect(migrated?.houseModel.rooms.single.layout.widthMeters, 4);
       expect(storedRow.datasetVersion, currentDatasetVersion);
       expect(storedRow.migratedFromDatasetVersion, 'seed-2025-12-01');
       expect(storedRow.updatedAtEpochMs, 123);
@@ -247,6 +250,7 @@ void main() {
         projects.single.sourceProjectFormatVersion,
         currentProjectFormatVersion,
       );
+      expect(projects.single.houseModel.rooms.single.layout.widthMeters, 4);
     },
   );
 
