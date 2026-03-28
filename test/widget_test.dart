@@ -80,6 +80,9 @@ void main() {
   });
 
   testWidgets('creating object from step 0 opens step 1', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -101,6 +104,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), 'Москва, ул. Тест');
     await tester.enterText(find.byType(TextField).at(2), 'Описание');
     await tester.enterText(find.byType(TextField).at(3), '+79991234567');
+    await tester.ensureVisible(find.text('Сохранить'));
     await tester.tap(find.text('Сохранить'));
     await tester.pumpAndSettle();
 

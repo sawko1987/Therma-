@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 import '../../construction_library/presentation/construction_step_screen.dart';
@@ -14,24 +15,29 @@ class ObjectStepScreen extends ConsumerWidget {
     final selectedObjectId = ref.watch(selectedObjectIdProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Шаг 0. Объект'),
-      ),
+      appBar: AppBar(title: const Text('Шаг 0. Объект')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [
           const _HeaderCard(),
           const SizedBox(height: 16),
-          objectListAsync.when(
-            data: (objects) => _ObjectListCard(
-              objects: objects,
-              selectedObjectId: selectedObjectId,
-              onSelectObject: (object) =>
-                  _openStep1ForObject(context, ref, object),
-            ),
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('Ошибка загрузки объектов: $error'),
-          ),
+          ref
+              .watch(catalogSnapshotProvider)
+              .when(
+                data: (catalog) => objectListAsync.when(
+                  data: (objects) => _ObjectListCard(
+                    objects: objects,
+                    climatePoints: catalog.climatePoints,
+                    selectedObjectId: selectedObjectId,
+                    onSelectObject: (object) =>
+                        _openStep1ForObject(context, ref, object),
+                  ),
+                  loading: () => const LinearProgressIndicator(),
+                  error: (error, _) => Text('Ошибка загрузки объектов: $error'),
+                ),
+                loading: () => const LinearProgressIndicator(),
+                error: (error, _) => Text('Ошибка загрузки климата: $error'),
+              ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -57,27 +63,33 @@ class ObjectStepScreen extends ConsumerWidget {
     }
     try {
       if (object == null) {
-        await ref.read(projectEditorProvider).createObject(
-          title: result.title,
-          address: result.address,
-          description: result.description,
-          customerPhone: result.customerPhone,
-        );
+        await ref
+            .read(projectEditorProvider)
+            .createObject(
+              title: result.title,
+              address: result.address,
+              description: result.description,
+              customerPhone: result.customerPhone,
+              climatePointId: result.climatePointId,
+            );
         final createdObject = await ref.read(selectedObjectProvider.future);
         if (!context.mounted || createdObject == null) {
           return;
         }
         _openStep1ForObject(context, ref, createdObject);
       } else {
-        await ref.read(projectEditorProvider).updateObject(
-          object.copyWith(
-            title: result.title,
-            address: result.address,
-            description: result.description,
-            customerPhone: result.customerPhone,
-            updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
+        await ref
+            .read(projectEditorProvider)
+            .updateObject(
+              object.copyWith(
+                title: result.title,
+                address: result.address,
+                description: result.description,
+                customerPhone: result.customerPhone,
+                climatePointId: result.climatePointId,
+                updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
       }
     } catch (error) {
       if (!context.mounted) {
@@ -97,9 +109,7 @@ class ObjectStepScreen extends ConsumerWidget {
     ref.read(selectedObjectIdProvider.notifier).select(object.id);
     ref.read(selectedProjectIdProvider.notifier).select(object.projectId);
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const ConstructionStepScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const ConstructionStepScreen()),
     );
   }
 }
@@ -123,7 +133,7 @@ class _HeaderCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Шаг 0 фиксирует карточку объекта: адрес, описание и телефон заказчика. Только после выбора объекта открываются инженерные шаги расчета.',
+              'Шаг 0 фиксирует карточку объекта и климатическую точку: регион, город, адрес, описание и телефон заказчика. Только после выбора объекта открываются инженерные шаги расчета.',
             ),
           ],
         ),
@@ -135,11 +145,13 @@ class _HeaderCard extends StatelessWidget {
 class _ObjectListCard extends ConsumerWidget {
   const _ObjectListCard({
     required this.objects,
+    required this.climatePoints,
     required this.selectedObjectId,
     required this.onSelectObject,
   });
 
   final List<DesignObject> objects;
+  final List<ClimatePoint> climatePoints;
   final String? selectedObjectId;
   final ValueChanged<DesignObject> onSelectObject;
 
@@ -163,6 +175,32 @@ class _ObjectListCard extends ConsumerWidget {
             else
               ...objects.map((object) {
                 final isSelected = object.id == selectedObjectId;
+                final climate = _findClimatePoint(
+                  climatePoints,
+                  object.climatePointId,
+                );
+                final subtitleLines = [
+                  if (climate != null) '${climate.region}, ${climate.city}',
+                  if (object.address.isNotEmpty) object.address,
+                  if (object.customerPhone.isNotEmpty)
+                    'Телефон: ${object.customerPhone}',
+                  if (object.description.isNotEmpty) object.description,
+                  if (climate != null)
+                    _climateSummaryLine(
+                      'Абсолютный минимум',
+                      climate.absoluteMinimumTemperature,
+                    ),
+                  if (climate != null)
+                    _climateSummaryLine(
+                      'Пятидневка 0.92',
+                      climate.coldestFiveDayTemperature,
+                    ),
+                  if (climate != null)
+                    _climateSummaryLine(
+                      'Средняя температура отопительного периода',
+                      climate.averageHeatingSeasonTemperature,
+                    ),
+                ];
                 return Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: ListTile(
@@ -182,17 +220,8 @@ class _ObjectListCard extends ConsumerWidget {
                       object.title,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    subtitle: Text(
-                      [
-                        if (object.address.isNotEmpty) object.address,
-                        if (object.customerPhone.isNotEmpty)
-                          'Телефон: ${object.customerPhone}',
-                        if (object.description.isNotEmpty) object.description,
-                      ].join('\n'),
-                    ),
-                    isThreeLine:
-                        object.customerPhone.isNotEmpty ||
-                        object.description.isNotEmpty,
+                    subtitle: Text(subtitleLines.join('\n')),
+                    isThreeLine: subtitleLines.length > 2,
                     trailing: PopupMenuButton<String>(
                       onSelected: (value) async {
                         switch (value) {
@@ -208,21 +237,24 @@ class _ObjectListCard extends ConsumerWidget {
                               if (result == null) {
                                 return;
                               }
-                              await ref.read(projectEditorProvider).updateObject(
-                                object.copyWith(
-                                  title: result.title,
-                                  address: result.address,
-                                  description: result.description,
-                                  customerPhone: result.customerPhone,
-                                  updatedAtEpochMs:
-                                      DateTime.now().millisecondsSinceEpoch,
-                                ),
-                              );
+                              await ref
+                                  .read(projectEditorProvider)
+                                  .updateObject(
+                                    object.copyWith(
+                                      title: result.title,
+                                      address: result.address,
+                                      description: result.description,
+                                      customerPhone: result.customerPhone,
+                                      climatePointId: result.climatePointId,
+                                      updatedAtEpochMs:
+                                          DateTime.now().millisecondsSinceEpoch,
+                                    ),
+                                  );
                             });
                           case 'delete':
-                            await ref.read(projectEditorProvider).deleteObject(
-                              object.id,
-                            );
+                            await ref
+                                .read(projectEditorProvider)
+                                .deleteObject(object.id);
                         }
                       },
                       itemBuilder: (context) => const [
@@ -254,12 +286,14 @@ class _ObjectEditorResult {
     required this.address,
     required this.description,
     required this.customerPhone,
+    required this.climatePointId,
   });
 
   final String title;
   final String address;
   final String description;
   final String customerPhone;
+  final String climatePointId;
 }
 
 class _ObjectEditorSheet extends ConsumerStatefulWidget {
@@ -276,6 +310,7 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
   late final TextEditingController _addressController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _phoneController;
+  late String _selectedClimatePointId;
 
   @override
   void initState() {
@@ -290,6 +325,7 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
     _phoneController = TextEditingController(
       text: widget.object?.customerPhone ?? '',
     );
+    _selectedClimatePointId = widget.object?.climatePointId ?? 'moscow';
   }
 
   @override
@@ -304,6 +340,7 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final picker = ref.watch(customerPhonePickerProvider);
+    final climateAsync = ref.watch(catalogSnapshotProvider);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -334,6 +371,34 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
               decoration: const InputDecoration(labelText: 'Адрес'),
             ),
             const SizedBox(height: 12),
+            climateAsync.when(
+              data: (catalog) => _ClimateSelector(
+                climatePoints: catalog.climatePoints,
+                selectedClimatePointId: _selectedClimatePointId,
+                onChanged: (climatePointId) {
+                  setState(() {
+                    _selectedClimatePointId = climatePointId;
+                  });
+                },
+              ),
+              loading: () => const LinearProgressIndicator(),
+              error: (error, _) => Text('Ошибка загрузки климата: $error'),
+            ),
+            const SizedBox(height: 12),
+            climateAsync.when(
+              data: (catalog) {
+                final climate = _findClimatePoint(
+                  catalog.climatePoints,
+                  _selectedClimatePointId,
+                );
+                return climate == null
+                    ? const SizedBox.shrink()
+                    : _ClimateDetailsCard(climate: climate);
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (error, _) => const SizedBox.shrink(),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _descriptionController,
               decoration: const InputDecoration(labelText: 'Описание'),
@@ -342,9 +407,7 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
             const SizedBox(height: 12),
             TextField(
               controller: _phoneController,
-              decoration: const InputDecoration(
-                labelText: 'Телефон заказчика',
-              ),
+              decoration: const InputDecoration(labelText: 'Телефон заказчика'),
               keyboardType: TextInputType.phone,
             ),
             const SizedBox(height: 12),
@@ -365,19 +428,15 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
                       children: [
                         if (supportsContacts)
                           FilledButton.tonalIcon(
-                            onPressed: () => _pickPhone(
-                              context,
-                              picker.loadContacts,
-                            ),
+                            onPressed: () =>
+                                _pickPhone(context, picker.loadContacts),
                             icon: const Icon(Icons.contacts_outlined),
                             label: const Text('Из контактов'),
                           ),
                         if (supportsCalls)
                           FilledButton.tonalIcon(
-                            onPressed: () => _pickPhone(
-                              context,
-                              picker.loadCallLog,
-                            ),
+                            onPressed: () =>
+                                _pickPhone(context, picker.loadCallLog),
                             icon: const Icon(Icons.call_outlined),
                             label: const Text('Из журнала вызовов'),
                           ),
@@ -396,6 +455,7 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
                     address: _addressController.text.trim(),
                     description: _descriptionController.text.trim(),
                     customerPhone: _phoneController.text.trim(),
+                    climatePointId: _selectedClimatePointId,
                   ),
                 );
               },
@@ -453,4 +513,147 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
     final normalized = value.trim();
     return normalized.isEmpty ? fallback : normalized;
   }
+}
+
+class _ClimateSelector extends StatelessWidget {
+  const _ClimateSelector({
+    required this.climatePoints,
+    required this.selectedClimatePointId,
+    required this.onChanged,
+  });
+
+  final List<ClimatePoint> climatePoints;
+  final String selectedClimatePointId;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedClimate =
+        _findClimatePoint(climatePoints, selectedClimatePointId) ??
+        climatePoints.first;
+    final regions =
+        climatePoints.map((item) => item.region).toSet().toList(growable: false)
+          ..sort();
+    final selectedRegion = regions.contains(selectedClimate.region)
+        ? selectedClimate.region
+        : regions.first;
+    final regionCities =
+        climatePoints
+            .where((item) => item.region == selectedRegion)
+            .toList(growable: false)
+          ..sort((left, right) => left.city.compareTo(right.city));
+    final selectedCity =
+        regionCities.any((item) => item.id == selectedClimatePointId)
+        ? selectedClimatePointId
+        : regionCities.first.id;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: selectedRegion,
+          decoration: const InputDecoration(labelText: 'Регион'),
+          items: regions
+              .map(
+                (region) => DropdownMenuItem<String>(
+                  value: region,
+                  child: Text(region),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (region) {
+            if (region == null) {
+              return;
+            }
+            final firstInRegion = climatePoints.firstWhere(
+              (item) => item.region == region,
+            );
+            onChanged(firstInRegion.id);
+          },
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: selectedCity,
+          decoration: const InputDecoration(labelText: 'Город'),
+          items: regionCities
+              .map(
+                (climate) => DropdownMenuItem<String>(
+                  value: climate.id,
+                  child: Text(climate.city),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (climatePointId) {
+            if (climatePointId != null) {
+              onChanged(climatePointId);
+            }
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ClimateDetailsCard extends StatelessWidget {
+  const _ClimateDetailsCard({required this.climate});
+
+  final ClimatePoint climate;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Климатическая точка',
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text('${climate.city}, ${climate.region}'),
+            const SizedBox(height: 8),
+            Text(
+              _climateSummaryLine(
+                'Абсолютная минимальная температура',
+                climate.absoluteMinimumTemperature,
+              ),
+            ),
+            Text(
+              _climateSummaryLine(
+                'Температура наиболее холодной пятидневки',
+                climate.coldestFiveDayTemperature,
+              ),
+            ),
+            Text(
+              _climateSummaryLine(
+                'Средняя температура отопительного периода',
+                climate.averageHeatingSeasonTemperature,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+ClimatePoint? _findClimatePoint(
+  List<ClimatePoint> climatePoints,
+  String climatePointId,
+) {
+  for (final climatePoint in climatePoints) {
+    if (climatePoint.id == climatePointId) {
+      return climatePoint;
+    }
+  }
+  return null;
+}
+
+String _climateSummaryLine(String label, double value) {
+  return '$label: ${value.toStringAsFixed(1)} °C';
 }

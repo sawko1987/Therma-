@@ -32,6 +32,9 @@ class ClimatePoint {
     required this.region,
     required this.city,
     required this.designTemperature,
+    required this.absoluteMinimumTemperature,
+    required this.coldestFiveDayTemperature,
+    required this.averageHeatingSeasonTemperature,
     required this.heatingPeriodDays,
     required this.gsop,
     required this.moistureSeasons,
@@ -43,6 +46,19 @@ class ClimatePoint {
     region: json['region'] as String,
     city: json['city'] as String,
     designTemperature: (json['designTemperature'] as num).toDouble(),
+    absoluteMinimumTemperature:
+        (json['absoluteMinimumTemperature'] as num?)?.toDouble() ??
+        (json['winterMinimumTemperature'] as num?)?.toDouble() ??
+        (json['designTemperature'] as num).toDouble(),
+    coldestFiveDayTemperature:
+        (json['coldestFiveDayTemperature'] as num?)?.toDouble() ??
+        (json['designTemperature'] as num).toDouble(),
+    averageHeatingSeasonTemperature:
+        (json['averageHeatingSeasonTemperature'] as num?)?.toDouble() ??
+        _inferAverageHeatingSeasonTemperature(
+          heatingPeriodDays: json['heatingPeriodDays'] as int,
+          gsop: (json['gsop'] as num).toDouble(),
+        ),
     heatingPeriodDays: json['heatingPeriodDays'] as int,
     gsop: (json['gsop'] as num).toDouble(),
     moistureSeasons: (json['moistureSeasons'] as List<dynamic>)
@@ -56,11 +72,24 @@ class ClimatePoint {
   final String region;
   final String city;
   final double designTemperature;
+  final double absoluteMinimumTemperature;
+  final double coldestFiveDayTemperature;
+  final double averageHeatingSeasonTemperature;
   final int heatingPeriodDays;
   final double gsop;
   final List<ClimateSeason> moistureSeasons;
 
   String get displayName => '$city, $region';
+}
+
+double _inferAverageHeatingSeasonTemperature({
+  required int heatingPeriodDays,
+  required double gsop,
+}) {
+  if (heatingPeriodDays <= 0) {
+    return 0;
+  }
+  return 20 - gsop / heatingPeriodDays;
 }
 
 class MaterialEntry {

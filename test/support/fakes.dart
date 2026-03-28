@@ -12,9 +12,12 @@ const testCatalogSnapshot = CatalogSnapshot(
       country: 'Россия',
       region: 'Московская область',
       city: 'Москва',
-      designTemperature: -23,
-      heatingPeriodDays: 202,
-      gsop: 4383.4,
+      designTemperature: -26,
+      absoluteMinimumTemperature: -43,
+      coldestFiveDayTemperature: -26,
+      averageHeatingSeasonTemperature: -2.2,
+      heatingPeriodDays: 204,
+      gsop: 4528.8,
       moistureSeasons: [
         ClimateSeason(
           id: 'winter',
@@ -45,8 +48,11 @@ const testCatalogSnapshot = CatalogSnapshot(
       region: 'Новосибирская область',
       city: 'Новосибирск',
       designTemperature: -37,
-      heatingPeriodDays: 230,
-      gsop: 6205.0,
+      absoluteMinimumTemperature: -50,
+      coldestFiveDayTemperature: -37,
+      averageHeatingSeasonTemperature: -7.9,
+      heatingPeriodDays: 222,
+      gsop: 6193.8,
       moistureSeasons: [
         ClimateSeason(
           id: 'winter',
@@ -398,6 +404,7 @@ class FakeProjectRepository
             address: '',
             description: '',
             customerPhone: '',
+            climatePointId: project.climatePointId,
             projectId: project.id,
             updatedAtEpochMs: 0,
           ),
@@ -498,6 +505,7 @@ class FakeProjectRepository
         address: '',
         description: '',
         customerPhone: '',
+        climatePointId: project.climatePointId,
         projectId: project.id,
         updatedAtEpochMs: 0,
       );

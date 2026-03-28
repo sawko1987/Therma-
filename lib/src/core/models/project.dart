@@ -872,6 +872,7 @@ class DesignObject {
     required this.address,
     required this.description,
     required this.customerPhone,
+    required this.climatePointId,
     required this.projectId,
     required this.updatedAtEpochMs,
   });
@@ -882,6 +883,7 @@ class DesignObject {
     address: json['address'] as String? ?? '',
     description: json['description'] as String? ?? '',
     customerPhone: json['customerPhone'] as String? ?? '',
+    climatePointId: json['climatePointId'] as String? ?? 'moscow',
     projectId: json['projectId'] as String,
     updatedAtEpochMs: (json['updatedAtEpochMs'] as num?)?.toInt() ?? 0,
   );
@@ -891,6 +893,7 @@ class DesignObject {
   final String address;
   final String description;
   final String customerPhone;
+  final String climatePointId;
   final String projectId;
   final int updatedAtEpochMs;
 
@@ -900,6 +903,7 @@ class DesignObject {
     String? address,
     String? description,
     String? customerPhone,
+    String? climatePointId,
     String? projectId,
     int? updatedAtEpochMs,
   }) {
@@ -909,6 +913,7 @@ class DesignObject {
       address: address ?? this.address,
       description: description ?? this.description,
       customerPhone: customerPhone ?? this.customerPhone,
+      climatePointId: climatePointId ?? this.climatePointId,
       projectId: projectId ?? this.projectId,
       updatedAtEpochMs: updatedAtEpochMs ?? this.updatedAtEpochMs,
     );
@@ -920,6 +925,7 @@ class DesignObject {
     'address': address,
     'description': description,
     'customerPhone': customerPhone,
+    'climatePointId': climatePointId,
     'projectId': projectId,
     'updatedAtEpochMs': updatedAtEpochMs,
   };

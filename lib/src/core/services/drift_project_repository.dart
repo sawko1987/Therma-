@@ -272,6 +272,7 @@ class DriftProjectRepository
           address: '',
           description: '',
           customerPhone: '',
+          climatePointId: project.climatePointId,
           projectId: project.id,
           updatedAtEpochMs: now,
         ),

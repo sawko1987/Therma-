@@ -24,6 +24,7 @@ class InMemoryProjectRepository
             address: '',
             description: '',
             customerPhone: '',
+            climatePointId: project.climatePointId,
             projectId: project.id,
             updatedAtEpochMs: 0,
           ),
@@ -145,6 +146,7 @@ class InMemoryProjectRepository
         address: '',
         description: '',
         customerPhone: '',
+        climatePointId: project.climatePointId,
         projectId: project.id,
         updatedAtEpochMs: 0,
       );

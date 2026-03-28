@@ -91,12 +91,13 @@ class ProjectEditor {
     required String address,
     required String description,
     required String customerPhone,
+    required String climatePointId,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final project = Project(
       id: 'project-$now',
       name: title,
-      climatePointId: 'moscow',
+      climatePointId: climatePointId,
       roomPreset: RoomPreset.livingRoom,
       constructions: const [],
       houseModel: HouseModel.bootstrapFromConstructions(const []),
@@ -107,6 +108,7 @@ class ProjectEditor {
       address: address,
       description: description,
       customerPhone: customerPhone,
+      climatePointId: climatePointId,
       projectId: project.id,
       updatedAtEpochMs: now,
     );
@@ -125,15 +127,23 @@ class ProjectEditor {
     final project = await _ref
         .read(projectRepositoryProvider)
         .getProject(object.projectId);
-    if (project != null && project.name != object.title) {
+    if (project != null &&
+        (project.name != object.title ||
+            project.climatePointId != object.climatePointId)) {
       await _ref
           .read(projectRepositoryProvider)
-          .saveProject(project.copyWith(name: object.title));
+          .saveProject(
+            project.copyWith(
+              name: object.title,
+              climatePointId: object.climatePointId,
+            ),
+          );
     }
     _ref.invalidate(projectListProvider);
     _ref.invalidate(objectListProvider);
     _ref.invalidate(selectedObjectProvider);
     _ref.invalidate(selectedProjectProvider);
+    _ref.invalidate(catalogSnapshotProvider);
   }
 
   Future<void> deleteObject(String objectId) async {
