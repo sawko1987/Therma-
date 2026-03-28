@@ -33,6 +33,35 @@ void main() {
     },
   );
 
+  testWidgets('house builder screen renders heating devices card', (
+    tester,
+  ) async {
+    await _pumpHouseScheme(
+      tester,
+      projectRepository: FakeProjectRepository(
+        projects: [
+          buildTestProject(
+            houseModel: buildHouseModel(
+              heatingDevices: [
+                buildHeatingDevice(
+                  id: 'device-main',
+                  title: 'Радиатор в гостиной',
+                  ratedPowerWatts: 1800,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    await _scrollToPlan(tester);
+
+    expect(find.text('Отопительные приборы'), findsOneWidget);
+    expect(find.text('Радиатор в гостиной'), findsOneWidget);
+    expect(find.textContaining('1800'), findsWidgets);
+  });
+
   testWidgets('dragging a room persists updated layout', (tester) async {
     final repository = FakeProjectRepository();
 

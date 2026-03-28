@@ -155,6 +155,26 @@ const testCatalogSnapshot = CatalogSnapshot(
     seasonalDryingRecoveryFactor: 0.65,
     maximumSeasonalAccumulationKgPerSquareMeter: 0.2,
   ),
+  heatingDevices: [
+    HeatingDeviceCatalogEntry(
+      id: 'rad-panel-22-500x1000',
+      kind: 'radiator',
+      title: 'Панельный радиатор 22, 500x1000',
+      ratedPowerWatts: 1700,
+    ),
+    HeatingDeviceCatalogEntry(
+      id: 'convector-floor-1500',
+      kind: 'convector',
+      title: 'Конвектор напольный 1500 Вт',
+      ratedPowerWatts: 1500,
+    ),
+    HeatingDeviceCatalogEntry(
+      id: 'ufh-loop-12m2',
+      kind: 'underfloorLoop',
+      title: 'Контур теплого пола до 12 м²',
+      ratedPowerWatts: 1200,
+    ),
+  ],
   datasetVersion: 'test-moisture-v2',
 );
 
@@ -238,11 +258,35 @@ Room buildRoom({
 HouseModel buildHouseModel({
   List<Construction>? constructions,
   List<EnvelopeOpening>? openings,
+  List<HeatingDevice>? heatingDevices,
 }) {
   final effectiveConstructions = constructions ?? [buildWallConstruction()];
   return HouseModel.bootstrapFromConstructions(
     effectiveConstructions,
-  ).copyWith(openings: openings ?? const []);
+  ).copyWith(
+    openings: openings ?? const [],
+    heatingDevices: heatingDevices ?? const [],
+  );
+}
+
+HeatingDevice buildHeatingDevice({
+  String id = 'device-main',
+  String roomId = defaultRoomId,
+  String title = 'Радиатор',
+  HeatingDeviceKind kind = HeatingDeviceKind.radiator,
+  double ratedPowerWatts = 1500,
+  String? catalogItemId = 'rad-panel-22-500x1000',
+  String? notes,
+}) {
+  return HeatingDevice(
+    id: id,
+    roomId: roomId,
+    title: title,
+    kind: kind,
+    ratedPowerWatts: ratedPowerWatts,
+    catalogItemId: catalogItemId,
+    notes: notes,
+  );
 }
 
 Project buildTestProject({

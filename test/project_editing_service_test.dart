@@ -353,4 +353,108 @@ void main() {
       throwsStateError,
     );
   });
+
+  test('deleteRoom rejects removal when heating devices still linked', () {
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: const [
+          Room(
+            id: 'room-a',
+            title: 'Комната A',
+            kind: RoomKind.livingRoom,
+            heightMeters: defaultRoomHeightMeters,
+            layout: RoomLayoutRect(
+              xMeters: 0,
+              yMeters: 0,
+              widthMeters: 4,
+              heightMeters: 4,
+            ),
+          ),
+          Room(
+            id: 'room-b',
+            title: 'Комната B',
+            kind: RoomKind.bedroom,
+            heightMeters: defaultRoomHeightMeters,
+            layout: RoomLayoutRect(
+              xMeters: 5,
+              yMeters: 0,
+              widthMeters: 4,
+              heightMeters: 4,
+            ),
+          ),
+        ],
+        elements: const [],
+        openings: const [],
+        heatingDevices: [
+          buildHeatingDevice(id: 'device-a', roomId: 'room-a'),
+        ],
+      ),
+    );
+
+    expect(() => service.deleteRoom(project, 'room-a'), throwsStateError);
+  });
+
+  test('add, update and delete heating device persists room binding', () {
+    final initialProject = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: const [
+          Room(
+            id: 'room-a',
+            title: 'Комната A',
+            kind: RoomKind.livingRoom,
+            heightMeters: defaultRoomHeightMeters,
+            layout: RoomLayoutRect(
+              xMeters: 0,
+              yMeters: 0,
+              widthMeters: 4,
+              heightMeters: 4,
+            ),
+          ),
+          Room(
+            id: 'room-b',
+            title: 'Комната B',
+            kind: RoomKind.bedroom,
+            heightMeters: defaultRoomHeightMeters,
+            layout: RoomLayoutRect(
+              xMeters: 5,
+              yMeters: 0,
+              widthMeters: 4,
+              heightMeters: 4,
+            ),
+          ),
+        ],
+        elements: const [],
+        openings: const [],
+        heatingDevices: const [],
+      ),
+    );
+
+    final withDevice = service.addHeatingDevice(
+      initialProject,
+      buildHeatingDevice(
+        id: 'device-a',
+        roomId: 'room-a',
+        ratedPowerWatts: 1200,
+      ),
+    );
+    expect(withDevice.houseModel.heatingDevices.single.roomId, 'room-a');
+    expect(withDevice.houseModel.heatingDevices.single.ratedPowerWatts, 1200);
+
+    final updated = service.updateHeatingDevice(
+      withDevice,
+      withDevice.houseModel.heatingDevices.single.copyWith(
+        roomId: 'room-b',
+        ratedPowerWatts: 1600,
+      ),
+    );
+    expect(updated.houseModel.heatingDevices.single.roomId, 'room-b');
+    expect(updated.houseModel.heatingDevices.single.ratedPowerWatts, 1600);
+
+    final withoutDevice = service.deleteHeatingDevice(updated, 'device-a');
+    expect(withoutDevice.houseModel.heatingDevices, isEmpty);
+  });
 }

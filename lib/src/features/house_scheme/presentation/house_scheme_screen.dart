@@ -9,6 +9,7 @@ import '../../../core/providers.dart';
 import '../../../core/services/house_summary_service.dart';
 import 'floor_plan_geometry.dart';
 import 'widgets/floor_plan_editor_card.dart';
+import 'widgets/heating_devices_card.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 
 class HouseSchemeScreen extends ConsumerWidget {
@@ -238,6 +239,69 @@ class HouseSchemeScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _handleAddHeatingDevice(
+    BuildContext context,
+    WidgetRef ref,
+    CatalogSnapshot catalog,
+    Room room,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final heatingDevice = await _showHeatingDeviceEditor(
+      context,
+      catalog: catalog,
+      roomId: room.id,
+    );
+    if (!context.mounted || heatingDevice == null) {
+      return;
+    }
+    try {
+      await ref.read(projectEditorProvider).addHeatingDevice(heatingDevice);
+    } catch (error) {
+      _showError(messenger, error);
+    }
+  }
+
+  Future<void> _handleEditHeatingDevice(
+    BuildContext context,
+    WidgetRef ref,
+    CatalogSnapshot catalog,
+    HeatingDevice heatingDevice,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final updated = await _showHeatingDeviceEditor(
+      context,
+      catalog: catalog,
+      roomId: heatingDevice.roomId,
+      heatingDevice: heatingDevice,
+    );
+    if (!context.mounted || updated == null) {
+      return;
+    }
+    try {
+      await ref.read(projectEditorProvider).updateHeatingDevice(updated);
+    } catch (error) {
+      _showError(messenger, error);
+    }
+  }
+
+  Future<void> _handleDeleteHeatingDevice(
+    BuildContext context,
+    WidgetRef ref,
+    HeatingDevice heatingDevice,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!context.mounted) {
+      return;
+    }
+    try {
+      await ref
+          .read(projectEditorProvider)
+          .deleteHeatingDevice(heatingDevice.id);
+    } catch (error) {
+      _showError(messenger, error);
+    }
+  }
+
   Future<void> _handleAddConstruction(
     BuildContext context,
     WidgetRef ref,
@@ -337,7 +401,10 @@ class HouseSchemeScreen extends ConsumerWidget {
                 if (project == null || summary == null) {
                   return const Text('Активный проект не найден.');
                 }
-                return _SummaryCard(project: project, summary: summary);
+                return _SummaryCard(
+                  project: project,
+                  summary: summary,
+                );
               },
               loading: () => const LinearProgressIndicator(),
               error: (error, _) => Text('Ошибка проекта: $error'),
@@ -356,6 +423,8 @@ class HouseSchemeScreen extends ConsumerWidget {
                   children: [
                     _PlanAndRoomsSection(
                       project: project,
+                      catalog: catalog,
+                      summary: summaryAsync.asData?.value,
                       onAddRoom: () => _handleAddRoom(context, ref, project),
                       onUpdateRoomLayout: (roomId, layout) =>
                           _handleUpdateRoomLayout(context, ref, roomId, layout),
@@ -391,6 +460,21 @@ class HouseSchemeScreen extends ConsumerWidget {
                           _handleEditOpening(context, ref, opening),
                       onDeleteOpening: (opening) =>
                           _handleDeleteOpening(context, ref, opening),
+                      onAddHeatingDevice: (room) =>
+                          _handleAddHeatingDevice(context, ref, catalog, room),
+                      onEditHeatingDevice: (heatingDevice) =>
+                          _handleEditHeatingDevice(
+                            context,
+                            ref,
+                            catalog,
+                            heatingDevice,
+                          ),
+                      onDeleteHeatingDevice: (heatingDevice) =>
+                          _handleDeleteHeatingDevice(
+                            context,
+                            ref,
+                            heatingDevice,
+                          ),
                       onOpenThermocalc: (element) =>
                           _handleOpenThermocalc(context, ref, element),
                     ),
@@ -527,6 +611,8 @@ class _SummaryCard extends StatelessWidget {
 class _PlanAndRoomsSection extends StatefulWidget {
   const _PlanAndRoomsSection({
     required this.project,
+    required this.catalog,
+    required this.summary,
     required this.onAddRoom,
     required this.onUpdateRoomLayout,
     required this.onEditRoom,
@@ -538,10 +624,15 @@ class _PlanAndRoomsSection extends StatefulWidget {
     required this.onAddOpening,
     required this.onEditOpening,
     required this.onDeleteOpening,
+    required this.onAddHeatingDevice,
+    required this.onEditHeatingDevice,
+    required this.onDeleteHeatingDevice,
     required this.onOpenThermocalc,
   });
 
   final Project project;
+  final CatalogSnapshot catalog;
+  final HouseThermalSummary? summary;
   final VoidCallback onAddRoom;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
@@ -558,6 +649,9 @@ class _PlanAndRoomsSection extends StatefulWidget {
   final ValueChanged<HouseEnvelopeElement> onAddOpening;
   final ValueChanged<EnvelopeOpening> onEditOpening;
   final ValueChanged<EnvelopeOpening> onDeleteOpening;
+  final ValueChanged<Room> onAddHeatingDevice;
+  final ValueChanged<HeatingDevice> onEditHeatingDevice;
+  final ValueChanged<HeatingDevice> onDeleteHeatingDevice;
   final ValueChanged<HouseEnvelopeElement> onOpenThermocalc;
 
   @override
@@ -620,6 +714,17 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
           onEditOpening: widget.onEditOpening,
           onDeleteOpening: widget.onDeleteOpening,
           onOpenThermocalc: widget.onOpenThermocalc,
+        ),
+        const SizedBox(height: 16),
+        HeatingDevicesCard(
+          project: widget.project,
+          catalog: widget.catalog,
+          summary: widget.summary,
+          selectedRoomId: selectedRoomId,
+          onSelectRoom: _selectRoom,
+          onAddHeatingDevice: widget.onAddHeatingDevice,
+          onEditHeatingDevice: widget.onEditHeatingDevice,
+          onDeleteHeatingDevice: widget.onDeleteHeatingDevice,
         ),
       ],
     );
@@ -2017,6 +2122,188 @@ Future<ConstructionLayer?> _showLayerEditor(
   );
 
   thicknessController.dispose();
+  return result;
+}
+
+Future<HeatingDevice?> _showHeatingDeviceEditor(
+  BuildContext context, {
+  required CatalogSnapshot catalog,
+  required String roomId,
+  HeatingDevice? heatingDevice,
+}) async {
+  final titleController = TextEditingController(
+    text: heatingDevice?.title ?? '',
+  );
+  final powerController = TextEditingController(
+    text: (heatingDevice?.ratedPowerWatts ?? 1500).toStringAsFixed(0),
+  );
+  final notesController = TextEditingController(
+    text: heatingDevice?.notes ?? '',
+  );
+  HeatingDeviceKind selectedKind =
+      heatingDevice?.kind ?? HeatingDeviceKind.radiator;
+  String? selectedCatalogItemId = heatingDevice?.catalogItemId;
+
+  final result = await showModalBottomSheet<HeatingDevice>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final catalogEntries = catalog.heatingDevices;
+          HeatingDeviceCatalogEntry? selectedCatalogItem;
+          if (selectedCatalogItemId != null) {
+            for (final item in catalogEntries) {
+              if (item.id == selectedCatalogItemId) {
+                selectedCatalogItem = item;
+                break;
+              }
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  heatingDevice == null
+                      ? 'Новый отопительный прибор'
+                      : 'Редактирование отопительного прибора',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                if (catalogEntries.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String?>(
+                    initialValue: selectedCatalogItemId,
+                    decoration: const InputDecoration(
+                      labelText: 'Шаблон из каталога',
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Без шаблона'),
+                      ),
+                      ...catalogEntries.map(
+                        (item) => DropdownMenuItem<String?>(
+                          value: item.id,
+                          child: Text(
+                            '${item.title} • ${item.ratedPowerWatts.toStringAsFixed(0)} Вт',
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        selectedCatalogItemId = value;
+                        if (value == null) {
+                          return;
+                        }
+                        final selected = catalogEntries.firstWhere(
+                          (item) => item.id == value,
+                        );
+                        titleController.text = selected.title;
+                        powerController.text = selected.ratedPowerWatts
+                            .toStringAsFixed(0);
+                        selectedKind = parseHeatingDeviceKind(selected.kind);
+                      });
+                    },
+                  ),
+                ],
+                const SizedBox(height: 12),
+                DropdownButtonFormField<HeatingDeviceKind>(
+                  initialValue: selectedKind,
+                  decoration: const InputDecoration(labelText: 'Тип прибора'),
+                  items: HeatingDeviceKind.values
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item,
+                          child: Text(item.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => selectedKind = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Название'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: powerController,
+                  decoration: const InputDecoration(
+                    labelText: 'Тепловая мощность, Вт',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Примечание',
+                  ),
+                  minLines: 1,
+                  maxLines: 3,
+                ),
+                if (selectedCatalogItem != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Каталог: ${selectedCatalogItem.title} • ${selectedCatalogItem.ratedPowerWatts.toStringAsFixed(0)} Вт',
+                  ),
+                ],
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(
+                      HeatingDevice(
+                        id:
+                            heatingDevice?.id ??
+                            _buildId('heating-device'),
+                        roomId: roomId,
+                        title: _requiredText(
+                          titleController.text,
+                          fallback: selectedKind.label,
+                        ),
+                        kind: selectedKind,
+                        ratedPowerWatts: _parseDouble(
+                          powerController.text,
+                          fallback: 1500,
+                        ),
+                        catalogItemId: selectedCatalogItemId,
+                        notes: notesController.text.trim().isEmpty
+                            ? null
+                            : notesController.text.trim(),
+                      ),
+                    );
+                  },
+                  child: const Text('Сохранить прибор'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+
+  titleController.dispose();
+  powerController.dispose();
+  notesController.dispose();
   return result;
 }
 

@@ -21,6 +21,9 @@ class AssetCatalogRepository implements CatalogRepository {
     final moistureRulesRaw = await bundle.loadString(
       'assets/data/moisture_rules.seed.json',
     );
+    final heatingDevicesRaw = await bundle.loadString(
+      'assets/data/heating_devices.seed.json',
+    );
 
     final climate = (jsonDecode(climateRaw) as List<dynamic>)
         .cast<Map<String, dynamic>>()
@@ -37,12 +40,17 @@ class AssetCatalogRepository implements CatalogRepository {
     final moistureRules = MoistureRuleSet.fromJson(
       jsonDecode(moistureRulesRaw) as Map<String, dynamic>,
     );
+    final heatingDevices = (jsonDecode(heatingDevicesRaw) as List<dynamic>)
+        .cast<Map<String, dynamic>>()
+        .map(HeatingDeviceCatalogEntry.fromJson)
+        .toList();
 
     return CatalogSnapshot(
       climatePoints: climate,
       materials: materials,
       norms: norms,
       moistureRules: moistureRules,
+      heatingDevices: heatingDevices,
       datasetVersion: currentDatasetVersion,
     );
   }

@@ -70,11 +70,15 @@ class ProjectMigrationService {
     final openings = houseModel.openings
         .where((item) => elementIds.contains(item.elementId))
         .toList(growable: false);
+    final heatingDevices = houseModel.heatingDevices
+        .where((item) => roomIds.contains(item.roomId))
+        .toList(growable: false);
 
     return houseModel.copyWith(
       rooms: normalizedRooms,
       elements: elements,
       openings: openings,
+      heatingDevices: heatingDevices,
     );
   }
 

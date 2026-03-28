@@ -7,23 +7,29 @@ class RoomThermalSummary {
     required this.room,
     required this.elementCount,
     required this.openingCount,
+    required this.heatingDeviceCount,
     required this.totalEnvelopeAreaSquareMeters,
     required this.totalOpaqueAreaSquareMeters,
     required this.totalOpeningAreaSquareMeters,
     required this.heatLossWatts,
     required this.opaqueHeatLossWatts,
     required this.openingHeatLossWatts,
+    required this.installedHeatingPowerWatts,
+    required this.heatingPowerDeltaWatts,
   });
 
   final Room room;
   final int elementCount;
   final int openingCount;
+  final int heatingDeviceCount;
   final double totalEnvelopeAreaSquareMeters;
   final double totalOpaqueAreaSquareMeters;
   final double totalOpeningAreaSquareMeters;
   final double heatLossWatts;
   final double opaqueHeatLossWatts;
   final double openingHeatLossWatts;
+  final double installedHeatingPowerWatts;
+  final double heatingPowerDeltaWatts;
 }
 
 class HouseThermalSummary {
@@ -37,6 +43,9 @@ class HouseThermalSummary {
     required this.totalOpeningCount,
     required this.totalOpaqueHeatLossWatts,
     required this.totalOpeningHeatLossWatts,
+    required this.totalHeatingDeviceCount,
+    required this.totalInstalledHeatingPowerWatts,
+    required this.totalHeatingPowerDeltaWatts,
   });
 
   final List<RoomThermalSummary> roomSummaries;
@@ -48,6 +57,9 @@ class HouseThermalSummary {
   final int totalOpeningCount;
   final double totalOpaqueHeatLossWatts;
   final double totalOpeningHeatLossWatts;
+  final int totalHeatingDeviceCount;
+  final double totalInstalledHeatingPowerWatts;
+  final double totalHeatingPowerDeltaWatts;
 }
 
 class HouseSummaryService {
@@ -71,6 +83,9 @@ class HouseSummaryService {
       final roomElementIds = roomElements.map((item) => item.id).toSet();
       final roomOpenings = project.houseModel.openings
           .where((item) => roomElementIds.contains(item.elementId))
+          .toList(growable: false);
+      final roomHeatingDevices = project.houseModel.heatingDevices
+          .where((item) => item.roomId == room.id)
           .toList(growable: false);
       var roomHeatLossWatts = 0.0;
       var roomOpaqueHeatLossWatts = 0.0;
@@ -119,11 +134,16 @@ class HouseSummaryService {
         0,
         (sum, item) => sum + item.areaSquareMeters,
       );
+      final installedHeatingPowerWatts = roomHeatingDevices.fold<double>(
+        0,
+        (sum, item) => sum + item.ratedPowerWatts,
+      );
       roomSummaries.add(
         RoomThermalSummary(
           room: room,
           elementCount: roomElements.length,
           openingCount: roomOpenings.length,
+          heatingDeviceCount: roomHeatingDevices.length,
           totalEnvelopeAreaSquareMeters: totalEnvelopeAreaSquareMeters,
           totalOpaqueAreaSquareMeters:
               (totalEnvelopeAreaSquareMeters - totalOpeningAreaSquareMeters).clamp(
@@ -134,6 +154,9 @@ class HouseSummaryService {
           heatLossWatts: roomHeatLossWatts,
           opaqueHeatLossWatts: roomOpaqueHeatLossWatts,
           openingHeatLossWatts: roomOpeningHeatLossWatts,
+          installedHeatingPowerWatts: installedHeatingPowerWatts,
+          heatingPowerDeltaWatts:
+              installedHeatingPowerWatts - roomHeatLossWatts,
         ),
       );
     }
@@ -162,6 +185,15 @@ class HouseSummaryService {
       totalOpeningHeatLossWatts: roomSummaries.fold<double>(
         0,
         (sum, item) => sum + item.openingHeatLossWatts,
+      ),
+      totalHeatingDeviceCount: project.houseModel.heatingDevices.length,
+      totalInstalledHeatingPowerWatts: roomSummaries.fold<double>(
+        0,
+        (sum, item) => sum + item.installedHeatingPowerWatts,
+      ),
+      totalHeatingPowerDeltaWatts: roomSummaries.fold<double>(
+        0,
+        (sum, item) => sum + item.heatingPowerDeltaWatts,
       ),
     );
   }

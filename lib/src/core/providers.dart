@@ -170,6 +170,30 @@ class ProjectEditor {
         .select(opening.elementId);
   }
 
+  Future<void> addHeatingDevice(HeatingDevice device) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addHeatingDevice(project, device);
+    await saveProject(updated);
+  }
+
+  Future<void> updateHeatingDevice(HeatingDevice device) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateHeatingDevice(project, device);
+    await saveProject(updated);
+  }
+
+  Future<void> deleteHeatingDevice(String heatingDeviceId) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .deleteHeatingDevice(project, heatingDeviceId);
+    await saveProject(updated);
+  }
+
   Future<void> addConstruction(Construction construction) async {
     final project = await _requireProject();
     final updated = _ref

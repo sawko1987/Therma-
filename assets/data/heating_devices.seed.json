@@ -1,0 +1,32 @@
+[
+  {
+    "id": "rad-panel-22-500x1000",
+    "kind": "radiator",
+    "title": "Панельный радиатор 22, 500x1000",
+    "ratedPowerWatts": 1700
+  },
+  {
+    "id": "rad-panel-22-500x1200",
+    "kind": "radiator",
+    "title": "Панельный радиатор 22, 500x1200",
+    "ratedPowerWatts": 2000
+  },
+  {
+    "id": "convector-floor-1500",
+    "kind": "convector",
+    "title": "Конвектор напольный 1500 Вт",
+    "ratedPowerWatts": 1500
+  },
+  {
+    "id": "ufh-loop-12m2",
+    "kind": "underfloorLoop",
+    "title": "Контур теплого пола до 12 м²",
+    "ratedPowerWatts": 1200
+  },
+  {
+    "id": "towel-rail-400",
+    "kind": "towelRail",
+    "title": "Полотенцесушитель 400 Вт",
+    "ratedPowerWatts": 400
+  }
+]

@@ -196,6 +196,7 @@ void main() {
       ],
       norms: testCatalogSnapshot.norms,
       moistureRules: testCatalogSnapshot.moistureRules,
+      heatingDevices: testCatalogSnapshot.heatingDevices,
       datasetVersion: 'invalid',
     );
     const construction = Construction(

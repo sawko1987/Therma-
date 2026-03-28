@@ -20,7 +20,9 @@ class ProjectEditingService {
     ];
     _validateRoomLayout(updatedRooms, room, roomId: room.id);
     return _syncElementsForRooms(
-      project.copyWith(houseModel: project.houseModel.copyWith(rooms: updatedRooms)),
+      project.copyWith(
+        houseModel: project.houseModel.copyWith(rooms: updatedRooms),
+      ),
     );
   }
 
@@ -37,7 +39,9 @@ class ProjectEditingService {
     final updatedRoom = updatedRooms.firstWhere((item) => item.id == roomId);
     _validateRoomLayout(updatedRooms, updatedRoom, roomId: roomId);
     return _syncElementsForRooms(
-      project.copyWith(houseModel: project.houseModel.copyWith(rooms: updatedRooms)),
+      project.copyWith(
+        houseModel: project.houseModel.copyWith(rooms: updatedRooms),
+      ),
     );
   }
 
@@ -48,6 +52,14 @@ class ProjectEditingService {
     if (linkedElements > 0) {
       throw StateError(
         'Нельзя удалить помещение, пока в нем есть ограждающие элементы.',
+      );
+    }
+    final linkedHeatingDevices = project.houseModel.heatingDevices
+        .where((item) => item.roomId == roomId)
+        .length;
+    if (linkedHeatingDevices > 0) {
+      throw StateError(
+        'Нельзя удалить помещение, пока в нем есть отопительные приборы.',
       );
     }
     if (project.houseModel.rooms.length <= 1) {
@@ -149,6 +161,40 @@ class ProjectEditingService {
         openings: [
           for (final item in project.houseModel.openings)
             if (item.id != openingId) item,
+        ],
+      ),
+    );
+  }
+
+  Project addHeatingDevice(Project project, HeatingDevice device) {
+    final normalized = _normalizeHeatingDevice(project, device);
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        heatingDevices: [...project.houseModel.heatingDevices, normalized],
+      ),
+    );
+  }
+
+  Project updateHeatingDevice(Project project, HeatingDevice device) {
+    _ensureHeatingDeviceExists(project, device.id);
+    final normalized = _normalizeHeatingDevice(project, device);
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        heatingDevices: [
+          for (final item in project.houseModel.heatingDevices)
+            if (item.id == normalized.id) normalized else item,
+        ],
+      ),
+    );
+  }
+
+  Project deleteHeatingDevice(Project project, String heatingDeviceId) {
+    _ensureHeatingDeviceExists(project, heatingDeviceId);
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        heatingDevices: [
+          for (final item in project.houseModel.heatingDevices)
+            if (item.id != heatingDeviceId) item,
         ],
       ),
     );
@@ -262,7 +308,9 @@ class ProjectEditingService {
       );
     }
 
-    final room = project.houseModel.rooms.firstWhere((item) => item.id == element.roomId);
+    final room = project.houseModel.rooms.firstWhere(
+      (item) => item.id == element.roomId,
+    );
     return element.copyWith(
       elementKind: construction.elementKind,
       wallPlacement:
@@ -282,12 +330,15 @@ class ProjectEditingService {
   }) {
     final layout = room.layout;
     if (layout.xMeters < 0 || layout.yMeters < 0) {
-      throw StateError('Комната не может выходить в отрицательные координаты.');
+      throw StateError(
+        'Комната не может выходить в отрицательные координаты.',
+      );
     }
     if (layout.widthMeters < minimumRoomLayoutDimensionMeters ||
         layout.heightMeters < minimumRoomLayoutDimensionMeters) {
       throw StateError(
-        'Размер комнаты не может быть меньше ${minimumRoomLayoutDimensionMeters.toStringAsFixed(1)} м.',
+        'Размер комнаты не может быть меньше '
+        '${minimumRoomLayoutDimensionMeters.toStringAsFixed(1)} м.',
       );
     }
 
@@ -297,7 +348,8 @@ class ProjectEditingService {
       }
       if (_rectanglesOverlap(layout, other.layout)) {
         throw StateError(
-          'Комнаты не должны пересекаться на плане: ${room.title} и ${other.title}.',
+          'Комнаты не должны пересекаться на плане: '
+          '${room.title} и ${other.title}.',
         );
       }
     }
@@ -335,13 +387,27 @@ class ProjectEditingService {
     }
   }
 
+  void _ensureHeatingDeviceExists(Project project, String heatingDeviceId) {
+    final exists = project.houseModel.heatingDevices.any(
+      (item) => item.id == heatingDeviceId,
+    );
+    if (!exists) {
+      throw StateError(
+        'Отопительный прибор $heatingDeviceId не найден в проекте.',
+      );
+    }
+  }
+
   void _ensureWallPlacementFitsRoom(Room room, EnvelopeWallPlacement placement) {
     if (placement.offsetMeters < 0) {
-      throw StateError('Смещение стены по стороне не может быть отрицательным.');
+      throw StateError(
+        'Смещение стены по стороне не может быть отрицательным.',
+      );
     }
     if (placement.lengthMeters < roomLayoutSnapStepMeters) {
       throw StateError(
-        'Длина сегмента стены должна быть не меньше ${roomLayoutSnapStepMeters.toStringAsFixed(1)} м.',
+        'Длина сегмента стены должна быть не меньше '
+        '${roomLayoutSnapStepMeters.toStringAsFixed(1)} м.',
       );
     }
     final sideLength = room.layout.sideLength(placement.side);
@@ -367,7 +433,9 @@ class ProjectEditingService {
         .fold<double>(0, (sum, item) => sum + item.areaSquareMeters);
     if (openingsArea > element.areaSquareMeters) {
       throw StateError(
-        'Площадь проёмов (${openingsArea.toStringAsFixed(1)} м²) не может превышать площадь ограждения (${element.areaSquareMeters.toStringAsFixed(1)} м²).',
+        'Площадь проемов (${openingsArea.toStringAsFixed(1)} м²) не может '
+        'превышать площадь ограждения '
+        '(${element.areaSquareMeters.toStringAsFixed(1)} м²).',
       );
     }
   }
@@ -385,8 +453,18 @@ class ProjectEditingService {
     final totalArea = otherOpeningsArea + opening.areaSquareMeters;
     if (totalArea > element.areaSquareMeters) {
       throw StateError(
-        'Суммарная площадь проёмов (${totalArea.toStringAsFixed(1)} м²) не может превышать площадь ограждения (${element.areaSquareMeters.toStringAsFixed(1)} м²).',
+        'Суммарная площадь проемов (${totalArea.toStringAsFixed(1)} м²) не '
+        'может превышать площадь ограждения '
+        '(${element.areaSquareMeters.toStringAsFixed(1)} м²).',
       );
     }
+  }
+
+  HeatingDevice _normalizeHeatingDevice(Project project, HeatingDevice device) {
+    _ensureRoomExists(project, device.roomId);
+    if (device.ratedPowerWatts <= 0) {
+      throw StateError('Тепловая мощность прибора должна быть больше нуля.');
+    }
+    return device;
   }
 }

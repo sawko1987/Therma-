@@ -167,12 +167,35 @@ class MoistureRuleSet {
   final double maximumSeasonalAccumulationKgPerSquareMeter;
 }
 
+class HeatingDeviceCatalogEntry {
+  const HeatingDeviceCatalogEntry({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.ratedPowerWatts,
+  });
+
+  factory HeatingDeviceCatalogEntry.fromJson(Map<String, dynamic> json) =>
+      HeatingDeviceCatalogEntry(
+        id: json['id'] as String,
+        kind: json['kind'] as String,
+        title: json['title'] as String,
+        ratedPowerWatts: (json['ratedPowerWatts'] as num).toDouble(),
+      );
+
+  final String id;
+  final String kind;
+  final String title;
+  final double ratedPowerWatts;
+}
+
 class CatalogSnapshot {
   const CatalogSnapshot({
     required this.climatePoints,
     required this.materials,
     required this.norms,
     required this.moistureRules,
+    required this.heatingDevices,
     required this.datasetVersion,
   });
 
@@ -180,5 +203,6 @@ class CatalogSnapshot {
   final List<MaterialEntry> materials;
   final List<NormReference> norms;
   final MoistureRuleSet moistureRules;
+  final List<HeatingDeviceCatalogEntry> heatingDevices;
   final String datasetVersion;
 }

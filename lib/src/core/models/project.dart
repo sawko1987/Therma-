@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-const int currentProjectFormatVersion = 6;
+const int currentProjectFormatVersion = 7;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -31,6 +31,8 @@ enum RoomKind {
   boilerRoom,
   other,
 }
+
+enum HeatingDeviceKind { radiator, convector, underfloorLoop, towelRail, other }
 
 extension ConstructionElementKindX on ConstructionElementKind {
   String get label => switch (this) {
@@ -173,6 +175,24 @@ RoomPreset parseRoomPreset(String value) {
   };
 }
 
+extension HeatingDeviceKindX on HeatingDeviceKind {
+  String get label => switch (this) {
+    HeatingDeviceKind.radiator => 'Радиатор',
+    HeatingDeviceKind.convector => 'Конвектор',
+    HeatingDeviceKind.underfloorLoop => 'Теплый пол',
+    HeatingDeviceKind.towelRail => 'Полотенцесушитель',
+    HeatingDeviceKind.other => 'Другое',
+  };
+
+  String get storageKey => switch (this) {
+    HeatingDeviceKind.radiator => 'radiator',
+    HeatingDeviceKind.convector => 'convector',
+    HeatingDeviceKind.underfloorLoop => 'underfloorLoop',
+    HeatingDeviceKind.towelRail => 'towelRail',
+    HeatingDeviceKind.other => 'other',
+  };
+}
+
 RoomSide parseRoomSide(String value) {
   return switch (value) {
     'top' => RoomSide.top,
@@ -201,6 +221,17 @@ OpeningKind parseOpeningKind(String value) {
     'window' => OpeningKind.window,
     'door' => OpeningKind.door,
     _ => throw StateError('Unknown OpeningKind: $value'),
+  };
+}
+
+HeatingDeviceKind parseHeatingDeviceKind(String value) {
+  return switch (value) {
+    'radiator' => HeatingDeviceKind.radiator,
+    'convector' => HeatingDeviceKind.convector,
+    'underfloorLoop' => HeatingDeviceKind.underfloorLoop,
+    'towelRail' => HeatingDeviceKind.towelRail,
+    'other' => HeatingDeviceKind.other,
+    _ => throw StateError('Unknown HeatingDeviceKind: $value'),
   };
 }
 
@@ -648,6 +679,72 @@ class EnvelopeOpening {
   };
 }
 
+class HeatingDevice {
+  const HeatingDevice({
+    required this.id,
+    required this.roomId,
+    required this.title,
+    required this.kind,
+    required this.ratedPowerWatts,
+    this.catalogItemId,
+    this.notes,
+  });
+
+  factory HeatingDevice.fromJson(Map<String, dynamic> json) => HeatingDevice(
+    id: json['id'] as String,
+    roomId: (json['roomId'] as String?) ?? defaultRoomId,
+    title: json['title'] as String,
+    kind: parseHeatingDeviceKind(
+      (json['kind'] as String?) ?? HeatingDeviceKind.other.storageKey,
+    ),
+    ratedPowerWatts: (json['ratedPowerWatts'] as num).toDouble(),
+    catalogItemId: json['catalogItemId'] as String?,
+    notes: json['notes'] as String?,
+  );
+
+  final String id;
+  final String roomId;
+  final String title;
+  final HeatingDeviceKind kind;
+  final double ratedPowerWatts;
+  final String? catalogItemId;
+  final String? notes;
+
+  HeatingDevice copyWith({
+    String? id,
+    String? roomId,
+    String? title,
+    HeatingDeviceKind? kind,
+    double? ratedPowerWatts,
+    String? catalogItemId,
+    String? notes,
+    bool clearCatalogItemId = false,
+    bool clearNotes = false,
+  }) {
+    return HeatingDevice(
+      id: id ?? this.id,
+      roomId: roomId ?? this.roomId,
+      title: title ?? this.title,
+      kind: kind ?? this.kind,
+      ratedPowerWatts: ratedPowerWatts ?? this.ratedPowerWatts,
+      catalogItemId: clearCatalogItemId
+          ? null
+          : catalogItemId ?? this.catalogItemId,
+      notes: clearNotes ? null : notes ?? this.notes,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'roomId': roomId,
+    'title': title,
+    'kind': kind.storageKey,
+    'ratedPowerWatts': ratedPowerWatts,
+    'catalogItemId': catalogItemId,
+    'notes': notes,
+  };
+}
+
 class HouseModel {
   const HouseModel({
     required this.id,
@@ -655,6 +752,7 @@ class HouseModel {
     required this.rooms,
     required this.elements,
     required this.openings,
+    this.heatingDevices = const [],
   });
 
   factory HouseModel.fromJson(Map<String, dynamic> json) {
@@ -667,6 +765,9 @@ class HouseModel {
         .toList(growable: false);
     final openings = ((json['openings'] as List<dynamic>?) ?? const [])
         .map((item) => EnvelopeOpening.fromJson(_asJsonMap(item)))
+        .toList(growable: false);
+    final heatingDevices = ((json['heatingDevices'] as List<dynamic>?) ?? const [])
+        .map((item) => HeatingDevice.fromJson(_asJsonMap(item)))
         .toList(growable: false);
     return HouseModel(
       id: json['id'] as String,
@@ -682,6 +783,15 @@ class HouseModel {
                 )
                 .toList(growable: false),
       openings: openings,
+      heatingDevices: rooms.isEmpty && heatingDevices.isEmpty
+          ? const []
+          : heatingDevices
+                .map(
+                  (item) => item.copyWith(
+                    roomId: rooms.isEmpty ? defaultRoomId : item.roomId,
+                  ),
+                )
+                .toList(growable: false),
     );
   }
 
@@ -703,6 +813,7 @@ class HouseModel {
           )
           .toList(growable: false),
       openings: const [],
+      heatingDevices: const [],
     );
   }
 
@@ -711,6 +822,7 @@ class HouseModel {
   final List<Room> rooms;
   final List<HouseEnvelopeElement> elements;
   final List<EnvelopeOpening> openings;
+  final List<HeatingDevice> heatingDevices;
 
   double get totalRoomAreaSquareMeters =>
       rooms.fold(0, (sum, room) => sum + room.areaSquareMeters);
@@ -727,6 +839,7 @@ class HouseModel {
     List<Room>? rooms,
     List<HouseEnvelopeElement>? elements,
     List<EnvelopeOpening>? openings,
+    List<HeatingDevice>? heatingDevices,
   }) {
     return HouseModel(
       id: id ?? this.id,
@@ -734,6 +847,7 @@ class HouseModel {
       rooms: rooms ?? this.rooms,
       elements: elements ?? this.elements,
       openings: openings ?? this.openings,
+      heatingDevices: heatingDevices ?? this.heatingDevices,
     );
   }
 
@@ -743,6 +857,9 @@ class HouseModel {
     'rooms': rooms.map((item) => item.toJson()).toList(growable: false),
     'elements': elements.map((item) => item.toJson()).toList(growable: false),
     'openings': openings.map((item) => item.toJson()).toList(growable: false),
+    'heatingDevices': heatingDevices
+        .map((item) => item.toJson())
+        .toList(growable: false),
   };
 }
 
