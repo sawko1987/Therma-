@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 11;
+const int currentProjectFormatVersion = 12;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -14,10 +14,19 @@ const double minimumRoomLayoutDimensionMeters = 1.5;
 const double roomLayoutSnapStepMeters = 0.5;
 const double roomLayoutGapMeters = 1.0;
 const String defaultRoomId = 'room-main';
+const double defaultElectricityPricePerKwh = 6.5;
+const double defaultGasPricePerCubicMeter = 7.5;
+const double defaultGasBoilerEfficiency = 0.92;
+const double defaultHeatPumpCop = 3.0;
 
 enum ConstructionElementKind { wall, roof, floor, ceiling }
 
-enum FloorConstructionType { onGround, overCrawlSpace, overBasement, overDriveway }
+enum FloorConstructionType {
+  onGround,
+  overCrawlSpace,
+  overBasement,
+  overDriveway,
+}
 
 enum CrawlSpaceVentilationMode { ventilated, unventilated }
 
@@ -1019,6 +1028,59 @@ class DesignObject {
   };
 }
 
+class HeatingEconomicsSettings {
+  const HeatingEconomicsSettings({
+    this.electricityPricePerKwh = defaultElectricityPricePerKwh,
+    this.gasPricePerCubicMeter = defaultGasPricePerCubicMeter,
+    this.gasBoilerEfficiency = defaultGasBoilerEfficiency,
+    this.heatPumpCop = defaultHeatPumpCop,
+  });
+
+  factory HeatingEconomicsSettings.fromJson(Map<String, dynamic> json) {
+    return HeatingEconomicsSettings(
+      electricityPricePerKwh:
+          (json['electricityPricePerKwh'] as num?)?.toDouble() ??
+          defaultElectricityPricePerKwh,
+      gasPricePerCubicMeter:
+          (json['gasPricePerCubicMeter'] as num?)?.toDouble() ??
+          defaultGasPricePerCubicMeter,
+      gasBoilerEfficiency:
+          (json['gasBoilerEfficiency'] as num?)?.toDouble() ??
+          defaultGasBoilerEfficiency,
+      heatPumpCop:
+          (json['heatPumpCop'] as num?)?.toDouble() ?? defaultHeatPumpCop,
+    );
+  }
+
+  final double electricityPricePerKwh;
+  final double gasPricePerCubicMeter;
+  final double gasBoilerEfficiency;
+  final double heatPumpCop;
+
+  HeatingEconomicsSettings copyWith({
+    double? electricityPricePerKwh,
+    double? gasPricePerCubicMeter,
+    double? gasBoilerEfficiency,
+    double? heatPumpCop,
+  }) {
+    return HeatingEconomicsSettings(
+      electricityPricePerKwh:
+          electricityPricePerKwh ?? this.electricityPricePerKwh,
+      gasPricePerCubicMeter:
+          gasPricePerCubicMeter ?? this.gasPricePerCubicMeter,
+      gasBoilerEfficiency: gasBoilerEfficiency ?? this.gasBoilerEfficiency,
+      heatPumpCop: heatPumpCop ?? this.heatPumpCop,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'electricityPricePerKwh': electricityPricePerKwh,
+    'gasPricePerCubicMeter': gasPricePerCubicMeter,
+    'gasBoilerEfficiency': gasBoilerEfficiency,
+    'heatPumpCop': heatPumpCop,
+  };
+}
+
 class Project {
   const Project({
     required this.id,
@@ -1030,6 +1092,7 @@ class Project {
     required this.houseModel,
     this.selectedConstructionIds = const [],
     this.groundFloorCalculations = const [],
+    this.heatingEconomicsSettings = const HeatingEconomicsSettings(),
     this.datasetVersion,
     this.migratedFromDatasetVersion,
     this.sourceProjectFormatVersion = currentProjectFormatVersion,
@@ -1049,6 +1112,7 @@ class Project {
         ((json['groundFloorCalculations'] as List<dynamic>?) ?? const [])
             .map((item) => GroundFloorCalculation.fromJson(_asJsonMap(item)))
             .toList(growable: false);
+    final heatingEconomicsSettingsJson = json['heatingEconomicsSettings'];
 
     return Project(
       id: json['id'] as String,
@@ -1067,6 +1131,11 @@ class Project {
               .map((item) => item as String)
               .toList(growable: false),
       groundFloorCalculations: groundFloorCalculations,
+      heatingEconomicsSettings: heatingEconomicsSettingsJson == null
+          ? const HeatingEconomicsSettings()
+          : HeatingEconomicsSettings.fromJson(
+              _asJsonMap(heatingEconomicsSettingsJson),
+            ),
       datasetVersion: json['datasetVersion'] as String?,
       migratedFromDatasetVersion: json['migratedFromDatasetVersion'] as String?,
       sourceProjectFormatVersion: formatVersion,
@@ -1082,6 +1151,7 @@ class Project {
   final HouseModel houseModel;
   final List<String> selectedConstructionIds;
   final List<GroundFloorCalculation> groundFloorCalculations;
+  final HeatingEconomicsSettings heatingEconomicsSettings;
   final String? datasetVersion;
   final String? migratedFromDatasetVersion;
   final int sourceProjectFormatVersion;
@@ -1112,6 +1182,7 @@ class Project {
     HouseModel? houseModel,
     List<String>? selectedConstructionIds,
     List<GroundFloorCalculation>? groundFloorCalculations,
+    HeatingEconomicsSettings? heatingEconomicsSettings,
     String? datasetVersion,
     String? migratedFromDatasetVersion,
     int? sourceProjectFormatVersion,
@@ -1129,6 +1200,8 @@ class Project {
           selectedConstructionIds ?? this.selectedConstructionIds,
       groundFloorCalculations:
           groundFloorCalculations ?? this.groundFloorCalculations,
+      heatingEconomicsSettings:
+          heatingEconomicsSettings ?? this.heatingEconomicsSettings,
       datasetVersion: datasetVersion ?? this.datasetVersion,
       migratedFromDatasetVersion: clearMigratedFromDatasetVersion
           ? null
@@ -1155,6 +1228,7 @@ class Project {
     'groundFloorCalculations': groundFloorCalculations
         .map((item) => item.toJson())
         .toList(growable: false),
+    'heatingEconomicsSettings': heatingEconomicsSettings.toJson(),
     'datasetVersion': datasetVersion,
     'migratedFromDatasetVersion': migratedFromDatasetVersion,
   };

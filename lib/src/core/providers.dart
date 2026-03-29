@@ -6,12 +6,14 @@ import 'models/building_heat_loss.dart';
 import 'models/calculation.dart';
 import 'models/catalog.dart';
 import 'models/ground_floor_calculation.dart';
+import 'models/heating_economics.dart';
 import 'models/project.dart';
 import 'models/report.dart';
 import 'services/asset_catalog_repository.dart';
 import 'services/building_heat_loss_service.dart';
 import 'services/drift_project_repository.dart';
 import 'services/ground_floor_calculation_service.dart';
+import 'services/heating_economics_service.dart';
 import 'services/interfaces.dart';
 import 'services/local_report_file_store.dart';
 import 'services/normative_thermal_calculation_engine.dart';
@@ -79,6 +81,7 @@ class ProjectEditor {
     _ref.invalidate(selectedEnvelopeElementProvider);
     _ref.invalidate(selectedConstructionProvider);
     _ref.invalidate(buildingHeatLossResultProvider);
+    _ref.invalidate(heatingEconomicsResultProvider);
     _ref.invalidate(selectedGroundFloorCalculationProvider);
     _ref.invalidate(groundFloorCalculationResultProvider);
     _ref.invalidate(constructionLibraryProvider);
@@ -298,6 +301,13 @@ class ProjectEditor {
         .read(projectEditingServiceProvider)
         .deleteHeatingDevice(project, heatingDeviceId);
     await saveProject(updated);
+  }
+
+  Future<void> updateHeatingEconomicsSettings(
+    HeatingEconomicsSettings settings,
+  ) async {
+    final project = await _requireProject();
+    await saveProject(project.copyWith(heatingEconomicsSettings: settings));
   }
 
   Future<void> addConstruction(Construction construction) async {
@@ -608,6 +618,10 @@ final groundFloorCalculationServiceProvider =
         ref.watch(thermalCalculationEngineProvider),
       ),
     );
+
+final heatingEconomicsServiceProvider = Provider<HeatingEconomicsService>(
+  (ref) => const NormativeHeatingEconomicsService(),
+);
 
 final projectEditorProvider = Provider<ProjectEditor>(
   (ref) => ProjectEditor(ref),
@@ -1024,6 +1038,26 @@ final buildingHeatLossResultProvider = FutureProvider<BuildingHeatLossResult?>((
   return ref
       .read(buildingHeatLossServiceProvider)
       .calculate(catalog: catalog, project: project);
+});
+
+final heatingEconomicsResultProvider = FutureProvider<HeatingEconomicsResult?>((
+  ref,
+) async {
+  final catalog = await ref.watch(catalogSnapshotProvider.future);
+  final project = await ref.watch(selectedProjectProvider.future);
+  final buildingHeatLoss = await ref.watch(
+    buildingHeatLossResultProvider.future,
+  );
+  if (project == null || buildingHeatLoss == null) {
+    return null;
+  }
+  return ref
+      .read(heatingEconomicsServiceProvider)
+      .calculate(
+        catalog: catalog,
+        project: project,
+        buildingHeatLoss: buildingHeatLoss,
+      );
 });
 
 final groundFloorCalculationResultProvider =

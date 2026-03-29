@@ -7,6 +7,7 @@ import '../../../core/providers.dart';
 import '../../building_step/presentation/building_step_screen.dart';
 import '../../construction_library/presentation/construction_step_screen.dart';
 import '../../ground_floor/presentation/ground_floor_screen.dart';
+import '../../heating_economics/presentation/heating_economics_screen.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
 import '../../object_step/presentation/object_step_screen.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
@@ -39,7 +40,9 @@ class DashboardScreen extends ConsumerWidget {
             selectedObjectId: selectedObjectId,
             onSelectObject: (object) {
               ref.read(selectedObjectIdProvider.notifier).select(object.id);
-              ref.read(selectedProjectIdProvider.notifier).select(object.projectId);
+              ref
+                  .read(selectedProjectIdProvider.notifier)
+                  .select(object.projectId);
             },
           ),
           const SizedBox(height: 16),
@@ -89,6 +92,13 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               );
             },
+            onOpenHeatingEconomics: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const HeatingEconomicsScreen(),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 16),
           const _RulesCard(),
@@ -99,10 +109,7 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({
-    required this.objectAsync,
-    required this.projectAsync,
-  });
+  const _HeroCard({required this.objectAsync, required this.projectAsync});
 
   final AsyncValue<DesignObject?> objectAsync;
   final AsyncValue<Project?> projectAsync;
@@ -331,6 +338,7 @@ class _RoadmapCard extends StatelessWidget {
     required this.onOpenHouseScheme,
     required this.onOpenPreview,
     required this.onOpenGroundFloor,
+    required this.onOpenHeatingEconomics,
   });
 
   final bool hasSelectedObject;
@@ -340,6 +348,7 @@ class _RoadmapCard extends StatelessWidget {
   final VoidCallback onOpenHouseScheme;
   final VoidCallback onOpenPreview;
   final VoidCallback onOpenGroundFloor;
+  final VoidCallback onOpenHeatingEconomics;
 
   @override
   Widget build(BuildContext context) {
@@ -394,6 +403,12 @@ class _RoadmapCard extends StatelessWidget {
               onPressed: hasSelectedObject ? onOpenGroundFloor : null,
               icon: const Icon(Icons.foundation_outlined),
               label: const Text('Открыть полы по грунту'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: hasSelectedObject ? onOpenHeatingEconomics : null,
+              icon: const Icon(Icons.looks_3_outlined),
+              label: const Text('Открыть шаг 3'),
             ),
           ],
         ),

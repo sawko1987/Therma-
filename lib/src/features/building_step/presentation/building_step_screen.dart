@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../construction_library/presentation/construction_step_screen.dart';
+import '../../heating_economics/presentation/heating_economics_screen.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
 
 class BuildingStepScreen extends ConsumerWidget {
@@ -87,6 +88,18 @@ class BuildingStepScreen extends ConsumerWidget {
                 },
                 icon: const Icon(Icons.looks_one_outlined),
                 label: const Text('Вернуться к шагу 1'),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const HeatingEconomicsScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.looks_3_outlined),
+                label: const Text('Перейти к шагу 3'),
               ),
             ],
           ),

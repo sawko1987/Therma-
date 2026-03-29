@@ -93,6 +93,14 @@ void main() {
     expect(restored.houseModel.rooms.single.layout.widthMeters, 4);
     expect(restored.customMaterials, hasLength(1));
     expect(restored.customMaterials.single.id, 'custom-material-1');
+    expect(
+      restored.heatingEconomicsSettings.electricityPricePerKwh,
+      defaultElectricityPricePerKwh,
+    );
+    expect(
+      restored.heatingEconomicsSettings.gasBoilerEfficiency,
+      defaultGasBoilerEfficiency,
+    );
     expect(restored.datasetVersion, currentDatasetVersion);
     expect(restored.migratedFromDatasetVersion, isNull);
   });
@@ -129,6 +137,7 @@ void main() {
     expect(restored.houseModel.elements, hasLength(1));
     expect(restored.customMaterials, isEmpty);
     expect(restored.sourceProjectFormatVersion, 1);
+    expect(restored.heatingEconomicsSettings.heatPumpCop, defaultHeatPumpCop);
   });
 
   test('project json rejects future project format version', () {
