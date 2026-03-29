@@ -37,13 +37,16 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await _pumpHouseScheme(
-      tester,
-      projectRepository: FakeProjectRepository(),
-    );
+    await _pumpHouseScheme(tester, projectRepository: FakeProjectRepository());
 
-    await tester.scrollUntilVisible(find.text('Открыть расчет потерь'), 200);
-    await tester.tap(find.text('Открыть расчет потерь'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('open-building-heat-loss-button')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('open-building-heat-loss-button')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Теплопотери здания'), findsOneWidget);
@@ -97,6 +100,49 @@ void main() {
     expect(room.layout.yMeters, 1);
   });
 
+  testWidgets('add room creates it directly on plan in free space', (
+    tester,
+  ) async {
+    final repository = FakeProjectRepository(
+      projects: [
+        buildTestProject(
+          houseModel: HouseModel(
+            id: 'house-model',
+            title: 'Конструктор дома',
+            rooms: [
+              buildRoom(
+                id: 'room-a',
+                title: 'Комната A',
+                layout: buildRoomLayout(
+                  xMeters: 0,
+                  yMeters: 0,
+                  widthMeters: 4,
+                  heightMeters: 4,
+                ),
+              ),
+            ],
+            elements: const [],
+            openings: const [],
+          ),
+        ),
+      ],
+    );
+
+    await _pumpHouseScheme(tester, projectRepository: repository);
+    await _scrollToPlan(tester);
+
+    await tester.tap(find.text('Добавить помещение').first);
+    await tester.pumpAndSettle();
+
+    final savedProject = (await repository.getProject('demo'))!;
+    expect(savedProject.houseModel.rooms, hasLength(2));
+    final createdRoom = savedProject.houseModel.rooms.last;
+    expect(createdRoom.layout.widthMeters, 3);
+    expect(createdRoom.layout.heightMeters, 3);
+    expect(createdRoom.layout.xMeters, 4);
+    expect(createdRoom.layout.yMeters, 0);
+  });
+
   testWidgets('room resize snaps to 0.5m grid', (tester) async {
     final repository = FakeProjectRepository();
 
@@ -113,6 +159,40 @@ void main() {
     final room = savedProject.houseModel.rooms.single;
     expect(room.layout.widthMeters, 4.5);
     expect(room.layout.heightMeters, 4.5);
+  });
+
+  testWidgets('selected room editor updates dimensions and height', (
+    tester,
+  ) async {
+    final repository = FakeProjectRepository();
+
+    await _pumpHouseScheme(tester, projectRepository: repository);
+    await _scrollToPlan(tester);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('selected-room-width-field')),
+      '5',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('selected-room-height-field')),
+      '6',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('selected-room-z-field')),
+      '3.1',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('selected-room-save-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('selected-room-save-button')));
+    await tester.pumpAndSettle();
+
+    final savedProject = (await repository.getProject('demo'))!;
+    final room = savedProject.houseModel.rooms.single;
+    expect(room.layout.widthMeters, 5);
+    expect(room.layout.heightMeters, 6);
+    expect(room.heightMeters, 3.1);
   });
 
   testWidgets('invalid room overlap rolls back draft and shows error', (
@@ -255,10 +335,7 @@ Future<void> _dispatchPan(
   final origin = tester.getCenter(finder);
   detector.onPanStart?.call(DragStartDetails(globalPosition: origin));
   detector.onPanUpdate?.call(
-    DragUpdateDetails(
-      globalPosition: origin + offset,
-      delta: offset,
-    ),
+    DragUpdateDetails(globalPosition: origin + offset, delta: offset),
   );
   detector.onPanEnd?.call(DragEndDetails());
   await tester.pumpAndSettle();

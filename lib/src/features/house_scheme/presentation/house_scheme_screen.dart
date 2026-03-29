@@ -32,26 +32,31 @@ class HouseSchemeScreen extends ConsumerWidget {
   final bool showHeatingDevices;
   final Widget? trailingHeader;
 
-  Future<void> _handleAddRoom(
+  Future<Room?> _handleAddRoom(
     BuildContext context,
     WidgetRef ref,
     Project project,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final room = await _showRoomEditor(
-      context,
-      initialLayout: buildNextRoomLayout(project.houseModel.rooms),
+    final layout = buildFirstAvailableRoomLayout(
+      project.houseModel.rooms,
+      widthMeters: defaultPlacedRoomWidthMeters,
+      heightMeters: defaultPlacedRoomHeightMeters,
     );
-    if (!context.mounted) {
-      return;
-    }
-    if (room == null) {
-      return;
-    }
+    final roomIndex = project.houseModel.rooms.length + 1;
+    final room = Room(
+      id: _buildId('room'),
+      title: 'Помещение $roomIndex',
+      kind: RoomKind.livingRoom,
+      heightMeters: defaultRoomHeightMeters,
+      layout: layout,
+    );
     try {
       await ref.read(projectEditorProvider).addRoom(room);
+      return room;
     } catch (error) {
       _showError(messenger, error);
+      return null;
     }
   }
 
@@ -72,6 +77,21 @@ class HouseSchemeScreen extends ConsumerWidget {
       await ref.read(projectEditorProvider).updateRoom(updated);
     } catch (error) {
       _showError(messenger, error);
+    }
+  }
+
+  Future<String?> _handleUpdateRoom(
+    BuildContext context,
+    WidgetRef ref,
+    Room room,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(projectEditorProvider).updateRoom(room);
+      return null;
+    } catch (error) {
+      _showError(messenger, error);
+      return _describeError(error);
     }
   }
 
@@ -462,6 +482,8 @@ class HouseSchemeScreen extends ConsumerWidget {
                       summary: summaryAsync.asData?.value,
                       showHeatingDevices: showHeatingDevices,
                       onAddRoom: () => _handleAddRoom(context, ref, project),
+                      onUpdateRoom: (room) =>
+                          _handleUpdateRoom(context, ref, room),
                       onUpdateRoomLayout: (roomId, layout) =>
                           _handleUpdateRoomLayout(context, ref, roomId, layout),
                       onEditRoom: (room) => _handleEditRoom(context, ref, room),
@@ -670,6 +692,7 @@ class _SummaryCard extends StatelessWidget {
               runSpacing: 12,
               children: [
                 FilledButton.icon(
+                  key: const ValueKey('open-building-heat-loss-button'),
                   onPressed: onOpenBuildingHeatLoss,
                   icon: const Icon(Icons.home_work_outlined),
                   label: const Text('Открыть расчет потерь'),
@@ -696,6 +719,7 @@ class _PlanAndRoomsSection extends StatefulWidget {
     required this.summary,
     required this.showHeatingDevices,
     required this.onAddRoom,
+    required this.onUpdateRoom,
     required this.onUpdateRoomLayout,
     required this.onEditRoom,
     required this.onDeleteRoom,
@@ -716,7 +740,8 @@ class _PlanAndRoomsSection extends StatefulWidget {
   final CatalogSnapshot catalog;
   final BuildingHeatLossResult? summary;
   final bool showHeatingDevices;
-  final VoidCallback onAddRoom;
+  final Future<Room?> Function() onAddRoom;
+  final Future<String?> Function(Room room) onUpdateRoom;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
   final ValueChanged<Room> onEditRoom;
@@ -766,27 +791,47 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
     });
   }
 
+  Future<void> _handleAddRoom() async {
+    final room = await widget.onAddRoom();
+    if (!mounted || room == null) {
+      return;
+    }
+    setState(() => _selectedRoomId = room.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectedRoomId = _effectiveSelectedRoomId;
+    final selectedRoom = selectedRoomId == null
+        ? null
+        : widget.project.houseModel.rooms.firstWhere(
+            (room) => room.id == selectedRoomId,
+          );
     return Column(
       children: [
         FloorPlanEditorCard(
           project: widget.project,
           selectedRoomId: selectedRoomId,
           selectedElementId: _selectedElementId,
-          onAddRoom: widget.onAddRoom,
+          onAddRoom: _handleAddRoom,
           onSelectRoom: _selectRoom,
           onSelectElement: _selectElement,
           onUpdateRoomLayout: widget.onUpdateRoomLayout,
           onUpdateElementWallPlacement: widget.onUpdateElementWallPlacement,
         ),
+        if (selectedRoom != null) ...[
+          const SizedBox(height: 16),
+          _SelectedRoomEditorCard(
+            room: selectedRoom,
+            onSave: widget.onUpdateRoom,
+          ),
+        ],
         const SizedBox(height: 16),
         _RoomsCard(
           project: widget.project,
           selectedRoomId: selectedRoomId,
           onSelectRoom: _selectRoom,
-          onAddRoom: widget.onAddRoom,
+          onAddRoom: _handleAddRoom,
           onEditRoom: widget.onEditRoom,
           onDeleteRoom: widget.onDeleteRoom,
           onAddElement: widget.onAddElement,
@@ -1158,6 +1203,217 @@ class _RoomsCard extends StatelessWidget {
   }
 }
 
+class _SelectedRoomEditorCard extends StatefulWidget {
+  const _SelectedRoomEditorCard({required this.room, required this.onSave});
+
+  final Room room;
+  final Future<String?> Function(Room room) onSave;
+
+  @override
+  State<_SelectedRoomEditorCard> createState() =>
+      _SelectedRoomEditorCardState();
+}
+
+class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _widthController;
+  late final TextEditingController _heightController;
+  late final TextEditingController _roomHeightController;
+  late RoomKind _selectedKind;
+  String? _lastError;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController();
+    _widthController = TextEditingController();
+    _heightController = TextEditingController();
+    _roomHeightController = TextEditingController();
+    _syncFromRoom(widget.room);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SelectedRoomEditorCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.room.id != widget.room.id ||
+        oldWidget.room.title != widget.room.title ||
+        oldWidget.room.kind != widget.room.kind ||
+        !layoutsEqual(oldWidget.room.layout, widget.room.layout) ||
+        oldWidget.room.heightMeters != widget.room.heightMeters) {
+      _syncFromRoom(widget.room);
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _widthController.dispose();
+    _heightController.dispose();
+    _roomHeightController.dispose();
+    super.dispose();
+  }
+
+  void _syncFromRoom(Room room) {
+    _titleController.text = room.title;
+    _widthController.text = room.layout.widthMeters.toStringAsFixed(1);
+    _heightController.text = room.layout.heightMeters.toStringAsFixed(1);
+    _roomHeightController.text = room.heightMeters.toStringAsFixed(1);
+    _selectedKind = room.kind;
+    _lastError = null;
+  }
+
+  Future<void> _handleSave() async {
+    setState(() {
+      _saving = true;
+      _lastError = null;
+    });
+    final updated = widget.room.copyWith(
+      title: _requiredText(_titleController.text, fallback: widget.room.title),
+      kind: _selectedKind,
+      heightMeters: _parseDouble(
+        _roomHeightController.text,
+        fallback: widget.room.heightMeters,
+      ),
+      layout: snapRoomLayout(
+        widget.room.layout.copyWith(
+          widthMeters: _parseDouble(
+            _widthController.text,
+            fallback: widget.room.layout.widthMeters,
+          ),
+          heightMeters: _parseDouble(
+            _heightController.text,
+            fallback: widget.room.layout.heightMeters,
+          ),
+        ),
+      ),
+    );
+    final error = await widget.onSave(updated);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _saving = false;
+      _lastError = error;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Параметры выбранного помещения',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'После добавления помещение сразу появляется на плане. Выберите его и задайте длину, ширину и высоту здесь, а позицию уточняйте перетаскиванием на схеме.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: const ValueKey('selected-room-title-field'),
+              controller: _titleController,
+              decoration: const InputDecoration(labelText: 'Название'),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<RoomKind>(
+              key: const ValueKey('selected-room-kind-field'),
+              initialValue: _selectedKind,
+              decoration: const InputDecoration(labelText: 'Тип помещения'),
+              items: RoomKind.values
+                  .map(
+                    (item) =>
+                        DropdownMenuItem(value: item, child: Text(item.label)),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedKind = value);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('selected-room-width-field'),
+                    controller: _widthController,
+                    decoration: const InputDecoration(labelText: 'Длина, м'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('selected-room-height-field'),
+                    controller: _heightController,
+                    decoration: const InputDecoration(labelText: 'Ширина, м'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('selected-room-z-field'),
+                    controller: _roomHeightController,
+                    decoration: const InputDecoration(labelText: 'Высота, м'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Позиция на плане: ${widget.room.layout.xMeters.toStringAsFixed(1)} / ${widget.room.layout.yMeters.toStringAsFixed(1)} м',
+            ),
+            Text(
+              'Площадь: ${widget.room.areaSquareMeters.toStringAsFixed(1)} м²',
+            ),
+            if (_lastError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _lastError!,
+                key: const ValueKey('selected-room-save-error'),
+                style: const TextStyle(
+                  color: Color(0xFF9C2F2F),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const ValueKey('selected-room-save-button'),
+              onPressed: _saving ? null : _handleSave,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: const Text('Сохранить параметры'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ConstructionsCard extends StatelessWidget {
   const _ConstructionsCard({
     required this.project,
@@ -1320,6 +1576,20 @@ Future<Room?> _showRoomEditor(
   RoomLayoutRect? initialLayout,
 }) async {
   final titleController = TextEditingController(text: room?.title ?? '');
+  final widthController = TextEditingController(
+    text:
+        (room?.layout.widthMeters ??
+                initialLayout?.widthMeters ??
+                defaultRoomLayoutWidthMeters)
+            .toString(),
+  );
+  final planHeightController = TextEditingController(
+    text:
+        (room?.layout.heightMeters ??
+                initialLayout?.heightMeters ??
+                defaultRoomLayoutHeightMeters)
+            .toString(),
+  );
   final heightController = TextEditingController(
     text: (room?.heightMeters ?? defaultRoomHeightMeters).toString(),
   );
@@ -1379,13 +1649,39 @@ Future<Room?> _showRoomEditor(
                     labelText: 'Площадь на плане',
                   ),
                   child: Text(
-                    '${effectiveLayout.areaSquareMeters.toStringAsFixed(1)} м²',
+                    '${snapRoomLayout(effectiveLayout.copyWith(
+                      widthMeters: _parseDouble(widthController.text, fallback: effectiveLayout.widthMeters),
+                      heightMeters: _parseDouble(planHeightController.text, fallback: effectiveLayout.heightMeters),
+                    )).areaSquareMeters.toStringAsFixed(1)} м²',
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  'Размеры и позиция комнаты редактируются на плане.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: widthController,
+                        decoration: const InputDecoration(
+                          labelText: 'Длина, м',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: planHeightController,
+                        decoration: const InputDecoration(
+                          labelText: 'Ширина, м',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -1410,7 +1706,18 @@ Future<Room?> _showRoomEditor(
                           heightController.text,
                           fallback: defaultRoomHeightMeters,
                         ),
-                        layout: effectiveLayout,
+                        layout: snapRoomLayout(
+                          effectiveLayout.copyWith(
+                            widthMeters: _parseDouble(
+                              widthController.text,
+                              fallback: effectiveLayout.widthMeters,
+                            ),
+                            heightMeters: _parseDouble(
+                              planHeightController.text,
+                              fallback: effectiveLayout.heightMeters,
+                            ),
+                          ),
+                        ),
                       ),
                     );
                   },
@@ -1425,6 +1732,8 @@ Future<Room?> _showRoomEditor(
   );
 
   titleController.dispose();
+  widthController.dispose();
+  planHeightController.dispose();
   heightController.dispose();
   return result;
 }

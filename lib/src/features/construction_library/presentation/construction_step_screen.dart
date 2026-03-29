@@ -5,6 +5,7 @@ import '../../../core/models/calculation.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
+import '../../building_step/presentation/building_step_screen.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 import 'construction_editor_sheet.dart';
 import 'material_management_screen.dart';
@@ -18,9 +19,29 @@ class ConstructionStepScreen extends ConsumerWidget {
     final catalogAsync = ref.watch(catalogSnapshotProvider);
     final libraryAsync = ref.watch(constructionLibraryProvider);
     final materialEntriesAsync = ref.watch(materialCatalogEntriesProvider);
+    final step2Fab = projectAsync.when<Widget?>(
+      data: (project) {
+        if (project == null) {
+          return null;
+        }
+        final hasSelectedConstructions =
+            project.effectiveSelectedConstructionIds.isNotEmpty;
+        return FloatingActionButton.extended(
+          onPressed: hasSelectedConstructions
+              ? () => _openStep2(context)
+              : null,
+          icon: const Icon(Icons.looks_two_outlined),
+          label: const Text('Шаг 2. Здание'),
+        );
+      },
+      loading: () => null,
+      error: (_, _) => null,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Шаг 1. Конструкции')),
+      floatingActionButton: step2Fab,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: projectAsync.when(
         data: (project) {
           if (project == null) {
@@ -52,6 +73,12 @@ class ConstructionStepScreen extends ConsumerWidget {
         error: (error, _) =>
             Center(child: Text('Ошибка загрузки проекта: $error')),
       ),
+    );
+  }
+
+  void _openStep2(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const BuildingStepScreen()),
     );
   }
 }
@@ -354,8 +381,27 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
                 const SizedBox(height: 8),
                 Text(
                   selectedConstructions.isEmpty
-                      ? 'Сначала добавьте хотя бы одну конструкцию в проект.'
-                      : 'Следующим шагом будет создание здания из выбранных конструкций.',
+                      ? 'Переход на шаг 2 заблокирован, пока в проект не добавлена хотя бы одна конструкция.'
+                      : 'Следующим шагом будет создание здания из выбранных конструкций. Используйте плавающую кнопку «Шаг 2. Здание».',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      selectedConstructions.isEmpty
+                          ? Icons.lock_outline
+                          : Icons.arrow_circle_right_outlined,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        selectedConstructions.isEmpty
+                            ? 'Кнопка перехода видна справа внизу, но станет активной только после выбора конструкции.'
+                            : 'Кнопка перехода активна справа внизу и открывает экран «Шаг 2. Здание».',
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

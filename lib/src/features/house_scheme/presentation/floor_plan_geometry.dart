@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/project.dart';
 
+const double defaultPlacedRoomWidthMeters = 3.0;
+const double defaultPlacedRoomHeightMeters = 3.0;
+
 RoomLayoutRect buildNextRoomLayout(List<Room> rooms) {
   if (rooms.isEmpty) {
     return RoomLayoutRect.defaultRect();
@@ -13,6 +16,59 @@ RoomLayoutRect buildNextRoomLayout(List<Room> rooms) {
     xMeters: lastRoom.layout.rightMeters + roomLayoutGapMeters,
     yMeters: lastRoom.layout.yMeters,
   );
+}
+
+RoomLayoutRect buildFirstAvailableRoomLayout(
+  List<Room> rooms, {
+  double widthMeters = defaultPlacedRoomWidthMeters,
+  double heightMeters = defaultPlacedRoomHeightMeters,
+}) {
+  final normalized = snapRoomLayout(
+    RoomLayoutRect(
+      xMeters: 0,
+      yMeters: 0,
+      widthMeters: widthMeters,
+      heightMeters: heightMeters,
+    ),
+  );
+  if (rooms.isEmpty) {
+    return normalized;
+  }
+
+  final maxRightMeters = rooms.fold<double>(
+    normalized.widthMeters + roomLayoutGapMeters * 4,
+    (maxValue, room) => math.max(maxValue, room.layout.rightMeters),
+  );
+  final maxBottomMeters = rooms.fold<double>(
+    normalized.heightMeters + roomLayoutGapMeters * 4,
+    (maxValue, room) => math.max(maxValue, room.layout.bottomMeters),
+  );
+  final limitX =
+      maxRightMeters + normalized.widthMeters + roomLayoutGapMeters * 4;
+  final limitY =
+      maxBottomMeters + normalized.heightMeters + roomLayoutGapMeters * 4;
+
+  for (
+    double yMeters = 0;
+    yMeters <= limitY;
+    yMeters += roomLayoutSnapStepMeters
+  ) {
+    for (
+      double xMeters = 0;
+      xMeters <= limitX;
+      xMeters += roomLayoutSnapStepMeters
+    ) {
+      final candidate = normalized.copyWith(xMeters: xMeters, yMeters: yMeters);
+      final overlaps = rooms.any(
+        (room) => layoutsOverlap(candidate, room.layout),
+      );
+      if (!overlaps) {
+        return candidate;
+      }
+    }
+  }
+
+  return buildNextRoomLayout(rooms);
 }
 
 RoomLayoutRect snapRoomLayout(RoomLayoutRect layout) {
@@ -39,6 +95,13 @@ bool layoutsEqual(RoomLayoutRect left, RoomLayoutRect right) {
       left.yMeters == right.yMeters &&
       left.widthMeters == right.widthMeters &&
       left.heightMeters == right.heightMeters;
+}
+
+bool layoutsOverlap(RoomLayoutRect left, RoomLayoutRect right) {
+  return left.xMeters < right.rightMeters &&
+      left.rightMeters > right.xMeters &&
+      left.yMeters < right.bottomMeters &&
+      left.bottomMeters > right.yMeters;
 }
 
 double deltaMetersForSide(RoomSide side, Offset delta, double pixelsPerMeter) {

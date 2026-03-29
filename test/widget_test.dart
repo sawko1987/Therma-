@@ -6,6 +6,7 @@ import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
 import 'package:smartcalc_mobile/src/features/building_step/presentation/building_step_screen.dart';
+import 'package:smartcalc_mobile/src/features/construction_library/presentation/construction_step_screen.dart';
 import 'package:smartcalc_mobile/src/features/ground_floor/presentation/ground_floor_screen.dart';
 import 'package:smartcalc_mobile/src/features/house_scheme/presentation/house_scheme_screen.dart';
 
@@ -77,6 +78,68 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Каталог материалов'), findsOneWidget);
+  });
+
+  testWidgets('step 1 shows disabled step 2 CTA without constructions', (
+    tester,
+  ) async {
+    final emptyProject = buildTestProject(constructions: const []).copyWith(
+      houseModel: HouseModel(
+        id: 'empty-house',
+        title: 'Конструктор дома',
+        rooms: [Room.defaultRoom()],
+        elements: const [],
+        openings: const [],
+        heatingDevices: const [],
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(projects: [emptyProject]),
+          ),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: ConstructionStepScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final fab = tester.widget<FloatingActionButton>(
+      find.widgetWithText(FloatingActionButton, 'Шаг 2. Здание'),
+    );
+    expect(fab.onPressed, isNull);
+    expect(find.text('ожидает'), findsOneWidget);
+  });
+
+  testWidgets('step 1 opens step 2 from floating CTA', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: ConstructionStepScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FloatingActionButton, 'Шаг 2. Здание'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Шаг 2. Здание'), findsWidgets);
+    expect(find.text('Контроль шага 2'), findsOneWidget);
   });
 
   testWidgets('creating object from step 0 opens step 1', (tester) async {

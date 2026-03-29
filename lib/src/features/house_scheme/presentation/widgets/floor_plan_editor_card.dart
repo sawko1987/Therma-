@@ -394,7 +394,7 @@ class _FloorPlanHeader extends StatelessWidget {
         _HeaderRow(onAddRoom: onAddRoom),
         const SizedBox(height: 8),
         const Text(
-          'Комнаты редактируются как прямоугольники на сетке 0.5 м. Наружные стены живут на сторонах помещений: сегмент можно сдвигать вдоль стороны и растягивать за маркер.',
+          'Новое помещение сразу появляется на плане. Выберите его, задайте длину, ширину и высоту в карточке ниже, затем двигайте по сетке 0.5 м. Наружные стены живут на сторонах помещений: сегмент можно сдвигать вдоль стороны и растягивать за маркер.',
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -550,6 +550,9 @@ class _PositionedRoomTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compactTile =
+        layout.widthMeters * pixelsPerMeter < 110 ||
+        layout.heightMeters * pixelsPerMeter < 90;
     final backgroundColor = invalid
         ? const Color(0xFFF4D4D4).withValues(alpha: 0.95)
         : editing
@@ -593,15 +596,18 @@ class _PositionedRoomTile extends StatelessWidget {
                     children: [
                       Text(
                         room.title,
-                        maxLines: 2,
+                        maxLines: compactTile ? 1 : 2,
+                        overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${layout.widthMeters.toStringAsFixed(1)} x ${layout.heightMeters.toStringAsFixed(1)} м',
-                        textAlign: TextAlign.center,
-                      ),
+                      if (!compactTile) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '${layout.widthMeters.toStringAsFixed(1)} x ${layout.heightMeters.toStringAsFixed(1)} м',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ],
                   ),
                 ),
