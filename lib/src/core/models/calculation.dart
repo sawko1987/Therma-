@@ -1,5 +1,18 @@
 import 'dart:math';
 
+enum CalculationScenarioStatus { supported, routedToGroundFloor, unsupported }
+
+extension CalculationScenarioStatusX on CalculationScenarioStatus {
+  String get label => switch (this) {
+    CalculationScenarioStatus.supported => 'Поддерживается',
+    CalculationScenarioStatus.routedToGroundFloor => 'Через полы по грунту',
+    CalculationScenarioStatus.unsupported => 'Сценарий не поддержан',
+  };
+
+  bool get isDirectlySupported =>
+      this == CalculationScenarioStatus.supported;
+}
+
 class LayerCalculationRow {
   const LayerCalculationRow({
     required this.title,
@@ -145,6 +158,8 @@ class MoistureCheckResult {
 
 class CalculationResult {
   const CalculationResult({
+    required this.scenarioStatus,
+    required this.scenarioMessage,
     required this.insideAirTemperature,
     required this.outsideAirTemperature,
     required this.insideSurfaceTemperature,
@@ -158,6 +173,8 @@ class CalculationResult {
     required this.appliedNormReferenceIds,
   });
 
+  final CalculationScenarioStatus scenarioStatus;
+  final String scenarioMessage;
   final double insideAirTemperature;
   final double outsideAirTemperature;
   final double insideSurfaceTemperature;

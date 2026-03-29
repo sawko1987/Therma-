@@ -12,6 +12,7 @@ void main() {
       id: 'floor',
       title: 'Пол по грунту',
       elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
       layers: buildWallConstruction().layers,
     );
   }
@@ -53,7 +54,7 @@ void main() {
         result.totalResistance,
         greaterThan(result.constructionResistance),
       );
-      expect(result.heatLossWatts, closeTo(204, 3));
+      expect(result.heatLossWatts, closeTo(218, 3));
       expect(result.passesResistanceCheck, isTrue);
     },
   );

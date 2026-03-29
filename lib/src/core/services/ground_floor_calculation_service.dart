@@ -73,6 +73,29 @@ class NormativeGroundFloorCalculationService
       );
     }
 
+    if (construction.floorConstructionType != FloorConstructionType.onGround) {
+      return GroundFloorCalculationResult(
+        calculation: calculation,
+        isSupported: false,
+        statusMessage:
+            'Для модуля пола по грунту нужна конструкция с типом "Пол по грунту".',
+        insideAirTemperature: baseCalculation.insideAirTemperature,
+        outsideAirTemperature: baseCalculation.outsideAirTemperature,
+        deltaTemperature:
+            baseCalculation.insideAirTemperature -
+            baseCalculation.outsideAirTemperature,
+        requiredResistance: baseCalculation.requiredResistance,
+        constructionResistance: baseCalculation.totalResistance,
+        equivalentGroundResistance: 0,
+        totalResistance: baseCalculation.totalResistance,
+        heatTransferCoefficient: 1 / baseCalculation.totalResistance,
+        heatLossWatts: 0,
+        specificHeatLossWattsPerSquareMeter: 0,
+        shapeFactor: calculation.shapeFactor,
+        appliedNormReferenceIds: baseCalculation.appliedNormReferenceIds,
+      );
+    }
+
     _validateInput(calculation);
 
     final equivalentGroundResistance = _calculateEquivalentGroundResistance(

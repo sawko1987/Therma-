@@ -200,6 +200,14 @@ class _ProjectSummary extends StatelessWidget {
                           if (showElementContext)
                             Text('Комната: ${room?.title ?? '—'}'),
                           Text('Конструкция: ${construction?.title ?? '—'}'),
+                          if (construction?.floorConstructionType
+                              case final floorType?)
+                            Text('Тип пола: ${floorType.label}'),
+                          if (construction?.crawlSpaceVentilationMode
+                              case final ventilationMode?)
+                            Text(
+                              'Вентиляция техподполья: ${ventilationMode.label}',
+                            ),
                           if (project?.datasetMigrationLabel
                               case final migrationLabel?)
                             Text(migrationLabel),
@@ -251,6 +259,32 @@ class _CalculationBody extends StatelessWidget {
 
     return Column(
       children: [
+        if (!calculation.scenarioStatus.isDirectlySupported ||
+            (construction.floorConstructionType ==
+                    FloorConstructionType.overCrawlSpace &&
+                construction.crawlSpaceVentilationMode == null)) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    calculation.scenarioStatus.isDirectlySupported
+                        ? 'Требует уточнения'
+                        : calculation.scenarioStatus.label,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(calculation.scenarioMessage),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -311,160 +345,163 @@ class _CalculationBody extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Сезонный влагорежим',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                Text(calculation.moistureCheck.summary),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _MetricTile(
-                      label: 'Σ паросопротивление',
-                      value:
-                          '${calculation.moistureCheck.totalVaporResistance.toStringAsFixed(2)} м²·ч·Па/мг',
-                    ),
-                    _MetricTile(
-                      label: 'Минимум для помещения',
-                      value:
-                          '${calculation.moistureCheck.minimumRecommendedVaporResistance.toStringAsFixed(2)} м²·ч·Па/мг',
-                    ),
-                    _MetricTile(
-                      label: 'Критический сезон',
-                      value: calculation.moistureCheck.criticalSeasonLabel,
-                    ),
-                    _MetricTile(
-                      label: 'Итог',
-                      value: calculation.moistureCheck.verdict.label,
-                    ),
-                    _MetricTile(
-                      label: 'Финальное накопление',
-                      value:
-                          '${calculation.moistureCheck.finalAccumulationKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
-                    ),
-                    _MetricTile(
-                      label: 'Допустимый максимум',
-                      value:
-                          '${calculation.moistureCheck.maximumAllowedAccumulationKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
+        if (calculation.scenarioStatus.isDirectlySupported) ...[
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Сезонный влагорежим',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(calculation.moistureCheck.summary),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _MetricTile(
+                        label: 'Σ паросопротивление',
+                        value:
+                            '${calculation.moistureCheck.totalVaporResistance.toStringAsFixed(2)} м²·ч·Па/мг',
+                      ),
+                      _MetricTile(
+                        label: 'Минимум для помещения',
+                        value:
+                            '${calculation.moistureCheck.minimumRecommendedVaporResistance.toStringAsFixed(2)} м²·ч·Па/мг',
+                      ),
+                      _MetricTile(
+                        label: 'Критический сезон',
+                        value: calculation.moistureCheck.criticalSeasonLabel,
+                      ),
+                      _MetricTile(
+                        label: 'Итог',
+                        value: calculation.moistureCheck.verdict.label,
+                      ),
+                      _MetricTile(
+                        label: 'Финальное накопление',
+                        value:
+                            '${calculation.moistureCheck.finalAccumulationKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
+                      ),
+                      _MetricTile(
+                        label: 'Допустимый максимум',
+                        value:
+                            '${calculation.moistureCheck.maximumAllowedAccumulationKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: calculation.moistureCheck.indicators
+                        .map(
+                          (indicator) => _IndicatorTile(
+                            indicator: indicator,
+                            norm: catalog.norms
+                                .where(
+                                  (norm) => norm.id == indicator.normReferenceId,
+                                )
+                                .firstOrNull,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  if (calculation
+                      .moistureCheck
+                      .condensationInterfaceTitles
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Критические границы: ${calculation.moistureCheck.condensationInterfaceTitles.join(', ')}',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: calculation.moistureCheck.indicators
-                      .map(
-                        (indicator) => _IndicatorTile(
-                          indicator: indicator,
-                          norm: catalog.norms
-                              .where(
-                                (norm) => norm.id == indicator.normReferenceId,
-                              )
-                              .firstOrNull,
-                        ),
-                      )
-                      .toList(),
-                ),
-                if (calculation
-                    .moistureCheck
-                    .condensationInterfaceTitles
-                    .isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (calculation.scenarioStatus.isDirectlySupported) ...[
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    'Критические границы: ${calculation.moistureCheck.condensationInterfaceTitles.join(', ')}',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    'Сечение конструкции',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 180,
+                    child: CustomPaint(
+                      painter: SectionPainter(
+                        construction: construction,
+                        materials: materialMap,
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
                   ),
                 ],
-              ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Сечение конструкции',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 180,
-                  child: CustomPaint(
-                    painter: SectionPainter(
-                      construction: construction,
-                      materials: materialMap,
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Профиль парциального давления',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
-                    child: const SizedBox.expand(),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Профиль парциального давления',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Критический период: ${calculation.moistureCheck.criticalSeasonLabel}',
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 220,
-                  child: CustomPaint(
-                    painter: LineChartPainter(
-                      lines: [
-                        ChartLine(
-                          series:
-                              calculation.moistureCheck.partialPressureSeries,
-                          color: const Color(0xFF8B5E34),
-                        ),
-                        ChartLine(
-                          series: calculation
-                              .moistureCheck
-                              .saturationPressureSeries,
-                          color: const Color(0xFF1D4ED8),
-                        ),
-                      ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'Критический период: ${calculation.moistureCheck.criticalSeasonLabel}',
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 220,
+                    child: CustomPaint(
+                      painter: LineChartPainter(
+                        lines: [
+                          ChartLine(
+                            series:
+                                calculation.moistureCheck.partialPressureSeries,
+                            color: const Color(0xFF8B5E34),
+                          ),
+                          ChartLine(
+                            series: calculation
+                                .moistureCheck
+                                .saturationPressureSeries,
+                            color: const Color(0xFF1D4ED8),
+                          ),
+                        ],
+                      ),
+                      child: const SizedBox.expand(),
                     ),
-                    child: const SizedBox.expand(),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Card(
+          const SizedBox(height: 16),
+          Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -516,8 +553,8 @@ class _CalculationBody extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Card(
+          const SizedBox(height: 16),
+          Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -556,8 +593,8 @@ class _CalculationBody extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Card(
+          const SizedBox(height: 16),
+          Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -595,8 +632,8 @@ class _CalculationBody extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Card(
+          const SizedBox(height: 16),
+          Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -645,8 +682,8 @@ class _CalculationBody extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Card(
+          const SizedBox(height: 16),
+          Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -695,6 +732,7 @@ class _CalculationBody extends StatelessWidget {
             ),
           ),
         ),
+        ],
         const SizedBox(height: 16),
         Card(
           child: Padding(

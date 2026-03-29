@@ -156,6 +156,7 @@ void main() {
       id: 'floor',
       title: 'Пол',
       elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
       layers: buildWallConstruction().layers,
     );
 

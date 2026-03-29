@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
 import 'package:smartcalc_mobile/src/core/models/versioning.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
@@ -150,5 +151,86 @@ void main() {
       find.textContaining('Не удалось экспортировать PDF'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('thermocalc renders full sections for supported floor scenario', (
+    tester,
+  ) async {
+    final floorConstruction = Construction(
+      id: 'floor-basement',
+      title: 'Пол над подвалом',
+      elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.overBasement,
+      layers: buildWallConstruction().layers,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(
+              projects: [buildTestProject(construction: floorConstruction)],
+            ),
+          ),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: ThermocalcScreen(
+            constructionId: 'floor-basement',
+            showElementContext: false,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Тип пола: Пол над подвалом'), findsOneWidget);
+    expect(find.text('Сезонный влагорежим'), findsOneWidget);
+    expect(find.textContaining('Полы по грунту'), findsNothing);
+  });
+
+  testWidgets('thermocalc warns when crawl space ventilation is not chosen', (
+    tester,
+  ) async {
+    final floorConstruction = Construction(
+      id: 'floor-crawlspace',
+      title: 'Пол над техподпольем',
+      elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.overCrawlSpace,
+      layers: buildWallConstruction().layers,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(
+              projects: [buildTestProject(construction: floorConstruction)],
+            ),
+          ),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: ThermocalcScreen(
+            constructionId: 'floor-crawlspace',
+            showElementContext: false,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Тип пола: Пол над техподпольем'), findsOneWidget);
+    expect(find.text('Требует уточнения'), findsOneWidget);
+    expect(find.textContaining('не выбран режим вентиляции'), findsOneWidget);
+    expect(find.text('Сезонный влагорежим'), findsOneWidget);
   });
 }

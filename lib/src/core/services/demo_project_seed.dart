@@ -64,6 +64,7 @@ const Project demoProject = Project(
       id: 'floor-on-ground',
       title: 'Пол по грунту',
       elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
       layers: [
         ConstructionLayer(
           id: 'screed',

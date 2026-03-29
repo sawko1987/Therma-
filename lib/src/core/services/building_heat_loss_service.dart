@@ -1,4 +1,5 @@
 import '../models/building_heat_loss.dart';
+import '../models/calculation.dart';
 import '../models/catalog.dart';
 import '../models/project.dart';
 import 'interfaces.dart';
@@ -71,6 +72,11 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           project: project,
           construction: construction,
         );
+        if (!result.scenarioStatus.isDirectlySupported) {
+          roomUnresolvedElements.add(element);
+          unresolvedElements.add(element);
+          continue;
+        }
         final elementOpenings =
             openingsByElementId[element.id] ?? const <EnvelopeOpening>[];
         final openingArea = elementOpenings.fold<double>(

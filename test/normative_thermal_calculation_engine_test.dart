@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smartcalc_mobile/src/core/models/calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/catalog.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
@@ -230,5 +231,131 @@ void main() {
         ),
       ),
     );
+  });
+
+  group('floor scenarios', () {
+    Construction buildFloorConstruction(
+      FloorConstructionType floorType, {
+      CrawlSpaceVentilationMode? crawlSpaceVentilationMode,
+    }) {
+      return Construction(
+        id: 'floor-${floorType.storageKey}',
+        title: floorType.label,
+        elementKind: ConstructionElementKind.floor,
+        floorConstructionType: floorType,
+        crawlSpaceVentilationMode: crawlSpaceVentilationMode,
+        layers: buildWallConstruction().layers,
+      );
+    }
+
+    test('floor on ground stays routed to dedicated ground-floor module', () async {
+      final construction = buildFloorConstruction(FloorConstructionType.onGround);
+      final project = buildTestProject(construction: construction);
+
+      final result = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+        construction: construction,
+      );
+
+      expect(
+        result.scenarioStatus,
+        CalculationScenarioStatus.routedToGroundFloor,
+      );
+      expect(result.scenarioMessage, contains('Полы по грунту'));
+    });
+
+    test('floor over crawl space is supported in thermocalc', () async {
+      final construction = buildFloorConstruction(
+        FloorConstructionType.overCrawlSpace,
+      );
+      final project = buildTestProject(construction: construction);
+
+      final result = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+        construction: construction,
+      );
+
+      expect(result.scenarioStatus, CalculationScenarioStatus.supported);
+      expect(result.requiredResistance, greaterThan(3.0));
+      expect(result.totalResistance, greaterThan(result.requiredResistance));
+      expect(result.scenarioMessage, contains('не выбран режим вентиляции'));
+    });
+
+    test('crawl space ventilation mode changes resulting resistance', () async {
+      final ventilatedConstruction = buildFloorConstruction(
+        FloorConstructionType.overCrawlSpace,
+        crawlSpaceVentilationMode: CrawlSpaceVentilationMode.ventilated,
+      );
+      final unventilatedConstruction = buildFloorConstruction(
+        FloorConstructionType.overCrawlSpace,
+        crawlSpaceVentilationMode: CrawlSpaceVentilationMode.unventilated,
+      );
+
+      final ventilatedResult = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: buildTestProject(construction: ventilatedConstruction),
+        construction: ventilatedConstruction,
+      );
+      final unventilatedResult = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: buildTestProject(construction: unventilatedConstruction),
+        construction: unventilatedConstruction,
+      );
+
+      expect(
+        unventilatedResult.totalResistance,
+        greaterThan(ventilatedResult.totalResistance),
+      );
+      expect(
+        unventilatedResult.scenarioMessage,
+        contains('промежуточную температуру техподполья'),
+      );
+    });
+
+    test('floor over basement is supported in thermocalc', () async {
+      final construction = buildFloorConstruction(
+        FloorConstructionType.overBasement,
+      );
+      final project = buildTestProject(construction: construction);
+
+      final result = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+        construction: construction,
+      );
+
+      expect(result.scenarioStatus, CalculationScenarioStatus.supported);
+      expect(result.requiredResistance, greaterThan(3.0));
+      expect(result.totalResistance, greaterThan(result.requiredResistance));
+      expect(result.scenarioMessage, contains('неотапливаемым подвалом'));
+    });
+
+    test('floor over driveway is supported with stronger requirement group', () async {
+      final construction = buildFloorConstruction(
+        FloorConstructionType.overDriveway,
+      );
+      final project = buildTestProject(construction: construction);
+      final basementConstruction = buildFloorConstruction(
+        FloorConstructionType.overBasement,
+      );
+      final basementProject = buildTestProject(construction: basementConstruction);
+
+      final result = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+        construction: construction,
+      );
+      final basementResult = await engine.calculate(
+        catalog: testCatalogSnapshot,
+        project: basementProject,
+        construction: basementConstruction,
+      );
+
+      expect(result.scenarioStatus, CalculationScenarioStatus.supported);
+      expect(result.requiredResistance, greaterThan(basementResult.requiredResistance));
+      expect(result.totalResistance, lessThan(basementResult.totalResistance));
+    });
   });
 }

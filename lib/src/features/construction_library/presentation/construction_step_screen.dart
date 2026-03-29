@@ -514,6 +514,8 @@ bool _matchesConstruction(
   final haystack = [
     construction.title,
     construction.elementKind.label,
+    construction.floorConstructionType?.label,
+    construction.crawlSpaceVentilationMode?.label,
     ...construction.layers.expand((layer) {
       final material = materialMap[layer.materialId];
       return [
@@ -575,6 +577,14 @@ class _ConstructionCard extends StatelessWidget {
     final layerTitles = construction.layers
         .map((layer) => materialMap[layer.materialId]?.name ?? layer.materialId)
         .join(', ');
+    final summaryParts = [
+      construction.elementKind.label,
+      if (construction.floorConstructionType case final floorType?)
+        floorType.label,
+      if (construction.crawlSpaceVentilationMode case final ventilationMode?)
+        ventilationMode.label,
+      'слоёв ${construction.layers.length}',
+    ];
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -622,7 +632,7 @@ class _ConstructionCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${construction.elementKind.label} • слоёв ${construction.layers.length}',
+            summaryParts.join(' • '),
           ),
           const SizedBox(height: 4),
           Text(layerTitles, style: Theme.of(context).textTheme.bodySmall),
@@ -669,6 +679,25 @@ class _ConstructionStatusFooter extends ConsumerWidget {
                   onPressed: onOpenCalculation,
                   icon: const Icon(Icons.analytics_outlined),
                   label: const Text('Проверить расчет'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!result.scenarioStatus.isDirectlySupported) {
+          return _StatusContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Chip(label: Text(result.scenarioStatus.label)),
+                const SizedBox(height: 8),
+                Text(result.scenarioMessage),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: onOpenCalculation,
+                  icon: const Icon(Icons.analytics_outlined),
+                  label: const Text('Открыть расчет'),
                 ),
               ],
             ),

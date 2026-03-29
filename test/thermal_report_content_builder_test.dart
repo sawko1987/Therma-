@@ -28,7 +28,7 @@ void main() {
     expect(content.projectName, 'Demo project');
     expect(content.climateLabel, 'Москва, Московская область');
     expect(content.roomLabel, 'Жилая комната');
-    expect(content.thermalMetrics, hasLength(4));
+    expect(content.thermalMetrics, hasLength(5));
     expect(content.moistureSummary, isNotEmpty);
     expect(content.thermalLayerRows, hasLength(calculation.layerRows.length));
     expect(

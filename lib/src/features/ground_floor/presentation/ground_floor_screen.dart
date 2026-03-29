@@ -176,9 +176,11 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
 
   Future<void> _handleAdd(Project project) async {
     final floorConstruction = project.constructions.firstWhere(
-      (item) => item.elementKind == ConstructionElementKind.floor,
+      (item) =>
+          item.elementKind == ConstructionElementKind.floor &&
+          item.floorConstructionType == FloorConstructionType.onGround,
       orElse: () => throw StateError(
-        'Для нового расчета нужна хотя бы одна конструкция типа "Пол".',
+        'Для нового расчета нужна хотя бы одна конструкция типа "Пол по грунту".',
       ),
     );
     final calculation = GroundFloorCalculation(
@@ -334,7 +336,9 @@ class _CalculationListCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasFloorConstruction = project.constructions.any(
-      (item) => item.elementKind == ConstructionElementKind.floor,
+      (item) =>
+          item.elementKind == ConstructionElementKind.floor &&
+          item.floorConstructionType == FloorConstructionType.onGround,
     );
     return Card(
       child: Padding(
@@ -363,7 +367,7 @@ class _CalculationListCard extends StatelessWidget {
             if (!hasFloorConstruction) ...[
               const SizedBox(height: 12),
               const Text(
-                'Сначала добавьте в проект хотя бы одну конструкцию типа "Пол".',
+                'Сначала добавьте в проект хотя бы одну конструкцию типа "Пол по грунту".',
               ),
             ],
             if (project.groundFloorCalculations.isNotEmpty) ...[
@@ -441,7 +445,11 @@ class _EditorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final floorConstructions = project.constructions
-        .where((item) => item.elementKind == ConstructionElementKind.floor)
+        .where(
+          (item) =>
+              item.elementKind == ConstructionElementKind.floor &&
+              item.floorConstructionType == FloorConstructionType.onGround,
+        )
         .toList(growable: false);
 
     return Card(
@@ -465,7 +473,7 @@ class _EditorCard extends StatelessWidget {
             const SizedBox(height: 12),
             DropdownButtonFormField<GroundFloorCalculationKind>(
               key: const ValueKey('ground-floor-kind'),
-              value: selectedKind,
+              initialValue: selectedKind,
               decoration: const InputDecoration(labelText: 'Сценарий'),
               items: GroundFloorCalculationKind.values
                   .map((item) {
@@ -484,7 +492,7 @@ class _EditorCard extends StatelessWidget {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               key: const ValueKey('ground-floor-construction'),
-              value: selectedConstructionId,
+              initialValue: selectedConstructionId,
               decoration: const InputDecoration(labelText: 'Конструкция пола'),
               items: floorConstructions
                   .map((item) {

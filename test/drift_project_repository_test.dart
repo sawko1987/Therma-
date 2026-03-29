@@ -31,6 +31,14 @@ void main() {
         buildTestProject(
           climatePointId: 'novosibirsk',
           roomPreset: RoomPreset.attic,
+          construction: Construction(
+            id: 'crawl-floor',
+            title: 'Пол над техподпольем',
+            elementKind: ConstructionElementKind.floor,
+            floorConstructionType: FloorConstructionType.overCrawlSpace,
+            crawlSpaceVentilationMode: CrawlSpaceVentilationMode.ventilated,
+            layers: buildWallConstruction().layers,
+          ),
         ).copyWith(
           customMaterials: const [
             MaterialEntry(
@@ -56,6 +64,14 @@ void main() {
       source.constructions.single.elementKind,
     );
     expect(
+      restored.constructions.single.floorConstructionType,
+      source.constructions.single.floorConstructionType,
+    );
+    expect(
+      restored.constructions.single.crawlSpaceVentilationMode,
+      source.constructions.single.crawlSpaceVentilationMode,
+    );
+    expect(
       restored.constructions.single.layers,
       hasLength(source.constructions.single.layers.length),
     );
@@ -68,7 +84,11 @@ void main() {
       restored.houseModel.elements.single.constructionId,
       source.constructions.single.id,
     );
-    expect(restored.houseModel.elements.single.wallPlacement, isNotNull);
+    expect(
+      restored.houseModel.elements.single.elementKind,
+      ConstructionElementKind.floor,
+    );
+    expect(restored.houseModel.elements.single.wallPlacement, isNull);
     expect(restored.houseModel.rooms.single.layout.xMeters, 0);
     expect(restored.houseModel.rooms.single.layout.widthMeters, 4);
     expect(restored.customMaterials, hasLength(1));

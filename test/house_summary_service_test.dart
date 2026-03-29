@@ -59,11 +59,11 @@ void main() {
       expect(summary.totalOpeningAreaSquareMeters, 4);
       expect(summary.totalOpaqueAreaSquareMeters, 16);
       expect(summary.totalOpeningCount, 1);
-      expect(summary.totalOpeningHeatLossWatts, closeTo(172, 2));
-      expect(summary.totalHeatLossWatts, closeTo(294, 3));
+      expect(summary.totalOpeningHeatLossWatts, closeTo(184, 2));
+      expect(summary.totalHeatLossWatts, closeTo(316.52, 3));
       expect(summary.totalHeatingDeviceCount, 1);
       expect(summary.totalInstalledHeatingPowerWatts, 450);
-      expect(summary.totalHeatingPowerDeltaWatts, closeTo(156, 3));
+      expect(summary.totalHeatingPowerDeltaWatts, closeTo(133.48, 3));
       expect(summary.roomResults.single.totalOpaqueAreaSquareMeters, 16);
       expect(summary.roomResults.single.installedHeatingPowerWatts, 450);
     },
@@ -141,6 +141,58 @@ void main() {
       expect(livingRoom.insideAirTemperature, 20);
       expect(bedroom.insideAirTemperature, 18);
       expect(livingRoom.heatLossWatts, greaterThan(bedroom.heatLossWatts));
+    },
+  );
+
+  test(
+    'building heat loss includes supported floor scenarios in envelope sum',
+    () async {
+      final floor = Construction(
+        id: 'floor-over-basement',
+        title: 'Пол над подвалом',
+        elementKind: ConstructionElementKind.floor,
+        floorConstructionType: FloorConstructionType.overBasement,
+        layers: buildWallConstruction().layers,
+      );
+      final project = buildTestProject(
+        constructions: [buildWallConstruction(), floor],
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Конструктор дома',
+          rooms: [Room.defaultRoom()],
+          elements: [
+            const HouseEnvelopeElement(
+              id: 'element-wall',
+              roomId: defaultRoomId,
+              title: 'Наружная стена',
+              elementKind: ConstructionElementKind.wall,
+              areaSquareMeters: 10,
+              constructionId: 'wall',
+            ),
+            HouseEnvelopeElement(
+              id: 'element-floor',
+              roomId: defaultRoomId,
+              title: 'Пол над подвалом',
+              elementKind: ConstructionElementKind.floor,
+              areaSquareMeters: 16,
+              constructionId: floor.id,
+            ),
+          ],
+          openings: const [],
+        ),
+      );
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
+
+      final summary = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+      );
+
+      expect(summary.roomResults.single.unresolvedElements, isEmpty);
+      expect(summary.totalEnvelopeAreaSquareMeters, 26);
+      expect(summary.totalHeatLossWatts, greaterThan(0));
     },
   );
 }

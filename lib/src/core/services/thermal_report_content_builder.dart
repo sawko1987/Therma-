@@ -32,6 +32,10 @@ class ThermalReportContentBuilder implements ReportContentBuilder {
       generatedAt: DateTime.now(),
       thermalMetrics: [
         ReportMetric(
+          label: 'Статус сценария',
+          value: calculation.scenarioStatus.label,
+        ),
+        ReportMetric(
           label: 'Фактическое R',
           value: '${_format2(calculation.totalResistance)} м2·°C/Вт',
         ),
@@ -59,8 +63,11 @@ class ThermalReportContentBuilder implements ReportContentBuilder {
             ),
           )
           .toList(growable: false),
-      moistureSummary: calculation.moistureCheck.summary,
-      moistureMetrics: [
+      moistureSummary: calculation.scenarioStatus.isDirectlySupported
+          ? calculation.moistureCheck.summary
+          : calculation.scenarioMessage,
+      moistureMetrics: calculation.scenarioStatus.isDirectlySupported
+          ? [
         ReportMetric(
           label: 'Общее паросопротивление',
           value:
@@ -89,8 +96,10 @@ class ThermalReportContentBuilder implements ReportContentBuilder {
           value:
               '${_format3(calculation.moistureCheck.maximumAllowedAccumulationKgPerSquareMeter)} кг/м2',
         ),
-      ],
-      moistureIndicators: calculation.moistureCheck.indicators
+      ]
+          : const [],
+      moistureIndicators: calculation.scenarioStatus.isDirectlySupported
+          ? calculation.moistureCheck.indicators
           .map(
             (indicator) => ReportIndicatorEntry(
               title: indicator.title,
@@ -99,8 +108,10 @@ class ThermalReportContentBuilder implements ReportContentBuilder {
               isPassed: indicator.isPassed,
             ),
           )
-          .toList(growable: false),
-      thermalLayerRows: calculation.layerRows
+          .toList(growable: false)
+          : const [],
+      thermalLayerRows: calculation.scenarioStatus.isDirectlySupported
+          ? calculation.layerRows
           .map(
             (row) => ReportRowEntry(
               title: row.title,
@@ -110,8 +121,10 @@ class ThermalReportContentBuilder implements ReportContentBuilder {
                   '${_format1(row.tempStart)} -> ${_format1(row.tempEnd)} °C',
             ),
           )
-          .toList(growable: false),
-      vaporLayerRows: calculation.moistureCheck.layerRows
+          .toList(growable: false)
+          : const [],
+      vaporLayerRows: calculation.scenarioStatus.isDirectlySupported
+          ? calculation.moistureCheck.layerRows
           .map(
             (row) => ReportRowEntry(
               title: row.title,
@@ -120,8 +133,10 @@ class ThermalReportContentBuilder implements ReportContentBuilder {
               trailing: 'Σ ${_format2(row.cumulativeVaporResistance)}',
             ),
           )
-          .toList(growable: false),
-      seasonalRows: calculation.moistureCheck.seasonalPeriods
+          .toList(growable: false)
+          : const [],
+      seasonalRows: calculation.scenarioStatus.isDirectlySupported
+          ? calculation.moistureCheck.seasonalPeriods
           .map(
             (period) => ReportRowEntry(
               title: period.label,
@@ -130,7 +145,8 @@ class ThermalReportContentBuilder implements ReportContentBuilder {
               trailing: 'Σ ${_format3(period.endAccumulationKgPerSquareMeter)}',
             ),
           )
-          .toList(growable: false),
+          .toList(growable: false)
+          : const [],
       appliedNorms: appliedNorms,
     );
   }

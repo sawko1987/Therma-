@@ -30,6 +30,7 @@ class ProjectMigrationService {
 
     return MigratedProject(
       project: project.copyWith(
+        constructions: _migrateConstructions(project),
         houseModel: _migrateHouseModel(project),
         groundFloorCalculations: _migrateGroundFloorCalculations(project),
         datasetVersion: currentDatasetVersion,
@@ -49,6 +50,26 @@ class ProjectMigrationService {
       return project.groundFloorCalculations;
     }
     return const [];
+  }
+
+  List<Construction> _migrateConstructions(Project project) {
+    if (project.sourceProjectFormatVersion >= 11) {
+      return project.constructions;
+    }
+    return project.constructions
+        .map((construction) {
+          if (project.sourceProjectFormatVersion < 10) {
+            if (construction.elementKind != ConstructionElementKind.floor ||
+                construction.floorConstructionType != null) {
+              return construction;
+            }
+            return construction.copyWith(
+              floorConstructionType: FloorConstructionType.onGround,
+            );
+          }
+          return construction;
+        })
+        .toList(growable: false);
   }
 
   HouseModel _migrateHouseModel(Project project) {

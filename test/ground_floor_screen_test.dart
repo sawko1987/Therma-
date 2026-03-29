@@ -15,6 +15,7 @@ void main() {
       id: 'floor',
       title: 'Пол по грунту',
       elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
       layers: buildWallConstruction().layers,
     );
   }
@@ -106,6 +107,7 @@ void main() {
       'Пол гостиной',
     );
     await tester.ensureVisible(find.byKey(const ValueKey('ground-floor-save')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('ground-floor-save')));
     await tester.pumpAndSettle();
 

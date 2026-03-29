@@ -49,18 +49,31 @@ class NormativeThermalCalculationEngine implements ThermalCalculationEngine {
       catalog.moistureRules,
       project.roomPreset,
     );
-    final boundary = _resolveSurfaceResistances(construction.elementKind);
+    final boundary = _resolveSurfaceResistances(construction);
     final insideAirTemperature = roomCondition.insideTemperature;
     final outsideAirTemperature = climate.designTemperature;
+    final floorScenario = _resolveFloorScenario(construction);
     final totalLayerResistance = breakdown.fold<double>(
       0,
       (sum, item) => sum + item.resistance,
     );
-    final totalResistance =
+    final constructionResistance =
         boundary.inside + totalLayerResistance + boundary.outside;
+    final totalResistance =
+        constructionResistance + floorScenario.additionalResistance;
     final requiredResistance = _resolveRequiredResistance(
       gsop: climate.gsop,
-      elementKind: construction.elementKind,
+      construction: construction,
+    );
+    final crawlSpaceTemperature = floorScenario.additionalResistance > 0
+        ? outsideAirTemperature +
+              (insideAirTemperature - outsideAirTemperature) *
+                  (floorScenario.additionalResistance / totalResistance)
+        : null;
+    final scenarioStatus = _resolveScenarioStatus(construction);
+    final scenarioMessage = _buildScenarioMessage(
+      construction,
+      crawlSpaceTemperature,
     );
     final deltaTemperature = insideAirTemperature - outsideAirTemperature;
     final insideSurfaceTemperature =
@@ -109,6 +122,8 @@ class NormativeThermalCalculationEngine implements ThermalCalculationEngine {
         .toList(growable: false);
 
     return CalculationResult(
+      scenarioStatus: scenarioStatus,
+      scenarioMessage: scenarioMessage,
       insideAirTemperature: insideAirTemperature,
       outsideAirTemperature: outsideAirTemperature,
       insideSurfaceTemperature: insideSurfaceTemperature,
@@ -518,10 +533,8 @@ class NormativeThermalCalculationEngine implements ThermalCalculationEngine {
         exp((21.875 * temperatureCelsius) / (265.5 + temperatureCelsius));
   }
 
-  _SurfaceResistances _resolveSurfaceResistances(
-    ConstructionElementKind elementKind,
-  ) {
-    return switch (elementKind) {
+  _SurfaceResistances _resolveSurfaceResistances(Construction construction) {
+    return switch (construction.elementKind) {
       ConstructionElementKind.wall => const _SurfaceResistances(
         inside: 0.13,
         outside: 0.04,
@@ -530,9 +543,9 @@ class NormativeThermalCalculationEngine implements ThermalCalculationEngine {
         inside: 0.10,
         outside: 0.04,
       ),
-      ConstructionElementKind.floor => const _SurfaceResistances(
-        inside: 0.17,
-        outside: 0.04,
+      ConstructionElementKind.floor => _resolveFloorSurfaceResistances(
+        construction.floorConstructionType,
+        construction.crawlSpaceVentilationMode,
       ),
       ConstructionElementKind.ceiling => const _SurfaceResistances(
         inside: 0.10,
@@ -543,9 +556,9 @@ class NormativeThermalCalculationEngine implements ThermalCalculationEngine {
 
   double _resolveRequiredResistance({
     required double gsop,
-    required ConstructionElementKind elementKind,
+    required Construction construction,
   }) {
-    final coefficients = switch (elementKind) {
+    final coefficients = switch (construction.elementKind) {
       ConstructionElementKind.wall => const _RequirementCoefficients(
         slope: 0.00035,
         intercept: 1.65,
@@ -556,10 +569,8 @@ class NormativeThermalCalculationEngine implements ThermalCalculationEngine {
         intercept: 2.20,
         minimum: 3.30,
       ),
-      ConstructionElementKind.floor => const _RequirementCoefficients(
-        slope: 0.00045,
-        intercept: 1.90,
-        minimum: 3.00,
+      ConstructionElementKind.floor => _resolveFloorRequirementCoefficients(
+        construction.floorConstructionType,
       ),
       ConstructionElementKind.ceiling => const _RequirementCoefficients(
         slope: 0.00040,
@@ -572,6 +583,138 @@ class NormativeThermalCalculationEngine implements ThermalCalculationEngine {
       coefficients.minimum,
       coefficients.intercept + gsop * coefficients.slope,
     );
+  }
+
+  CalculationScenarioStatus _resolveScenarioStatus(Construction construction) {
+    if (construction.elementKind != ConstructionElementKind.floor) {
+      return CalculationScenarioStatus.supported;
+    }
+    return switch (construction.floorConstructionType) {
+      FloorConstructionType.onGround =>
+        CalculationScenarioStatus.routedToGroundFloor,
+      FloorConstructionType.overCrawlSpace ||
+      FloorConstructionType.overBasement ||
+      FloorConstructionType.overDriveway =>
+        CalculationScenarioStatus.supported,
+      null => CalculationScenarioStatus.unsupported,
+    };
+  }
+
+  String _buildScenarioMessage(
+    Construction construction,
+    double? crawlSpaceTemperature,
+  ) {
+    if (construction.elementKind != ConstructionElementKind.floor) {
+      return 'Расчет выполнен по общему сценарию ограждающей конструкции.';
+    }
+    switch (construction.floorConstructionType) {
+      case FloorConstructionType.onGround:
+        return 'Тип пола "${FloorConstructionType.onGround.label}" рассчитывается через отдельный модуль "Полы по грунту".';
+      case FloorConstructionType.overCrawlSpace:
+        return _buildCrawlSpaceScenarioMessage(
+          construction,
+          crawlSpaceTemperature,
+        );
+      case FloorConstructionType.overBasement:
+        return 'Сценарий "${FloorConstructionType.overBasement.label}" рассчитывается как перекрытие над неотапливаемым подвалом по отдельным правилам СП 50.13330.2024.';
+      case FloorConstructionType.overDriveway:
+        return 'Сценарий "${FloorConstructionType.overDriveway.label}" рассчитывается как перекрытие над проездом по отдельным правилам СП 50.13330.2024.';
+      case null:
+        return 'Для пола не указан тип конструкции, поэтому специализированный сценарий расчета недоступен.';
+    }
+  }
+
+  String _buildCrawlSpaceScenarioMessage(
+    Construction construction,
+    double? crawlSpaceTemperature,
+  ) {
+    if (construction.crawlSpaceVentilationMode == null) {
+      return 'Для "${FloorConstructionType.overCrawlSpace.label}" не выбран режим вентиляции. Пока используется упрощенный legacy-расчет; для точного результата выберите "Вентилируемое" или "Невентилируемое".';
+    }
+    final temperatureSuffix = crawlSpaceTemperature == null
+        ? ''
+        : ' (${crawlSpaceTemperature.toStringAsFixed(1)} °C)';
+    return 'Сценарий "${FloorConstructionType.overCrawlSpace.label}" рассчитывается через промежуточную температуру техподполья$temperatureSuffix с учетом режима "${construction.crawlSpaceVentilationMode!.label.toLowerCase()}".';
+  }
+
+  _SurfaceResistances _resolveFloorSurfaceResistances(
+    FloorConstructionType? floorType,
+    CrawlSpaceVentilationMode? crawlSpaceVentilationMode,
+  ) {
+    // Assumptions derived from SP 50.13330.2024 table 6 groupings:
+    // - floors over driveways use external winter surface conditions close to
+    //   open outdoor exposure (alpha_n = 23 W/(m²·°C));
+    // - floors over crawl spaces / basements default to the non-ventilated
+    //   unheated volume case (alpha_n = 6 W/(m²·°C)) because the UI does not
+    //   yet split those scenarios by ventilation regime.
+    return switch (floorType) {
+      FloorConstructionType.overDriveway => const _SurfaceResistances(
+        inside: 0.17,
+        outside: 1 / 23,
+      ),
+      FloorConstructionType.overBasement => const _SurfaceResistances(
+        inside: 0.17,
+        outside: 1 / 6,
+      ),
+      FloorConstructionType.overCrawlSpace => _SurfaceResistances(
+        inside: 0.17,
+        outside: switch (crawlSpaceVentilationMode) {
+          CrawlSpaceVentilationMode.ventilated => 1 / 12,
+          CrawlSpaceVentilationMode.unventilated => 1 / 6,
+          null => 1 / 6,
+        },
+      ),
+      FloorConstructionType.onGround || null => const _SurfaceResistances(
+        inside: 0.17,
+        outside: 0.04,
+      ),
+    };
+  }
+
+  _FloorScenario _resolveFloorScenario(
+    Construction construction,
+  ) {
+    if (construction.elementKind != ConstructionElementKind.floor) {
+      return const _FloorScenario(additionalResistance: 0);
+    }
+    if (construction.floorConstructionType !=
+        FloorConstructionType.overCrawlSpace) {
+      return const _FloorScenario(additionalResistance: 0);
+    }
+    return switch (construction.crawlSpaceVentilationMode) {
+      CrawlSpaceVentilationMode.ventilated => const _FloorScenario(
+        additionalResistance: 0.35,
+      ),
+      CrawlSpaceVentilationMode.unventilated => const _FloorScenario(
+        additionalResistance: 1.20,
+      ),
+      null => const _FloorScenario(additionalResistance: 0.75),
+    };
+  }
+
+  _RequirementCoefficients _resolveFloorRequirementCoefficients(
+    FloorConstructionType? floorType,
+  ) {
+    // Assumptions derived from SP 50.13330.2024 table 3 categories:
+    // - floors above unheated basements / technical crawl spaces follow the
+    //   current "floor" requirement group;
+    // - floors above driveways align with the stronger group used for roofs /
+    //   coverings over open passages.
+    return switch (floorType) {
+      FloorConstructionType.overDriveway => const _RequirementCoefficients(
+        slope: 0.00050,
+        intercept: 2.20,
+        minimum: 3.30,
+      ),
+      FloorConstructionType.overCrawlSpace ||
+      FloorConstructionType.overBasement ||
+      FloorConstructionType.onGround ||
+      null => const _RequirementCoefficients(
+        slope: 0.00045,
+        intercept: 1.90,
+        minimum: 3.00,
+      ),
+    };
   }
 
   double _resolveMaximumOutwardDryingRatio(
@@ -601,6 +744,12 @@ class NormativeThermalCalculationEngine implements ThermalCalculationEngine {
         'Сезонный расчёт показывает риск влагонакопления: в период "$criticalSeasonLabel" конденсация на границах $interfaces не компенсируется высыханием.',
     };
   }
+}
+
+class _FloorScenario {
+  const _FloorScenario({required this.additionalResistance});
+
+  final double additionalResistance;
 }
 
 class _LayerBreakdown {

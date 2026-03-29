@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 9;
+const int currentProjectFormatVersion = 11;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -16,6 +16,10 @@ const double roomLayoutGapMeters = 1.0;
 const String defaultRoomId = 'room-main';
 
 enum ConstructionElementKind { wall, roof, floor, ceiling }
+
+enum FloorConstructionType { onGround, overCrawlSpace, overBasement, overDriveway }
+
+enum CrawlSpaceVentilationMode { ventilated, unventilated }
 
 enum OpeningKind { window, door }
 
@@ -50,6 +54,34 @@ extension ConstructionElementKindX on ConstructionElementKind {
     ConstructionElementKind.roof => 'roof',
     ConstructionElementKind.floor => 'floor',
     ConstructionElementKind.ceiling => 'ceiling',
+  };
+}
+
+extension FloorConstructionTypeX on FloorConstructionType {
+  String get label => switch (this) {
+    FloorConstructionType.onGround => 'Пол по грунту',
+    FloorConstructionType.overCrawlSpace => 'Пол над техподпольем',
+    FloorConstructionType.overBasement => 'Пол над подвалом',
+    FloorConstructionType.overDriveway => 'Пол над проездом',
+  };
+
+  String get storageKey => switch (this) {
+    FloorConstructionType.onGround => 'onGround',
+    FloorConstructionType.overCrawlSpace => 'overCrawlSpace',
+    FloorConstructionType.overBasement => 'overBasement',
+    FloorConstructionType.overDriveway => 'overDriveway',
+  };
+}
+
+extension CrawlSpaceVentilationModeX on CrawlSpaceVentilationMode {
+  String get label => switch (this) {
+    CrawlSpaceVentilationMode.ventilated => 'Вентилируемое',
+    CrawlSpaceVentilationMode.unventilated => 'Невентилируемое',
+  };
+
+  String get storageKey => switch (this) {
+    CrawlSpaceVentilationMode.ventilated => 'ventilated',
+    CrawlSpaceVentilationMode.unventilated => 'unventilated',
   };
 }
 
@@ -155,6 +187,24 @@ ConstructionElementKind parseConstructionElementKind(String value) {
     'floor' => ConstructionElementKind.floor,
     'ceiling' => ConstructionElementKind.ceiling,
     _ => throw StateError('Unknown ConstructionElementKind: $value'),
+  };
+}
+
+FloorConstructionType parseFloorConstructionType(String value) {
+  return switch (value) {
+    'onGround' => FloorConstructionType.onGround,
+    'overCrawlSpace' => FloorConstructionType.overCrawlSpace,
+    'overBasement' => FloorConstructionType.overBasement,
+    'overDriveway' => FloorConstructionType.overDriveway,
+    _ => throw StateError('Unknown FloorConstructionType: $value'),
+  };
+}
+
+CrawlSpaceVentilationMode parseCrawlSpaceVentilationMode(String value) {
+  return switch (value) {
+    'ventilated' => CrawlSpaceVentilationMode.ventilated,
+    'unventilated' => CrawlSpaceVentilationMode.unventilated,
+    _ => throw StateError('Unknown CrawlSpaceVentilationMode: $value'),
   };
 }
 
@@ -293,33 +343,65 @@ class Construction {
     required this.title,
     required this.elementKind,
     required this.layers,
+    this.floorConstructionType,
+    this.crawlSpaceVentilationMode,
   });
 
-  factory Construction.fromJson(Map<String, dynamic> json) => Construction(
-    id: json['id'] as String,
-    title: json['title'] as String,
-    elementKind: parseConstructionElementKind(json['elementKind'] as String),
-    layers: (json['layers'] as List<dynamic>)
-        .map((item) => ConstructionLayer.fromJson(_asJsonMap(item)))
-        .toList(growable: false),
-  );
+  factory Construction.fromJson(Map<String, dynamic> json) {
+    final elementKind = parseConstructionElementKind(
+      json['elementKind'] as String,
+    );
+    final floorConstructionTypeValue = json['floorConstructionType'] as String?;
+    final crawlSpaceVentilationModeValue =
+        json['crawlSpaceVentilationMode'] as String?;
+    return Construction(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      elementKind: elementKind,
+      layers: (json['layers'] as List<dynamic>)
+          .map((item) => ConstructionLayer.fromJson(_asJsonMap(item)))
+          .toList(growable: false),
+      floorConstructionType: switch (elementKind) {
+        ConstructionElementKind.floor when floorConstructionTypeValue != null =>
+          parseFloorConstructionType(floorConstructionTypeValue),
+        _ => null,
+      },
+      crawlSpaceVentilationMode: switch (floorConstructionTypeValue) {
+        'overCrawlSpace' when crawlSpaceVentilationModeValue != null =>
+          parseCrawlSpaceVentilationMode(crawlSpaceVentilationModeValue),
+        _ => null,
+      },
+    );
+  }
 
   final String id;
   final String title;
   final ConstructionElementKind elementKind;
   final List<ConstructionLayer> layers;
+  final FloorConstructionType? floorConstructionType;
+  final CrawlSpaceVentilationMode? crawlSpaceVentilationMode;
 
   Construction copyWith({
     String? id,
     String? title,
     ConstructionElementKind? elementKind,
     List<ConstructionLayer>? layers,
+    FloorConstructionType? floorConstructionType,
+    CrawlSpaceVentilationMode? crawlSpaceVentilationMode,
+    bool clearFloorConstructionType = false,
+    bool clearCrawlSpaceVentilationMode = false,
   }) {
     return Construction(
       id: id ?? this.id,
       title: title ?? this.title,
       elementKind: elementKind ?? this.elementKind,
       layers: layers ?? this.layers,
+      floorConstructionType: clearFloorConstructionType
+          ? null
+          : floorConstructionType ?? this.floorConstructionType,
+      crawlSpaceVentilationMode: clearCrawlSpaceVentilationMode
+          ? null
+          : crawlSpaceVentilationMode ?? this.crawlSpaceVentilationMode,
     );
   }
 
@@ -328,6 +410,12 @@ class Construction {
     'title': title,
     'elementKind': elementKind.storageKey,
     'layers': layers.map((item) => item.toJson()).toList(growable: false),
+    if (elementKind == ConstructionElementKind.floor &&
+        floorConstructionType != null)
+      'floorConstructionType': floorConstructionType!.storageKey,
+    if (floorConstructionType == FloorConstructionType.overCrawlSpace &&
+        crawlSpaceVentilationMode != null)
+      'crawlSpaceVentilationMode': crawlSpaceVentilationMode!.storageKey,
   };
 }
 
