@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/models/calculation.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
+import '../../building_builder/presentation/building_wizard_screen.dart';
 import '../../thermocalc/presentation/thermocalc_preview_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -13,6 +15,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final catalogAsync = ref.watch(catalogSnapshotProvider);
     final projectAsync = ref.watch(selectedProjectProvider);
+    final heatLossAsync = ref.watch(selectedBuildingHeatLossProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -28,14 +31,9 @@ class DashboardScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           _CatalogOverview(catalogAsync: catalogAsync),
           const SizedBox(height: 16),
-          _RoadmapCard(
-            onOpenPreview: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const ThermocalcPreviewScreen(),
-                ),
-              );
-            },
+          _Step2Card(
+            projectAsync: projectAsync,
+            heatLossAsync: heatLossAsync,
           ),
           const SizedBox(height: 16),
           const _RulesCard(),
@@ -62,21 +60,21 @@ class _HeroCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: const [
-                Chip(label: Text('Android first')),
-                Chip(label: Text('Offline-first')),
-                Chip(label: Text('Thermocalc MVP')),
+                Chip(label: Text('Шаг 0: объект')),
+                Chip(label: Text('Шаг 1: конструкции')),
+                Chip(label: Text('Шаг 2: теплопотери')),
               ],
             ),
             const SizedBox(height: 18),
             Text(
-              'Инженерный калькулятор для мобильного сценария, а не перенос сайта один-в-один.',
+              'Основной сценарий теперь строится вокруг расчетного объекта: комнаты, поверхности, проемы и полный баланс потерь по помещению и по дому.',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
             ),
             const SizedBox(height: 12),
             const Text(
-              'Текущий каркас уже содержит доменные модели, seed-данные, правила разработки и визуальный preview экрана расчета. Следующий крупный шаг — замена preview-движка на нормативный расчет.',
+              'Construction preview сохранен как отдельный экран детализации, но главным рабочим потоком стал wizard шага 2 с агрегацией по комнатам и объекту.',
             ),
             const SizedBox(height: 18),
             projectAsync.when(
@@ -94,7 +92,7 @@ class _HeroCard extends StatelessWidget {
                       child: Text(
                         project == null
                             ? 'Демо-проект пока не загружен'
-                            : 'Активный demo-проект: ${project.name}',
+                            : 'Активный demo-проект: ${project.name} · ${project.rooms.length} комнат · ${project.constructions.length} конструкций',
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -165,10 +163,14 @@ class _CatalogOverview extends StatelessWidget {
   }
 }
 
-class _RoadmapCard extends StatelessWidget {
-  const _RoadmapCard({required this.onOpenPreview});
+class _Step2Card extends StatelessWidget {
+  const _Step2Card({
+    required this.projectAsync,
+    required this.heatLossAsync,
+  });
 
-  final VoidCallback onOpenPreview;
+  final AsyncValue<Project?> projectAsync;
+  final AsyncValue<BuildingHeatLossResult?> heatLossAsync;
 
   @override
   Widget build(BuildContext context) {
@@ -179,20 +181,72 @@ class _RoadmapCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Что уже можно смотреть',
+              'Шаг 2: расчетный объект',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
             ),
             const SizedBox(height: 12),
             const Text(
-              'Открывается preview основного экрана thermocalc: слои конструкции, статусные индикаторы, сечение и графики. Это рабочий scaffold для UX и архитектуры, а не финальный нормативный расчет.',
+              'Wizard собирает объект из комнат, ограждающих поверхностей и проемов, после чего считает потери через ограждения, вентиляцию и общий баланс.',
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onOpenPreview,
-              icon: const Icon(Icons.analytics_outlined),
-              label: const Text('Открыть thermocalc preview'),
+            heatLossAsync.when(
+              data: (result) => result == null
+                  ? const Text('Нет результата по демо-объекту.')
+                  : Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        _MetricTile(
+                          label: 'Комнаты',
+                          value: '${result.roomResults.length}',
+                        ),
+                        _MetricTile(
+                          label: 'Вт потерь',
+                          value: result.totalLossW.toStringAsFixed(0),
+                        ),
+                        _MetricTile(
+                          label: 'Вт/К',
+                          value: result.heatLossCoefficientWPerK.toStringAsFixed(1),
+                        ),
+                      ],
+                    ),
+              loading: () => const LinearProgressIndicator(),
+              error: (error, _) => Text('Ошибка расчета: $error'),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  onPressed: () {
+                    final project = projectAsync.value;
+                    if (project == null) {
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => BuildingWizardScreen(initialProject: project),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.stacked_line_chart_outlined),
+                  label: const Text('Открыть wizard шага 2'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ThermocalcPreviewScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.analytics_outlined),
+                  label: const Text('Открыть preview конструкции'),
+                ),
+              ],
             ),
           ],
         ),
@@ -215,13 +269,12 @@ class _RulesCard extends StatelessWidget {
             Text(
               'Зафиксированные правила',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                    fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
             const Text('Документация на русском, код на английском.'),
             const Text('Формулы и данные не прячутся во widgets.'),
-            const Text('Каждая расчетная правка требует тестов и ссылки на источник.'),
+            const Text('Шаг 2 обязан отдавать стабильный результат для шага 3.'),
             const Text('Чек-лист и ADR обновляются вместе с кодом.'),
           ],
         ),
@@ -239,7 +292,7 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 104,
+      width: 112,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,

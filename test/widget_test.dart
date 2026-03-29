@@ -14,8 +14,9 @@ void main() {
         overrides: [
           catalogRepositoryProvider.overrideWithValue(_FakeCatalogRepository()),
           projectRepositoryProvider.overrideWithValue(_FakeProjectRepository()),
-          thermalCalculationEngineProvider
-              .overrideWithValue(const PreviewThermalCalculationEngine()),
+          constructionPerformanceEngineProvider.overrideWithValue(
+            const PreviewConstructionPerformanceEngine(),
+          ),
         ],
         child: const SmartCalcApp(),
       ),
@@ -73,7 +74,6 @@ class _FakeProjectRepository implements ProjectRepository {
         id: 'demo',
         name: 'Demo project',
         climatePointId: 'moscow',
-        roomPreset: RoomPreset.livingRoom,
         constructions: [
           Construction(
             id: 'wall',
@@ -87,6 +87,15 @@ class _FakeProjectRepository implements ProjectRepository {
                 thicknessMm: 300,
               ),
             ],
+          ),
+        ],
+        rooms: [
+          Room(
+            id: 'living',
+            name: 'Гостиная',
+            roomType: RoomType.livingRoom,
+            floorAreaM2: 20,
+            heightM: 2.8,
           ),
         ],
       ),

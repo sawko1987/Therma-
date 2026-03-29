@@ -5,6 +5,8 @@ import 'models/calculation.dart';
 import 'models/catalog.dart';
 import 'models/project.dart';
 import 'services/asset_catalog_repository.dart';
+import 'services/default_building_calculation_assembler.dart';
+import 'services/default_building_heat_loss_engine.dart';
 import 'services/in_memory_project_repository.dart';
 import 'services/interfaces.dart';
 import 'services/preview_report_service.dart';
@@ -18,8 +20,18 @@ final projectRepositoryProvider = Provider<ProjectRepository>(
   (ref) => InMemoryProjectRepository.demo(),
 );
 
-final thermalCalculationEngineProvider = Provider<ThermalCalculationEngine>(
-  (ref) => const PreviewThermalCalculationEngine(),
+final constructionPerformanceEngineProvider = Provider<ConstructionPerformanceEngine>(
+  (ref) => const PreviewConstructionPerformanceEngine(),
+);
+
+final buildingCalculationAssemblerProvider = Provider<BuildingCalculationAssembler>(
+  (ref) => DefaultBuildingCalculationAssembler(
+    ref.read(constructionPerformanceEngineProvider),
+  ),
+);
+
+final buildingHeatLossEngineProvider = Provider<BuildingHeatLossEngine>(
+  (ref) => const DefaultBuildingHeatLossEngine(),
 );
 
 final reportServiceProvider = Provider<ReportService>(
@@ -42,7 +54,7 @@ final selectedProjectProvider = FutureProvider<Project?>((ref) async {
   return projects.first;
 });
 
-final previewConstructionProvider = FutureProvider<Construction?>((ref) async {
+final selectedConstructionProvider = FutureProvider<Construction?>((ref) async {
   final project = await ref.watch(selectedProjectProvider.future);
   if (project == null || project.constructions.isEmpty) {
     return null;
@@ -50,16 +62,31 @@ final previewConstructionProvider = FutureProvider<Construction?>((ref) async {
   return project.constructions.first;
 });
 
-final previewCalculationProvider = FutureProvider<CalculationResult?>((ref) async {
+final selectedConstructionPerformanceProvider =
+    FutureProvider<ConstructionPerformance?>((ref) async {
   final catalog = await ref.watch(catalogSnapshotProvider.future);
   final project = await ref.watch(selectedProjectProvider.future);
-  final construction = await ref.watch(previewConstructionProvider.future);
+  final construction = await ref.watch(selectedConstructionProvider.future);
   if (project == null || construction == null) {
     return null;
   }
-  return ref.read(thermalCalculationEngineProvider).calculate(
+  return ref.read(constructionPerformanceEngineProvider).calculate(
         catalog: catalog,
         project: project,
         construction: construction,
       );
+});
+
+final selectedBuildingHeatLossProvider =
+    FutureProvider<BuildingHeatLossResult?>((ref) async {
+  final catalog = await ref.watch(catalogSnapshotProvider.future);
+  final project = await ref.watch(selectedProjectProvider.future);
+  if (project == null) {
+    return null;
+  }
+  final input = await ref.read(buildingCalculationAssemblerProvider).assemble(
+        catalog: catalog,
+        project: project,
+      );
+  return ref.read(buildingHeatLossEngineProvider).calculate(input: input);
 });

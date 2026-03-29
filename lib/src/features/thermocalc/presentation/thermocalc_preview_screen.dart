@@ -14,14 +14,14 @@ class ThermocalcPreviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectAsync = ref.watch(selectedProjectProvider);
-    final constructionAsync = ref.watch(previewConstructionProvider);
-    final calculationAsync = ref.watch(previewCalculationProvider);
+    final constructionAsync = ref.watch(selectedConstructionProvider);
+    final performanceAsync = ref.watch(selectedConstructionPerformanceProvider);
     final catalogAsync = ref.watch(catalogSnapshotProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Thermocalc Preview',
+          'Construction Preview',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
@@ -36,14 +36,14 @@ class ThermocalcPreviewScreen extends ConsumerWidget {
             catalogAsync: catalogAsync,
           ),
           const SizedBox(height: 16),
-          calculationAsync.when(
-            data: (calculation) => constructionAsync.when(
+          performanceAsync.when(
+            data: (performance) => constructionAsync.when(
               data: (construction) {
-                if (calculation == null || construction == null) {
+                if (performance == null || construction == null) {
                   return const Text('Недостаточно данных для preview.');
                 }
                 return _CalculationBody(
-                  calculation: calculation,
+                  performance: performance,
                   construction: construction,
                   catalogAsync: catalogAsync,
                 );
@@ -73,7 +73,7 @@ class _PreviewBanner extends StatelessWidget {
       child: const Padding(
         padding: EdgeInsets.all(16),
         child: Text(
-          'Важно: это preview-экран для архитектуры и визуализаций. Расчетный движок пока черновой и не заменяет нормативную реализацию.',
+          'Этот экран остался как construction preview: он показывает одну выбранную конструкцию, ее слои, графики и базовые индикаторы. Основной сценарий шага 2 теперь живет в wizard расчета объекта.',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
@@ -101,7 +101,7 @@ class _ProjectSummary extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Проект и исходные условия',
+              'Проект и конструкция',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -122,7 +122,7 @@ class _ProjectSummary extends StatelessWidget {
                         Text(project?.name ?? 'Нет проекта'),
                         const SizedBox(height: 6),
                         Text('Климат: ${climate?.displayName ?? '—'}'),
-                        Text('Помещение: ${project?.roomPreset.label ?? '—'}'),
+                        Text('Комнат в объекте: ${project?.rooms.length ?? 0}'),
                         Text('Конструкция: ${construction?.title ?? '—'}'),
                       ],
                     );
@@ -145,12 +145,12 @@ class _ProjectSummary extends StatelessWidget {
 
 class _CalculationBody extends StatelessWidget {
   const _CalculationBody({
-    required this.calculation,
+    required this.performance,
     required this.construction,
     required this.catalogAsync,
   });
 
-  final CalculationResult calculation;
+  final ConstructionPerformance performance;
   final Construction construction;
   final AsyncValue<CatalogSnapshot> catalogAsync;
 
@@ -174,7 +174,7 @@ class _CalculationBody extends StatelessWidget {
                 Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: calculation.complianceIndicators
+                  children: performance.complianceIndicators
                       .map((indicator) => _IndicatorTile(indicator: indicator))
                       .toList(),
                 ),
@@ -235,7 +235,7 @@ class _CalculationBody extends StatelessWidget {
                   height: 170,
                   child: CustomPaint(
                     painter: LineChartPainter(
-                      series: calculation.temperatureSeries,
+                      series: performance.temperatureSeries,
                       color: const Color(0xFF006D77),
                     ),
                     child: const SizedBox.expand(),
@@ -246,7 +246,7 @@ class _CalculationBody extends StatelessWidget {
                   height: 170,
                   child: CustomPaint(
                     painter: LineChartPainter(
-                      series: calculation.humiditySeries,
+                      series: performance.humiditySeries,
                       color: const Color(0xFFB45309),
                     ),
                     child: const SizedBox.expand(),
@@ -264,20 +264,20 @@ class _CalculationBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Слои и preview-метрики',
+                  'Слои и метрики конструкции',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Сопротивление теплопередаче: ${calculation.totalResistance.toStringAsFixed(2)} м²·°C/Вт',
+                  'Сопротивление теплопередаче: ${performance.totalResistance.toStringAsFixed(2)} м²·°C/Вт',
                 ),
                 Text(
-                  'Теплопотери: ${calculation.heatLossPerSqm.toStringAsFixed(1)} Вт/м²',
+                  'Коэффициент теплопередачи U: ${performance.uValue.toStringAsFixed(3)} Вт/м²·К',
                 ),
                 const SizedBox(height: 14),
-                ...calculation.layerRows.map(
+                ...performance.layerRows.map(
                   (row) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Row(

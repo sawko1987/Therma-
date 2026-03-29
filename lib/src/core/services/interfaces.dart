@@ -10,11 +10,24 @@ abstract interface class ProjectRepository {
   Future<List<Project>> listProjects();
 }
 
-abstract interface class ThermalCalculationEngine {
-  Future<CalculationResult> calculate({
+abstract interface class ConstructionPerformanceEngine {
+  Future<ConstructionPerformance> calculate({
     required CatalogSnapshot catalog,
     required Project project,
     required Construction construction,
+  });
+}
+
+abstract interface class BuildingCalculationAssembler {
+  Future<BuildingCalculationInput> assemble({
+    required CatalogSnapshot catalog,
+    required Project project,
+  });
+}
+
+abstract interface class BuildingHeatLossEngine {
+  Future<BuildingHeatLossResult> calculate({
+    required BuildingCalculationInput input,
   });
 }
 

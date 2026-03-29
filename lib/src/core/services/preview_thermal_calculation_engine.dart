@@ -5,11 +5,12 @@ import '../models/catalog.dart';
 import '../models/project.dart';
 import 'interfaces.dart';
 
-class PreviewThermalCalculationEngine implements ThermalCalculationEngine {
-  const PreviewThermalCalculationEngine();
+class PreviewConstructionPerformanceEngine
+    implements ConstructionPerformanceEngine {
+  const PreviewConstructionPerformanceEngine();
 
   @override
-  Future<CalculationResult> calculate({
+  Future<ConstructionPerformance> calculate({
     required CatalogSnapshot catalog,
     required Project project,
     required Construction construction,
@@ -21,11 +22,9 @@ class PreviewThermalCalculationEngine implements ThermalCalculationEngine {
       for (final material in catalog.materials) material.id: material,
     };
 
-    final insideTemp = switch (project.roomPreset) {
-      RoomPreset.livingRoom => 20.0,
-      RoomPreset.attic => 18.0,
-      RoomPreset.basement => 16.0,
-    };
+    final insideTemp = project.rooms.isEmpty
+        ? RoomType.livingRoom.defaultTargetTemperatureC
+        : project.rooms.first.targetTemperatureC;
     final outsideTemp = climate.designTemperature;
 
     final enabledLayers =
@@ -70,11 +69,13 @@ class PreviewThermalCalculationEngine implements ThermalCalculationEngine {
       humidityPoints.add(Point(currentPosition, 55 + i * 7.0));
     }
 
-    final heatLoss = delta / effectiveResistance;
+    final uValue = 1 / effectiveResistance;
 
-    return CalculationResult(
+    return ConstructionPerformance(
+      constructionId: construction.id,
+      constructionTitle: construction.title,
       totalResistance: totalResistance,
-      heatLossPerSqm: heatLoss,
+      uValue: uValue,
       layerRows: rows,
       temperatureSeries: GraphSeries(
         title: 'Температура',
@@ -93,9 +94,9 @@ class PreviewThermalCalculationEngine implements ThermalCalculationEngine {
         ),
         ComplianceIndicator(
           title: 'Влагорежим',
-          actual: max(0, 100 - heatLoss),
+          actual: max(0, 100 - uValue * 12),
           target: 65,
-          isPassed: heatLoss < 35,
+          isPassed: uValue < 0.35,
         ),
       ],
     );
