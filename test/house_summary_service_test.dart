@@ -60,12 +60,14 @@ void main() {
       expect(summary.totalOpaqueAreaSquareMeters, 16);
       expect(summary.totalOpeningCount, 1);
       expect(summary.totalOpeningHeatLossWatts, closeTo(184, 2));
-      expect(summary.totalHeatLossWatts, closeTo(316.52, 3));
+      expect(summary.totalVentilationHeatLossWatts, closeTo(332.86, 0.1));
+      expect(summary.totalHeatLossWatts, closeTo(649.38, 0.2));
       expect(summary.totalHeatingDeviceCount, 1);
       expect(summary.totalInstalledHeatingPowerWatts, 450);
-      expect(summary.totalHeatingPowerDeltaWatts, closeTo(133.48, 3));
+      expect(summary.totalHeatingPowerDeltaWatts, closeTo(-199.38, 0.2));
       expect(summary.roomResults.single.totalOpaqueAreaSquareMeters, 16);
       expect(summary.roomResults.single.installedHeatingPowerWatts, 450);
+      expect(summary.roomResults.single.ventilationHeatLossWatts, closeTo(332.86, 0.1));
     },
   );
 
@@ -117,8 +119,16 @@ void main() {
         norms: testCatalogSnapshot.norms,
         moistureRules: testCatalogSnapshot.moistureRules,
         roomKindConditions: const [
-          RoomKindCondition(roomKindId: 'livingRoom', insideTemperature: 20),
-          RoomKindCondition(roomKindId: 'bedroom', insideTemperature: 18),
+          RoomKindCondition(
+            roomKindId: 'livingRoom',
+            insideTemperature: 20,
+            airChangesPerHour: 0.5,
+          ),
+          RoomKindCondition(
+            roomKindId: 'bedroom',
+            insideTemperature: 18,
+            airChangesPerHour: 0.3,
+          ),
         ],
         heatingDevices: testCatalogSnapshot.heatingDevices,
         datasetVersion: testCatalogSnapshot.datasetVersion,
@@ -141,6 +151,8 @@ void main() {
       expect(livingRoom.insideAirTemperature, 20);
       expect(bedroom.insideAirTemperature, 18);
       expect(livingRoom.heatLossWatts, greaterThan(bedroom.heatLossWatts));
+      expect(livingRoom.airChangesPerHour, 0.5);
+      expect(bedroom.airChangesPerHour, 0.3);
     },
   );
 
@@ -195,4 +207,44 @@ void main() {
       expect(summary.totalHeatLossWatts, greaterThan(0));
     },
   );
+
+  test('building heat loss adds ventilation using room volume and air change rate', () async {
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Конструктор дома',
+        rooms: [
+          buildRoom(
+            id: 'bath',
+            title: 'Санузел',
+            kind: RoomKind.bathroom,
+            heightMeters: 2.8,
+            layout: const RoomLayoutRect(
+              xMeters: 0,
+              yMeters: 0,
+              widthMeters: 2,
+              heightMeters: 2,
+            ),
+          ),
+        ],
+        elements: const [],
+        openings: const [],
+      ),
+    );
+    const service = NormativeBuildingHeatLossService(
+      NormativeThermalCalculationEngine(),
+    );
+
+    final summary = await service.calculate(
+      catalog: testCatalogSnapshot,
+      project: project,
+    );
+    final room = summary.roomResults.single;
+
+    expect(room.roomVolumeCubicMeters, closeTo(11.2, 0.01));
+    expect(room.airChangesPerHour, 1.2);
+    expect(room.ventilationHeatLossWatts, closeTo(225.12, 0.2));
+    expect(room.heatLossWatts, closeTo(room.ventilationHeatLossWatts, 0.01));
+    expect(summary.totalVentilationHeatLossWatts, closeTo(225.12, 0.2));
+  });
 }

@@ -8,6 +8,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
   const NormativeBuildingHeatLossService(this._engine);
 
   final ThermalCalculationEngine _engine;
+  static const double _ventilationHeatCapacityFactor = 0.335;
 
   @override
   Future<BuildingHeatLossResult> calculate({
@@ -58,6 +59,8 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       final outsideAirTemperature = climate.designTemperature;
       final insideAirTemperature = roomCondition.insideTemperature;
       final deltaTemperature = insideAirTemperature - outsideAirTemperature;
+      final airChangesPerHour = roomCondition.airChangesPerHour ?? 0.0;
+      final roomVolumeCubicMeters = room.areaSquareMeters * room.heightMeters;
 
       for (final element in roomElements) {
         final construction = constructionMap[element.constructionId];
@@ -126,6 +129,11 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         0,
         (sum, item) => sum + item.openingHeatLossWatts,
       );
+      final ventilationHeatLossWatts =
+          _ventilationHeatCapacityFactor *
+          airChangesPerHour *
+          roomVolumeCubicMeters *
+          deltaTemperature;
       final totalEnvelopeAreaSquareMeters = roomElements.fold<double>(
         0,
         (sum, item) => sum + item.areaSquareMeters,
@@ -156,11 +164,16 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           totalOpeningAreaSquareMeters: totalOpeningAreaSquareMeters,
           insideAirTemperature: insideAirTemperature,
           outsideAirTemperature: outsideAirTemperature,
-          heatLossWatts: heatLossWatts,
+          airChangesPerHour: airChangesPerHour,
+          roomVolumeCubicMeters: roomVolumeCubicMeters,
+          heatLossWatts: heatLossWatts + ventilationHeatLossWatts,
           opaqueHeatLossWatts: opaqueHeatLossWatts,
           openingHeatLossWatts: openingHeatLossWatts,
+          ventilationHeatLossWatts: ventilationHeatLossWatts,
           installedHeatingPowerWatts: installedHeatingPowerWatts,
-          heatingPowerDeltaWatts: installedHeatingPowerWatts - heatLossWatts,
+          heatingPowerDeltaWatts:
+              installedHeatingPowerWatts -
+              (heatLossWatts + ventilationHeatLossWatts),
         ),
       );
     }
@@ -188,6 +201,10 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       totalOpeningHeatLossWatts: roomResults.fold<double>(
         0,
         (sum, item) => sum + item.openingHeatLossWatts,
+      ),
+      totalVentilationHeatLossWatts: roomResults.fold<double>(
+        0,
+        (sum, item) => sum + item.ventilationHeatLossWatts,
       ),
       totalHeatingDeviceCount: project.houseModel.heatingDevices.length,
       totalInstalledHeatingPowerWatts: roomResults.fold<double>(

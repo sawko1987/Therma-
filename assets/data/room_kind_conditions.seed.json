@@ -2,36 +2,43 @@
   {
     "roomKindId": "livingRoom",
     "insideTemperature": 20.0,
-    "insideRelativeHumidity": 0.55
+    "insideRelativeHumidity": 0.55,
+    "airChangesPerHour": 0.5
   },
   {
     "roomKindId": "bedroom",
     "insideTemperature": 20.0,
-    "insideRelativeHumidity": 0.5
+    "insideRelativeHumidity": 0.5,
+    "airChangesPerHour": 0.5
   },
   {
     "roomKindId": "kitchen",
     "insideTemperature": 20.0,
-    "insideRelativeHumidity": 0.6
+    "insideRelativeHumidity": 0.6,
+    "airChangesPerHour": 1.0
   },
   {
     "roomKindId": "bathroom",
     "insideTemperature": 24.0,
-    "insideRelativeHumidity": 0.65
+    "insideRelativeHumidity": 0.65,
+    "airChangesPerHour": 1.2
   },
   {
     "roomKindId": "hall",
     "insideTemperature": 18.0,
-    "insideRelativeHumidity": 0.45
+    "insideRelativeHumidity": 0.45,
+    "airChangesPerHour": 0.3
   },
   {
     "roomKindId": "boilerRoom",
     "insideTemperature": 18.0,
-    "insideRelativeHumidity": 0.45
+    "insideRelativeHumidity": 0.45,
+    "airChangesPerHour": 0.3
   },
   {
     "roomKindId": "other",
     "insideTemperature": 18.0,
-    "insideRelativeHumidity": 0.5
+    "insideRelativeHumidity": 0.5,
+    "airChangesPerHour": 0.4
   }
 ]

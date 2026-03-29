@@ -287,6 +287,7 @@ class RoomKindCondition {
     required this.roomKindId,
     required this.insideTemperature,
     this.insideRelativeHumidity,
+    this.airChangesPerHour,
   });
 
   factory RoomKindCondition.fromJson(Map<String, dynamic> json) =>
@@ -295,11 +296,13 @@ class RoomKindCondition {
         insideTemperature: (json['insideTemperature'] as num).toDouble(),
         insideRelativeHumidity: (json['insideRelativeHumidity'] as num?)
             ?.toDouble(),
+        airChangesPerHour: (json['airChangesPerHour'] as num?)?.toDouble(),
       );
 
   final String roomKindId;
   final double insideTemperature;
   final double? insideRelativeHumidity;
+  final double? airChangesPerHour;
 }
 
 class HeatingDeviceCatalogEntry {

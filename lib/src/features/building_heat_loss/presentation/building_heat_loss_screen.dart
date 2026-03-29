@@ -73,7 +73,7 @@ class _ResultBody extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Расчет v1 учитывает только потери через непрозрачные участки ограждений и проемы.',
+                  'Расчет учитывает потери через непрозрачные участки, проемы и базовую вентиляцию по типу комнаты.',
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -93,6 +93,11 @@ class _ResultBody extends StatelessWidget {
                       label: 'Через проемы',
                       value:
                           '${result.totalOpeningHeatLossWatts.toStringAsFixed(0)} Вт',
+                    ),
+                    _MetricTile(
+                      label: 'Вентиляция',
+                      value:
+                          '${result.totalVentilationHeatLossWatts.toStringAsFixed(0)} Вт',
                     ),
                     _MetricTile(
                       label: 'Баланс отопления',
@@ -176,6 +181,11 @@ class _RoomResultCard extends StatelessWidget {
                       '${roomResult.openingCount} / ${roomResult.totalOpeningAreaSquareMeters.toStringAsFixed(1)} м²',
                 ),
                 _MetricTile(
+                  label: 'Вентиляция',
+                  value:
+                      '${roomResult.ventilationHeatLossWatts.toStringAsFixed(0)} Вт',
+                ),
+                _MetricTile(
                   label: 'Баланс отопления',
                   value:
                       '${roomResult.heatingPowerDeltaWatts.toStringAsFixed(0)} Вт',
@@ -192,6 +202,11 @@ class _RoomResultCard extends StatelessWidget {
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            Text(
+              'Объем ${roomResult.roomVolumeCubicMeters.toStringAsFixed(1)} м³ · '
+              '${roomResult.airChangesPerHour.toStringAsFixed(2)} ACH',
+            ),
             const SizedBox(height: 12),
             ...roomResult.elementResults.map((elementResult) {
               return Padding(

@@ -188,36 +188,43 @@ const testCatalogSnapshot = CatalogSnapshot(
       roomKindId: 'livingRoom',
       insideTemperature: 20,
       insideRelativeHumidity: 0.55,
+      airChangesPerHour: 0.5,
     ),
     RoomKindCondition(
       roomKindId: 'bedroom',
       insideTemperature: 18,
       insideRelativeHumidity: 0.5,
+      airChangesPerHour: 0.5,
     ),
     RoomKindCondition(
       roomKindId: 'kitchen',
       insideTemperature: 20,
       insideRelativeHumidity: 0.6,
+      airChangesPerHour: 1.0,
     ),
     RoomKindCondition(
       roomKindId: 'bathroom',
       insideTemperature: 24,
       insideRelativeHumidity: 0.65,
+      airChangesPerHour: 1.2,
     ),
     RoomKindCondition(
       roomKindId: 'hall',
       insideTemperature: 16,
       insideRelativeHumidity: 0.45,
+      airChangesPerHour: 0.3,
     ),
     RoomKindCondition(
       roomKindId: 'boilerRoom',
       insideTemperature: 18,
       insideRelativeHumidity: 0.45,
+      airChangesPerHour: 0.3,
     ),
     RoomKindCondition(
       roomKindId: 'other',
       insideTemperature: 18,
       insideRelativeHumidity: 0.5,
+      airChangesPerHour: 0.4,
     ),
   ],
   heatingDevices: [
