@@ -190,6 +190,17 @@ class ProjectEditor {
     await saveProject(updated);
   }
 
+  Future<void> mergeRoomsAcrossPartition(
+    String primaryRoomId,
+    String secondaryRoomId,
+  ) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .mergeRoomsAcrossPartition(project, primaryRoomId, secondaryRoomId);
+    await saveProject(updated);
+  }
+
   Future<void> updateRoomLayout(String roomId, RoomLayoutRect layout) async {
     final project = await _requireProject();
     final updated = _ref
@@ -232,6 +243,17 @@ class ProjectEditor {
         .updateEnvelopeWallPlacement(project, elementId, wallPlacement);
     await saveProject(updated);
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(elementId);
+  }
+
+  Future<void> splitExteriorWallSegment(
+    String elementId,
+    double splitOffsetMeters,
+  ) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .splitExteriorWallSegment(project, elementId, splitOffsetMeters);
+    await saveProject(updated);
   }
 
   Future<void> deleteEnvelopeElement(String elementId) async {

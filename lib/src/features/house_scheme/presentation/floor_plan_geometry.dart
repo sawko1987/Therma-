@@ -104,6 +104,18 @@ bool layoutsOverlap(RoomLayoutRect left, RoomLayoutRect right) {
       left.bottomMeters > right.yMeters;
 }
 
+class RoomPartitionSegment {
+  const RoomPartitionSegment({
+    required this.primaryRoomId,
+    required this.secondaryRoomId,
+    required this.segment,
+  });
+
+  final String primaryRoomId;
+  final String secondaryRoomId;
+  final HouseLineSegment segment;
+}
+
 double deltaMetersForSide(RoomSide side, Offset delta, double pixelsPerMeter) {
   return switch (side) {
         RoomSide.top || RoomSide.bottom => delta.dx,
@@ -141,44 +153,112 @@ bool wallPlacementsEqual(
 }
 
 Rect wallSegmentRect({
-  required Room room,
-  required EnvelopeWallPlacement placement,
+  required HouseLineSegment segment,
   required double pixelsPerMeter,
   required double canvasPadding,
   required double thicknessPixels,
 }) {
-  final layout = room.layout;
-  final roomLeft = canvasPadding + layout.xMeters * pixelsPerMeter;
-  final roomTop = canvasPadding + layout.yMeters * pixelsPerMeter;
-  final widthPixels = layout.widthMeters * pixelsPerMeter;
-  final heightPixels = layout.heightMeters * pixelsPerMeter;
-  final offsetPixels = placement.offsetMeters * pixelsPerMeter;
-  final lengthPixels = placement.lengthMeters * pixelsPerMeter;
+  final normalized = segment.normalized();
+  final left = canvasPadding + normalized.startXMeters * pixelsPerMeter;
+  final top = canvasPadding + normalized.startYMeters * pixelsPerMeter;
+  final width =
+      (normalized.endXMeters - normalized.startXMeters).abs() * pixelsPerMeter;
+  final height =
+      (normalized.endYMeters - normalized.startYMeters).abs() * pixelsPerMeter;
 
-  return switch (placement.side) {
-    RoomSide.top => Rect.fromLTWH(
-      roomLeft + offsetPixels,
-      roomTop - thicknessPixels / 2,
-      lengthPixels,
+  if (normalized.isHorizontal) {
+    return Rect.fromLTWH(
+      left,
+      top - thicknessPixels / 2,
+      width,
       thicknessPixels,
-    ),
-    RoomSide.bottom => Rect.fromLTWH(
-      roomLeft + offsetPixels,
-      roomTop + heightPixels - thicknessPixels / 2,
-      lengthPixels,
-      thicknessPixels,
-    ),
-    RoomSide.left => Rect.fromLTWH(
-      roomLeft - thicknessPixels / 2,
-      roomTop + offsetPixels,
-      thicknessPixels,
-      lengthPixels,
-    ),
-    RoomSide.right => Rect.fromLTWH(
-      roomLeft + widthPixels - thicknessPixels / 2,
-      roomTop + offsetPixels,
-      thicknessPixels,
-      lengthPixels,
-    ),
-  };
+    );
+  }
+  return Rect.fromLTWH(
+    left - thicknessPixels / 2,
+    top,
+    thicknessPixels,
+    height,
+  );
+}
+
+List<RoomPartitionSegment> buildRoomPartitions(List<Room> rooms) {
+  final partitions = <String, RoomPartitionSegment>{};
+  for (var roomIndex = 0; roomIndex < rooms.length; roomIndex++) {
+    final room = rooms[roomIndex];
+    for (
+      var otherIndex = roomIndex + 1;
+      otherIndex < rooms.length;
+      otherIndex++
+    ) {
+      final other = rooms[otherIndex];
+      for (final roomCell in room.effectiveCells) {
+        for (final otherCell in other.effectiveCells) {
+          for (final roomEdge in _cellEdges(roomCell)) {
+            for (final otherEdge in _cellEdges(otherCell)) {
+              if (_segmentsEqual(roomEdge, otherEdge)) {
+                final normalized = roomEdge.normalized();
+                final key =
+                    '${room.id}:${other.id}:${normalized.startXMeters}:${normalized.startYMeters}:${normalized.endXMeters}:${normalized.endYMeters}';
+                partitions[key] = RoomPartitionSegment(
+                  primaryRoomId: room.id,
+                  secondaryRoomId: other.id,
+                  segment: normalized,
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return partitions.values.toList(growable: false);
+}
+
+double splitOffsetForSegmentTap(
+  HouseLineSegment segment,
+  Offset localPosition,
+  double pixelsPerMeter,
+) {
+  final normalized = segment.normalized();
+  final raw = normalized.isHorizontal
+      ? localPosition.dx / pixelsPerMeter
+      : localPosition.dy / pixelsPerMeter;
+  return snapToStep(raw);
+}
+
+List<HouseLineSegment> _cellEdges(RoomLayoutRect cell) => [
+  HouseLineSegment(
+    startXMeters: cell.xMeters,
+    startYMeters: cell.yMeters,
+    endXMeters: cell.rightMeters,
+    endYMeters: cell.yMeters,
+  ),
+  HouseLineSegment(
+    startXMeters: cell.xMeters,
+    startYMeters: cell.bottomMeters,
+    endXMeters: cell.rightMeters,
+    endYMeters: cell.bottomMeters,
+  ),
+  HouseLineSegment(
+    startXMeters: cell.xMeters,
+    startYMeters: cell.yMeters,
+    endXMeters: cell.xMeters,
+    endYMeters: cell.bottomMeters,
+  ),
+  HouseLineSegment(
+    startXMeters: cell.rightMeters,
+    startYMeters: cell.yMeters,
+    endXMeters: cell.rightMeters,
+    endYMeters: cell.bottomMeters,
+  ),
+];
+
+bool _segmentsEqual(HouseLineSegment left, HouseLineSegment right) {
+  final a = left.normalized();
+  final b = right.normalized();
+  return a.startXMeters == b.startXMeters &&
+      a.startYMeters == b.startYMeters &&
+      a.endXMeters == b.endXMeters &&
+      a.endYMeters == b.endYMeters;
 }

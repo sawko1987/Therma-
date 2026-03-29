@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 12;
+const int currentProjectFormatVersion = 13;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -33,6 +33,8 @@ enum CrawlSpaceVentilationMode { ventilated, unventilated }
 enum OpeningKind { window, door }
 
 enum RoomSide { top, right, bottom, left }
+
+enum EnvelopeElementSource { manual, autoExteriorWall }
 
 enum LayerKind { solid, frame, crossFrame, masonry, ventilatedGap }
 
@@ -127,6 +129,13 @@ extension RoomSideX on RoomSide {
   };
 
   bool get isHorizontal => this == RoomSide.top || this == RoomSide.bottom;
+}
+
+extension EnvelopeElementSourceX on EnvelopeElementSource {
+  String get storageKey => switch (this) {
+    EnvelopeElementSource.manual => 'manual',
+    EnvelopeElementSource.autoExteriorWall => 'autoExteriorWall',
+  };
 }
 
 extension LayerKindX on LayerKind {
@@ -294,6 +303,14 @@ HeatingDeviceKind parseHeatingDeviceKind(String value) {
     'towelRail' => HeatingDeviceKind.towelRail,
     'other' => HeatingDeviceKind.other,
     _ => throw StateError('Unknown HeatingDeviceKind: $value'),
+  };
+}
+
+EnvelopeElementSource parseEnvelopeElementSource(String value) {
+  return switch (value) {
+    'manual' => EnvelopeElementSource.manual,
+    'autoExteriorWall' => EnvelopeElementSource.autoExteriorWall,
+    _ => throw StateError('Unknown EnvelopeElementSource: $value'),
   };
 }
 
@@ -470,6 +487,22 @@ class RoomLayoutRect {
     );
   }
 
+  factory RoomLayoutRect.boundingBox(List<RoomLayoutRect> rects) {
+    if (rects.isEmpty) {
+      return RoomLayoutRect.defaultRect();
+    }
+    final left = rects.map((item) => item.xMeters).reduce(math.min);
+    final top = rects.map((item) => item.yMeters).reduce(math.min);
+    final right = rects.map((item) => item.rightMeters).reduce(math.max);
+    final bottom = rects.map((item) => item.bottomMeters).reduce(math.max);
+    return RoomLayoutRect(
+      xMeters: left,
+      yMeters: top,
+      widthMeters: right - left,
+      heightMeters: bottom - top,
+    );
+  }
+
   final double xMeters;
   final double yMeters;
   final double widthMeters;
@@ -544,6 +577,74 @@ class EnvelopeWallPlacement {
   };
 }
 
+class HouseLineSegment {
+  const HouseLineSegment({
+    required this.startXMeters,
+    required this.startYMeters,
+    required this.endXMeters,
+    required this.endYMeters,
+  });
+
+  factory HouseLineSegment.fromJson(Map<String, dynamic> json) =>
+      HouseLineSegment(
+        startXMeters: (json['startXMeters'] as num).toDouble(),
+        startYMeters: (json['startYMeters'] as num).toDouble(),
+        endXMeters: (json['endXMeters'] as num).toDouble(),
+        endYMeters: (json['endYMeters'] as num).toDouble(),
+      );
+
+  final double startXMeters;
+  final double startYMeters;
+  final double endXMeters;
+  final double endYMeters;
+
+  bool get isHorizontal => startYMeters == endYMeters;
+  bool get isVertical => startXMeters == endXMeters;
+  double get lengthMeters => math.sqrt(
+    math.pow(endXMeters - startXMeters, 2) +
+        math.pow(endYMeters - startYMeters, 2),
+  );
+
+  HouseLineSegment normalized() {
+    if (startXMeters < endXMeters || startYMeters < endYMeters) {
+      return this;
+    }
+    if (startXMeters == endXMeters && startYMeters <= endYMeters) {
+      return this;
+    }
+    if (startYMeters == endYMeters && startXMeters <= endXMeters) {
+      return this;
+    }
+    return HouseLineSegment(
+      startXMeters: endXMeters,
+      startYMeters: endYMeters,
+      endXMeters: startXMeters,
+      endYMeters: startYMeters,
+    );
+  }
+
+  HouseLineSegment copyWith({
+    double? startXMeters,
+    double? startYMeters,
+    double? endXMeters,
+    double? endYMeters,
+  }) {
+    return HouseLineSegment(
+      startXMeters: startXMeters ?? this.startXMeters,
+      startYMeters: startYMeters ?? this.startYMeters,
+      endXMeters: endXMeters ?? this.endXMeters,
+      endYMeters: endYMeters ?? this.endYMeters,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'startXMeters': startXMeters,
+    'startYMeters': startYMeters,
+    'endXMeters': endXMeters,
+    'endYMeters': endYMeters,
+  };
+}
+
 class Room {
   const Room({
     required this.id,
@@ -551,6 +652,7 @@ class Room {
     required this.kind,
     required this.heightMeters,
     required this.layout,
+    this.cells = const [],
   });
 
   factory Room.fromJson(Map<String, dynamic> json) {
@@ -558,6 +660,17 @@ class Room {
         (json['areaSquareMeters'] as num?)?.toDouble() ??
         defaultRoomAreaSquareMeters;
     final layoutJson = json['layout'];
+    final effectiveLayout = layoutJson == null
+        ? RoomLayoutRect.squareFromArea(
+            areaSquareMeters,
+            xMeters: 0,
+            yMeters: 0,
+          )
+        : RoomLayoutRect.fromJson(_asJsonMap(layoutJson));
+    final cellsJson = (json['cells'] as List<dynamic>?) ?? const [];
+    final parsedCells = cellsJson
+        .map((item) => RoomLayoutRect.fromJson(_asJsonMap(item)))
+        .toList(growable: false);
     return Room(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -566,13 +679,10 @@ class Room {
       ),
       heightMeters:
           (json['heightMeters'] as num?)?.toDouble() ?? defaultRoomHeightMeters,
-      layout: layoutJson == null
-          ? RoomLayoutRect.squareFromArea(
-              areaSquareMeters,
-              xMeters: 0,
-              yMeters: 0,
-            )
-          : RoomLayoutRect.fromJson(_asJsonMap(layoutJson)),
+      layout: parsedCells.isEmpty
+          ? effectiveLayout
+          : RoomLayoutRect.boundingBox(parsedCells),
+      cells: parsedCells.isEmpty ? [effectiveLayout] : parsedCells,
     );
   }
 
@@ -587,6 +697,14 @@ class Room {
       widthMeters: defaultRoomLayoutWidthMeters,
       heightMeters: defaultRoomLayoutHeightMeters,
     ),
+    cells: [
+      RoomLayoutRect(
+        xMeters: 0,
+        yMeters: 0,
+        widthMeters: defaultRoomLayoutWidthMeters,
+        heightMeters: defaultRoomLayoutHeightMeters,
+      ),
+    ],
   );
 
   final String id;
@@ -594,8 +712,13 @@ class Room {
   final RoomKind kind;
   final double heightMeters;
   final RoomLayoutRect layout;
+  final List<RoomLayoutRect> cells;
 
-  double get areaSquareMeters => layout.areaSquareMeters;
+  List<RoomLayoutRect> get effectiveCells =>
+      cells.isEmpty ? [layout] : List.unmodifiable(cells);
+
+  double get areaSquareMeters =>
+      effectiveCells.fold(0, (sum, cell) => sum + cell.areaSquareMeters);
 
   Room copyWith({
     String? id,
@@ -603,13 +726,16 @@ class Room {
     RoomKind? kind,
     double? heightMeters,
     RoomLayoutRect? layout,
+    List<RoomLayoutRect>? cells,
   }) {
+    final effectiveCells = cells ?? this.effectiveCells;
     return Room(
       id: id ?? this.id,
       title: title ?? this.title,
       kind: kind ?? this.kind,
       heightMeters: heightMeters ?? this.heightMeters,
-      layout: layout ?? this.layout,
+      layout: layout ?? RoomLayoutRect.boundingBox(effectiveCells),
+      cells: List.unmodifiable(effectiveCells),
     );
   }
 
@@ -620,6 +746,9 @@ class Room {
     'areaSquareMeters': areaSquareMeters,
     'heightMeters': heightMeters,
     'layout': layout.toJson(),
+    'cells': effectiveCells
+        .map((item) => item.toJson())
+        .toList(growable: false),
   };
 }
 
@@ -632,6 +761,8 @@ class HouseEnvelopeElement {
     required this.areaSquareMeters,
     required this.constructionId,
     this.wallPlacement,
+    this.lineSegment,
+    this.source = EnvelopeElementSource.manual,
   });
 
   factory HouseEnvelopeElement.fromJson(Map<String, dynamic> json) =>
@@ -647,6 +778,12 @@ class HouseEnvelopeElement {
         wallPlacement: json['wallPlacement'] == null
             ? null
             : EnvelopeWallPlacement.fromJson(_asJsonMap(json['wallPlacement'])),
+        lineSegment: json['lineSegment'] == null
+            ? null
+            : HouseLineSegment.fromJson(_asJsonMap(json['lineSegment'])),
+        source: json['source'] == null
+            ? EnvelopeElementSource.manual
+            : parseEnvelopeElementSource(json['source'] as String),
       );
 
   factory HouseEnvelopeElement.fromConstruction(
@@ -673,6 +810,17 @@ class HouseEnvelopeElement {
           : defaultHouseElementAreaSquareMeters,
       constructionId: construction.id,
       wallPlacement: wallPlacement,
+      lineSegment: construction.elementKind == ConstructionElementKind.wall
+          ? HouseLineSegment(
+              startXMeters: effectiveRoom.layout.xMeters,
+              startYMeters: effectiveRoom.layout.yMeters,
+              endXMeters: effectiveRoom.layout.rightMeters,
+              endYMeters: effectiveRoom.layout.yMeters,
+            )
+          : null,
+      source: construction.elementKind == ConstructionElementKind.wall
+          ? EnvelopeElementSource.autoExteriorWall
+          : EnvelopeElementSource.manual,
     );
   }
 
@@ -683,6 +831,8 @@ class HouseEnvelopeElement {
   final double areaSquareMeters;
   final String constructionId;
   final EnvelopeWallPlacement? wallPlacement;
+  final HouseLineSegment? lineSegment;
+  final EnvelopeElementSource source;
 
   HouseEnvelopeElement copyWith({
     String? id,
@@ -692,7 +842,10 @@ class HouseEnvelopeElement {
     double? areaSquareMeters,
     String? constructionId,
     EnvelopeWallPlacement? wallPlacement,
+    HouseLineSegment? lineSegment,
+    EnvelopeElementSource? source,
     bool clearWallPlacement = false,
+    bool clearLineSegment = false,
   }) {
     return HouseEnvelopeElement(
       id: id ?? this.id,
@@ -704,6 +857,8 @@ class HouseEnvelopeElement {
       wallPlacement: clearWallPlacement
           ? null
           : wallPlacement ?? this.wallPlacement,
+      lineSegment: clearLineSegment ? null : lineSegment ?? this.lineSegment,
+      source: source ?? this.source,
     );
   }
 
@@ -715,6 +870,8 @@ class HouseEnvelopeElement {
     'areaSquareMeters': areaSquareMeters,
     'constructionId': constructionId,
     'wallPlacement': wallPlacement?.toJson(),
+    'lineSegment': lineSegment?.toJson(),
+    'source': source.storageKey,
   };
 }
 
@@ -899,18 +1056,90 @@ class HouseModel {
     List<Construction> constructions,
   ) {
     final defaultRoom = Room.defaultRoom();
+    final wallConstructions = constructions
+        .where((item) => item.elementKind == ConstructionElementKind.wall)
+        .toList(growable: false);
+    final nonWallConstructions = constructions
+        .where((item) => item.elementKind != ConstructionElementKind.wall)
+        .toList(growable: false);
     return HouseModel(
       id: 'house-model',
       title: 'Конструктор дома',
       rooms: [defaultRoom],
-      elements: constructions
-          .map(
-            (construction) => HouseEnvelopeElement.fromConstruction(
-              construction,
-              room: defaultRoom,
+      elements: [
+        if (wallConstructions.isNotEmpty) ...[
+          HouseEnvelopeElement(
+            id: 'wall-${defaultRoom.id}-0_0-0_0-4_0-0_0',
+            roomId: defaultRoom.id,
+            title: 'Стена ${defaultRoom.title}',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters:
+                defaultRoom.layout.widthMeters * defaultRoom.heightMeters,
+            constructionId: wallConstructions.first.id,
+            lineSegment: HouseLineSegment(
+              startXMeters: defaultRoom.layout.xMeters,
+              startYMeters: defaultRoom.layout.yMeters,
+              endXMeters: defaultRoom.layout.rightMeters,
+              endYMeters: defaultRoom.layout.yMeters,
             ),
-          )
-          .toList(growable: false),
+            source: EnvelopeElementSource.autoExteriorWall,
+          ),
+          HouseEnvelopeElement(
+            id: 'wall-${defaultRoom.id}-4_0-0_0-4_0-4_0',
+            roomId: defaultRoom.id,
+            title: 'Стена ${defaultRoom.title}',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters:
+                defaultRoom.layout.heightMeters * defaultRoom.heightMeters,
+            constructionId: wallConstructions.first.id,
+            lineSegment: HouseLineSegment(
+              startXMeters: defaultRoom.layout.rightMeters,
+              startYMeters: defaultRoom.layout.yMeters,
+              endXMeters: defaultRoom.layout.rightMeters,
+              endYMeters: defaultRoom.layout.bottomMeters,
+            ),
+            source: EnvelopeElementSource.autoExteriorWall,
+          ),
+          HouseEnvelopeElement(
+            id: 'wall-${defaultRoom.id}-0_0-4_0-4_0-4_0',
+            roomId: defaultRoom.id,
+            title: 'Стена ${defaultRoom.title}',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters:
+                defaultRoom.layout.widthMeters * defaultRoom.heightMeters,
+            constructionId: wallConstructions.first.id,
+            lineSegment: HouseLineSegment(
+              startXMeters: defaultRoom.layout.xMeters,
+              startYMeters: defaultRoom.layout.bottomMeters,
+              endXMeters: defaultRoom.layout.rightMeters,
+              endYMeters: defaultRoom.layout.bottomMeters,
+            ),
+            source: EnvelopeElementSource.autoExteriorWall,
+          ),
+          HouseEnvelopeElement(
+            id: 'wall-${defaultRoom.id}-0_0-0_0-0_0-4_0',
+            roomId: defaultRoom.id,
+            title: 'Стена ${defaultRoom.title}',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters:
+                defaultRoom.layout.heightMeters * defaultRoom.heightMeters,
+            constructionId: wallConstructions.first.id,
+            lineSegment: HouseLineSegment(
+              startXMeters: defaultRoom.layout.xMeters,
+              startYMeters: defaultRoom.layout.yMeters,
+              endXMeters: defaultRoom.layout.xMeters,
+              endYMeters: defaultRoom.layout.bottomMeters,
+            ),
+            source: EnvelopeElementSource.autoExteriorWall,
+          ),
+        ],
+        ...nonWallConstructions.map(
+          (construction) => HouseEnvelopeElement.fromConstruction(
+            construction,
+            room: defaultRoom,
+          ),
+        ),
+      ],
       openings: const [],
       heatingDevices: const [],
     );

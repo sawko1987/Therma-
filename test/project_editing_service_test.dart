@@ -167,44 +167,61 @@ void main() {
       project,
       project.houseModel.rooms.single.copyWith(heightMeters: 3.1),
     );
-
-    expect(
-      updated.houseModel.elements.single.areaSquareMeters,
-      closeTo(12.4, 0.001),
+    final topWall = updated.houseModel.elements.firstWhere(
+      (item) =>
+          item.elementKind == ConstructionElementKind.wall &&
+          item.lineSegment != null &&
+          item.lineSegment!.startYMeters == 0 &&
+          item.lineSegment!.endYMeters == 0,
     );
+
+    expect(topWall.areaSquareMeters, closeTo(12.4, 0.001));
   });
 
   test('updateEnvelopeWallPlacement updates derived area', () {
     final project = buildTestProject();
+    final sourceWall = project.houseModel.elements.firstWhere(
+      (item) =>
+          item.elementKind == ConstructionElementKind.wall &&
+          item.lineSegment != null &&
+          item.lineSegment!.startYMeters == 0 &&
+          item.lineSegment!.endYMeters == 0,
+    );
 
     final updated = service.updateEnvelopeWallPlacement(
       project,
-      project.houseModel.elements.single.id,
+      sourceWall.id,
       buildWallPlacement(
         side: RoomSide.right,
         offsetMeters: 1,
         lengthMeters: 2.5,
       ),
     );
-
-    expect(
-      updated.houseModel.elements.single.wallPlacement?.side,
-      RoomSide.right,
+    final editedWall = updated.houseModel.elements.firstWhere(
+      (item) => item.id == sourceWall.id,
     );
-    expect(updated.houseModel.elements.single.areaSquareMeters, 6.75);
+
+    expect(editedWall.wallPlacement?.side, RoomSide.right);
+    expect(editedWall.areaSquareMeters, 6.75);
   });
 
-  test('updateRoomLayout rejects when wall no longer fits side', () {
+  test('updateRoomLayout rebuilds auto walls for new room size', () {
     final project = buildTestProject();
-
-    expect(
-      () => service.updateRoomLayout(
-        project,
-        defaultRoomId,
-        buildRoomLayout(widthMeters: 3, heightMeters: 4),
-      ),
-      throwsStateError,
+    final updated = service.updateRoomLayout(
+      project,
+      defaultRoomId,
+      buildRoomLayout(widthMeters: 3, heightMeters: 4),
     );
+    final topWall = updated.houseModel.elements.firstWhere(
+      (item) =>
+          item.elementKind == ConstructionElementKind.wall &&
+          item.lineSegment != null &&
+          item.lineSegment!.startYMeters == 0 &&
+          item.lineSegment!.endYMeters == 0,
+    );
+
+    expect(topWall.lineSegment!.lengthMeters, 3);
+    expect(topWall.areaSquareMeters, 3 * defaultRoomHeightMeters);
   });
 
   test('updateRoomLayout rejects negative coordinates', () {
@@ -343,14 +360,107 @@ void main() {
 
   test('updateEnvelopeWallPlacement rejects segment outside room side', () {
     final project = buildTestProject();
+    final sourceWall = project.houseModel.elements.firstWhere(
+      (item) =>
+          item.elementKind == ConstructionElementKind.wall &&
+          item.lineSegment != null &&
+          item.lineSegment!.startYMeters == 0 &&
+          item.lineSegment!.endYMeters == 0,
+    );
 
     expect(
       () => service.updateEnvelopeWallPlacement(
         project,
-        project.houseModel.elements.single.id,
+        sourceWall.id,
         buildWallPlacement(offsetMeters: 1.5, lengthMeters: 3),
       ),
       throwsStateError,
+    );
+  });
+
+  test('mergeRoomsAcrossPartition combines adjacent rooms into one room', () {
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: [
+          buildRoom(
+            id: 'room-a',
+            title: 'Комната A',
+            layout: buildRoomLayout(
+              xMeters: 0,
+              yMeters: 0,
+              widthMeters: 4,
+              heightMeters: 4,
+            ),
+          ),
+          buildRoom(
+            id: 'room-b',
+            title: 'Комната B',
+            kind: RoomKind.bedroom,
+            heightMeters: 3.2,
+            layout: buildRoomLayout(
+              xMeters: 4,
+              yMeters: 0,
+              widthMeters: 2,
+              heightMeters: 4,
+            ),
+          ),
+        ],
+        elements: const [],
+        openings: const [],
+      ),
+    );
+
+    final updated = service.mergeRoomsAcrossPartition(
+      project,
+      'room-a',
+      'room-b',
+    );
+
+    expect(updated.houseModel.rooms, hasLength(1));
+    final mergedRoom = updated.houseModel.rooms.single;
+    expect(mergedRoom.id, 'room-a');
+    expect(mergedRoom.heightMeters, defaultRoomHeightMeters);
+    expect(mergedRoom.effectiveCells, hasLength(2));
+    expect(mergedRoom.areaSquareMeters, 24);
+    expect(
+      updated.houseModel.elements.where(
+        (item) => item.elementKind == ConstructionElementKind.wall,
+      ),
+      hasLength(4),
+    );
+  });
+
+  test('splitExteriorWallSegment creates two auto wall spans', () {
+    final project = buildTestProject();
+    final topWall = project.houseModel.elements.firstWhere(
+      (item) =>
+          item.elementKind == ConstructionElementKind.wall &&
+          item.lineSegment != null &&
+          item.lineSegment!.startYMeters == 0 &&
+          item.lineSegment!.endYMeters == 0,
+    );
+
+    final updated = service.splitExteriorWallSegment(project, topWall.id, 1.5);
+    final splitWalls = updated.houseModel.elements
+        .where(
+          (item) =>
+              item.elementKind == ConstructionElementKind.wall &&
+              item.roomId == defaultRoomId &&
+              item.lineSegment != null &&
+              item.lineSegment!.startYMeters == 0 &&
+              item.lineSegment!.endYMeters == 0,
+        )
+        .toList(growable: false);
+
+    expect(splitWalls, hasLength(2));
+    expect(
+      splitWalls.fold<double>(
+        0,
+        (sum, item) => sum + item.lineSegment!.lengthMeters,
+      ),
+      closeTo(4, 0.0001),
     );
   });
 
@@ -387,9 +497,7 @@ void main() {
         ],
         elements: const [],
         openings: const [],
-        heatingDevices: [
-          buildHeatingDevice(id: 'device-a', roomId: 'room-a'),
-        ],
+        heatingDevices: [buildHeatingDevice(id: 'device-a', roomId: 'room-a')],
       ),
     );
 

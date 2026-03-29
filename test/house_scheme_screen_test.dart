@@ -29,7 +29,13 @@ void main() {
       await _scrollToPlan(tester);
 
       expect(find.text('План дома'), findsOneWidget);
-      expect(find.text('Ошибка commit'), findsOneWidget);
+      expect(find.text('Наружные стены'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Комната может состоять из нескольких соседних ячеек',
+        ),
+        findsOneWidget,
+      );
     },
   );
 
@@ -257,9 +263,46 @@ void main() {
     expect(room.layout.yMeters, 0);
   });
 
-  testWidgets('dragging a wall segment persists wall placement', (
+  testWidgets('tapping a wall segment splits exterior wall into two spans', (
     tester,
   ) async {
+    final repository = FakeProjectRepository();
+
+    await _pumpHouseScheme(tester, projectRepository: repository);
+    await _scrollToPlan(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('floor-plan-wall-wall-room-main-0_0-0_0-4_0-0_0'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('split-wall-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('split-wall-button')));
+    await tester.pumpAndSettle();
+
+    final savedProject = (await repository.getProject('demo'))!;
+    final topWalls = savedProject.houseModel.elements
+        .where(
+          (item) =>
+              item.elementKind == ConstructionElementKind.wall &&
+              item.lineSegment != null &&
+              item.lineSegment!.startYMeters == 0 &&
+              item.lineSegment!.endYMeters == 0,
+        )
+        .toList(growable: false);
+    expect(topWalls, hasLength(2));
+    expect(
+      topWalls.fold<double>(
+        0,
+        (sum, item) => sum + item.lineSegment!.lengthMeters,
+      ),
+      closeTo(4, 0.0001),
+    );
+  });
+
+  testWidgets('tapping a partition merges adjacent rooms', (tester) async {
     final repository = FakeProjectRepository(
       projects: [
         buildTestProject(
@@ -268,20 +311,28 @@ void main() {
             title: 'Конструктор дома',
             rooms: [
               buildRoom(
-                layout: buildRoomLayout(widthMeters: 6, heightMeters: 4),
+                id: 'room-a',
+                title: 'Комната A',
+                layout: buildRoomLayout(
+                  xMeters: 0,
+                  yMeters: 0,
+                  widthMeters: 4,
+                  heightMeters: 4,
+                ),
+              ),
+              buildRoom(
+                id: 'room-b',
+                title: 'Комната B',
+                kind: RoomKind.bedroom,
+                layout: buildRoomLayout(
+                  xMeters: 4,
+                  yMeters: 0,
+                  widthMeters: 2,
+                  heightMeters: 4,
+                ),
               ),
             ],
-            elements: [
-              HouseEnvelopeElement(
-                id: 'element-wall',
-                roomId: defaultRoomId,
-                title: 'Стена',
-                elementKind: ConstructionElementKind.wall,
-                areaSquareMeters: 3 * defaultRoomHeightMeters,
-                constructionId: 'wall',
-                wallPlacement: buildWallPlacement(lengthMeters: 3),
-              ),
-            ],
+            elements: const [],
             openings: const [],
           ),
         ),
@@ -291,16 +342,21 @@ void main() {
     await _pumpHouseScheme(tester, projectRepository: repository);
     await _scrollToPlan(tester);
 
-    await _dispatchPan(
-      tester,
-      find.byKey(const ValueKey('floor-plan-wall-element-wall')),
-      const Offset(32, 0),
+    await tester.tap(
+      find.byKey(const ValueKey('floor-plan-partition-4.0-0.0-4.0-4.0')),
     );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('merge-rooms-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('merge-rooms-button')));
+    await tester.pumpAndSettle();
 
     final savedProject = (await repository.getProject('demo'))!;
-    final wall = savedProject.houseModel.elements.single;
-    expect(wall.wallPlacement?.offsetMeters, 1);
-    expect(wall.areaSquareMeters, closeTo(3 * defaultRoomHeightMeters, 0.0001));
+    expect(savedProject.houseModel.rooms, hasLength(1));
+    expect(savedProject.houseModel.rooms.single.effectiveCells, hasLength(2));
+    expect(savedProject.houseModel.rooms.single.areaSquareMeters, 24);
   });
 }
 

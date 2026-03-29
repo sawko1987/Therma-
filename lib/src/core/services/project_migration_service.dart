@@ -84,21 +84,36 @@ class ProjectMigrationService {
     final normalizedRooms = project.sourceProjectFormatVersion < 5
         ? _migrateRoomLayouts(rooms)
         : rooms;
-    final roomIds = normalizedRooms.map((item) => item.id).toSet();
+    final roomsWithCells = project.sourceProjectFormatVersion < 13
+        ? normalizedRooms
+              .map(
+                (room) => room.copyWith(
+                  cells: room.effectiveCells.isEmpty
+                      ? [room.layout]
+                      : room.effectiveCells,
+                  layout: RoomLayoutRect.boundingBox(room.effectiveCells),
+                ),
+              )
+              .toList(growable: false)
+        : normalizedRooms;
+    final roomIds = roomsWithCells.map((item) => item.id).toSet();
     final normalizedElements = houseModel.elements
         .map(
           (item) => roomIds.contains(item.roomId)
               ? item
-              : item.copyWith(roomId: normalizedRooms.first.id),
+              : item.copyWith(roomId: roomsWithCells.first.id),
         )
         .toList(growable: false);
     final elements = project.sourceProjectFormatVersion < 6
         ? _migrateWallPlacements(
-            rooms: normalizedRooms,
+            rooms: roomsWithCells,
             elements: normalizedElements,
           )
         : normalizedElements;
-    final elementIds = elements.map((item) => item.id).toSet();
+    final wallElements = project.sourceProjectFormatVersion < 13
+        ? _migrateWallSegments(rooms: roomsWithCells, elements: elements)
+        : elements;
+    final elementIds = wallElements.map((item) => item.id).toSet();
     final openings = houseModel.openings
         .where((item) => elementIds.contains(item.elementId))
         .toList(growable: false);
@@ -107,8 +122,8 @@ class ProjectMigrationService {
         .toList(growable: false);
 
     return houseModel.copyWith(
-      rooms: normalizedRooms,
-      elements: elements,
+      rooms: roomsWithCells,
+      elements: wallElements,
       openings: openings,
       heatingDevices: heatingDevices,
     );
@@ -163,5 +178,70 @@ class ProjectMigrationService {
           );
         })
         .toList(growable: false);
+  }
+
+  List<HouseEnvelopeElement> _migrateWallSegments({
+    required List<Room> rooms,
+    required List<HouseEnvelopeElement> elements,
+  }) {
+    final roomMap = {for (final room in rooms) room.id: room};
+    return elements
+        .map((element) {
+          if (element.elementKind != ConstructionElementKind.wall) {
+            return element.copyWith(
+              source: EnvelopeElementSource.manual,
+              clearLineSegment: true,
+            );
+          }
+          final room = roomMap[element.roomId] ?? rooms.first;
+          final lineSegment =
+              element.lineSegment ??
+              (element.wallPlacement == null
+                  ? HouseLineSegment(
+                      startXMeters: room.layout.xMeters,
+                      startYMeters: room.layout.yMeters,
+                      endXMeters: room.layout.rightMeters,
+                      endYMeters: room.layout.yMeters,
+                    )
+                  : _lineSegmentForPlacement(room, element.wallPlacement!));
+          return element.copyWith(
+            lineSegment: lineSegment,
+            source: EnvelopeElementSource.autoExteriorWall,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  HouseLineSegment _lineSegmentForPlacement(
+    Room room,
+    EnvelopeWallPlacement placement,
+  ) {
+    final layout = room.layout;
+    return switch (placement.side) {
+      RoomSide.top => HouseLineSegment(
+        startXMeters: layout.xMeters + placement.offsetMeters,
+        startYMeters: layout.yMeters,
+        endXMeters: layout.xMeters + placement.endMeters,
+        endYMeters: layout.yMeters,
+      ),
+      RoomSide.bottom => HouseLineSegment(
+        startXMeters: layout.xMeters + placement.offsetMeters,
+        startYMeters: layout.bottomMeters,
+        endXMeters: layout.xMeters + placement.endMeters,
+        endYMeters: layout.bottomMeters,
+      ),
+      RoomSide.left => HouseLineSegment(
+        startXMeters: layout.xMeters,
+        startYMeters: layout.yMeters + placement.offsetMeters,
+        endXMeters: layout.xMeters,
+        endYMeters: layout.yMeters + placement.endMeters,
+      ),
+      RoomSide.right => HouseLineSegment(
+        startXMeters: layout.rightMeters,
+        startYMeters: layout.yMeters + placement.offsetMeters,
+        endXMeters: layout.rightMeters,
+        endYMeters: layout.yMeters + placement.endMeters,
+      ),
+    };
   }
 }
