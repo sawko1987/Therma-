@@ -17,12 +17,30 @@ void main() {
         title: 'Спальня',
         kind: RoomKind.bedroom,
         heightMeters: 2.7,
-        layout: buildRoomLayout(xMeters: 5, yMeters: 0),
+        layout: buildRoomLayout(xMeters: 4, yMeters: 0),
       ),
     );
 
     expect(updated.houseModel.rooms, hasLength(2));
     expect(updated.houseModel.rooms.last.title, 'Спальня');
+  });
+
+  test('addRoom rejects disconnected layout without shared side', () {
+    final project = buildTestProject();
+
+    expect(
+      () => service.addRoom(
+        project,
+        Room(
+          id: 'room-bedroom',
+          title: 'Спальня',
+          kind: RoomKind.bedroom,
+          heightMeters: 2.7,
+          layout: buildRoomLayout(xMeters: 6, yMeters: 0),
+        ),
+      ),
+      throwsStateError,
+    );
   });
 
   test('addRoom rejects overlapping layout', () {
@@ -61,6 +79,63 @@ void main() {
         () =>
             service.deleteConstruction(project, project.constructions.first.id),
         throwsStateError,
+      );
+    },
+  );
+
+  test('updateInternalPartitionConstruction rejects non-wall construction', () {
+    final floor = Construction(
+      id: 'floor',
+      title: 'Пол',
+      elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.overBasement,
+      layers: buildWallConstruction().layers,
+    );
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: [Room.defaultRoom()],
+        elements: const [],
+        openings: const [],
+      ),
+    ).copyWith(constructions: [buildWallConstruction(), floor]);
+
+    expect(
+      () => service.updateInternalPartitionConstruction(project, floor.id),
+      throwsStateError,
+    );
+  });
+
+  test(
+    'deleteConstruction retargets internal partition construction to remaining wall',
+    () {
+      final primaryWall = buildWallConstruction();
+      final secondaryWall = primaryWall.copyWith(
+        id: 'wall-secondary',
+        title: 'Внутренняя перегородка',
+      );
+      final project =
+          buildTestProject(
+            construction: primaryWall,
+            houseModel: HouseModel(
+              id: 'house-model',
+              title: 'Дом',
+              rooms: [Room.defaultRoom()],
+              elements: const [],
+              openings: const [],
+              internalPartitionConstructionId: 'wall-secondary',
+            ),
+          ).copyWith(
+            constructions: [primaryWall, secondaryWall],
+            selectedConstructionIds: [primaryWall.id, secondaryWall.id],
+          );
+
+      final updated = service.deleteConstruction(project, secondaryWall.id);
+
+      expect(
+        updated.houseModel.internalPartitionConstructionId,
+        primaryWall.id,
       );
     },
   );
@@ -178,6 +253,83 @@ void main() {
     expect(topWall.areaSquareMeters, closeTo(12.4, 0.001));
   });
 
+  test('configureRoomEnvelope creates auto floor and top elements', () {
+    final wall = buildWallConstruction();
+    final floor = Construction(
+      id: 'floor-main',
+      title: 'Пол по грунту',
+      elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
+      layers: wall.layers,
+    );
+    final ceiling = Construction(
+      id: 'ceiling-main',
+      title: 'Чердачное перекрытие',
+      elementKind: ConstructionElementKind.ceiling,
+      layers: wall.layers,
+    );
+    final project = buildTestProject(constructions: [wall, floor, ceiling]);
+
+    final updated = service.configureRoomEnvelope(
+      project,
+      roomId: defaultRoomId,
+      floorConstructionId: floor.id,
+      topConstructionId: ceiling.id,
+    );
+
+    expect(
+      updated.houseModel.elements.any(
+        (item) => item.id == 'auto-floor-room-main',
+      ),
+      isTrue,
+    );
+    expect(
+      updated.houseModel.elements.any(
+        (item) => item.id == 'auto-top-room-main',
+      ),
+      isTrue,
+    );
+  });
+
+  test('updateRoom syncs auto floor and top area from room area', () {
+    final wall = buildWallConstruction();
+    final floor = Construction(
+      id: 'floor-main',
+      title: 'Пол по грунту',
+      elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
+      layers: wall.layers,
+    );
+    final roof = Construction(
+      id: 'roof-main',
+      title: 'Теплая кровля',
+      elementKind: ConstructionElementKind.roof,
+      layers: wall.layers,
+    );
+    final configuredProject = service.configureRoomEnvelope(
+      buildTestProject(constructions: [wall, floor, roof]),
+      roomId: defaultRoomId,
+      floorConstructionId: floor.id,
+      topConstructionId: roof.id,
+    );
+
+    final updated = service.updateRoom(
+      configuredProject,
+      configuredProject.houseModel.rooms.single.copyWith(
+        layout: buildRoomLayout(widthMeters: 5, heightMeters: 6),
+      ),
+    );
+
+    final autoFloor = updated.houseModel.elements.firstWhere(
+      (item) => item.id == 'auto-floor-room-main',
+    );
+    final autoTop = updated.houseModel.elements.firstWhere(
+      (item) => item.id == 'auto-top-room-main',
+    );
+    expect(autoFloor.areaSquareMeters, 30);
+    expect(autoTop.areaSquareMeters, 30);
+  });
+
   test('updateEnvelopeWallPlacement updates derived area', () {
     final project = buildTestProject();
     final sourceWall = project.houseModel.elements.firstWhere(
@@ -236,6 +388,207 @@ void main() {
       throwsStateError,
     );
   });
+
+  test('addRoomCell expands room directly on grid without temporary room', () {
+    final project = buildTestProject();
+
+    final updated = service.addRoomCell(
+      project,
+      defaultRoomId,
+      const RoomLayoutRect(
+        xMeters: 4,
+        yMeters: 0,
+        widthMeters: roomLayoutSnapStepMeters,
+        heightMeters: roomLayoutSnapStepMeters,
+      ),
+    );
+
+    expect(updated.houseModel.rooms.single.areaSquareMeters, 16.25);
+    expect(updated.houseModel.rooms.single.effectiveCells, hasLength(65));
+  });
+
+  test('removeRoomCell shrinks multi-cell room and keeps it connected', () {
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: [
+          buildRoom(
+            cells: const [
+              RoomLayoutRect(
+                xMeters: 0,
+                yMeters: 0,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+              RoomLayoutRect(
+                xMeters: 0.5,
+                yMeters: 0,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+              RoomLayoutRect(
+                xMeters: 1.0,
+                yMeters: 0,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+            ],
+          ),
+        ],
+        elements: const [],
+        openings: const [],
+      ),
+    );
+
+    final updated = service.removeRoomCell(
+      project,
+      defaultRoomId,
+      const RoomLayoutRect(
+        xMeters: 1.0,
+        yMeters: 0,
+        widthMeters: roomLayoutSnapStepMeters,
+        heightMeters: roomLayoutSnapStepMeters,
+      ),
+    );
+
+    expect(updated.houseModel.rooms.single.effectiveCells, hasLength(2));
+    expect(updated.houseModel.rooms.single.layout.widthMeters, 1.0);
+  });
+
+  test('removeRoomCell rejects disconnecting composite room', () {
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: [
+          buildRoom(
+            cells: const [
+              RoomLayoutRect(
+                xMeters: 0,
+                yMeters: 0,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+              RoomLayoutRect(
+                xMeters: 0.5,
+                yMeters: 0,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+              RoomLayoutRect(
+                xMeters: 1.0,
+                yMeters: 0,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+            ],
+          ),
+        ],
+        elements: const [],
+        openings: const [],
+      ),
+    );
+
+    expect(
+      () => service.removeRoomCell(
+        project,
+        defaultRoomId,
+        const RoomLayoutRect(
+          xMeters: 0.5,
+          yMeters: 0,
+          widthMeters: roomLayoutSnapStepMeters,
+          heightMeters: roomLayoutSnapStepMeters,
+        ),
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('removeRoomCell rejects creating internal hole', () {
+    final project = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: [
+          buildRoom(
+            cells: const [
+              RoomLayoutRect(
+                xMeters: 0,
+                yMeters: 0,
+                widthMeters: 1.5,
+                heightMeters: 1.5,
+              ),
+            ],
+          ),
+        ],
+        elements: const [],
+        openings: const [],
+      ),
+    );
+
+    expect(
+      () => service.removeRoomCell(
+        project,
+        defaultRoomId,
+        const RoomLayoutRect(
+          xMeters: 0.5,
+          yMeters: 0.5,
+          widthMeters: roomLayoutSnapStepMeters,
+          heightMeters: roomLayoutSnapStepMeters,
+        ),
+      ),
+      throwsStateError,
+    );
+  });
+
+  test(
+    'addRoomCell preserves opening-bound wall id when segment stays unique',
+    () {
+      final project = buildTestProject(
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Дом',
+          rooms: [Room.defaultRoom()],
+          elements: HouseModel.bootstrapFromConstructions([
+            buildWallConstruction(),
+          ]).elements,
+          openings: const [
+            EnvelopeOpening(
+              id: 'opening-window',
+              elementId: 'wall-room-main-0_0-0_0-4_0-0_0',
+              title: 'Окно',
+              kind: OpeningKind.window,
+              areaSquareMeters: 2,
+              heatTransferCoefficient: 1.0,
+            ),
+          ],
+        ),
+      );
+
+      final updated = service.addRoomCell(
+        project,
+        defaultRoomId,
+        const RoomLayoutRect(
+          xMeters: 4,
+          yMeters: 3.5,
+          widthMeters: roomLayoutSnapStepMeters,
+          heightMeters: roomLayoutSnapStepMeters,
+        ),
+      );
+
+      expect(
+        updated.houseModel.elements.any(
+          (item) => item.id == 'wall-room-main-0_0-0_0-4_0-0_0',
+        ),
+        isTrue,
+      );
+      expect(
+        updated.houseModel.openings.single.elementId,
+        'wall-room-main-0_0-0_0-4_0-0_0',
+      );
+    },
+  );
 
   test('deleteEnvelopeElement also removes linked openings', () {
     final project = buildTestProject(

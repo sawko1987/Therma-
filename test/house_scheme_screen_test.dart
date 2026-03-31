@@ -26,16 +26,10 @@ void main() {
         findsOneWidget,
       );
 
-      await _scrollToPlan(tester);
+      await _scrollToPlanLauncher(tester);
 
-      expect(find.text('План дома'), findsOneWidget);
-      expect(find.text('Наружные стены'), findsOneWidget);
-      expect(
-        find.textContaining(
-          'Комната может состоять из нескольких соседних ячеек',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('Открыть редактор плана'), findsOneWidget);
+      expect(find.text('Помещения и ограждения'), findsOneWidget);
     },
   );
 
@@ -57,6 +51,32 @@ void main() {
 
     expect(find.text('Теплопотери здания'), findsOneWidget);
     expect(find.textContaining('Итого потерь'), findsOneWidget);
+    expect(find.text('Инфильтрация'), findsWidgets);
+  });
+
+  testWidgets('house builder summary handles long partition construction title', (
+    tester,
+  ) async {
+    final longWall = buildWallConstruction().copyWith(
+      title:
+          'Очень длинная внутренняя перегородка с демонстрационно длинным названием для проверки отсутствия переполнения в dropdown',
+    );
+    final houseModel = HouseModel.bootstrapFromConstructions([
+      longWall,
+    ]).copyWith(internalPartitionConstructionId: longWall.id);
+    final project = buildTestProject(
+      constructions: [longWall],
+      houseModel: houseModel,
+    );
+
+    await _pumpHouseScheme(
+      tester,
+      projectRepository: FakeProjectRepository(projects: [project]),
+    );
+
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('house builder screen renders heating devices card', (
@@ -81,7 +101,21 @@ void main() {
       ),
     );
 
-    await _scrollToPlan(tester);
+    await _openPlanEditor(tester);
+
+    expect(find.text('Редактор плана'), findsOneWidget);
+    expect(find.text('План дома'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Комната может состоять из нескольких соседних ячеек',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('close-house-plan-editor-button')),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('Отопительные приборы'), findsOneWidget);
     expect(find.text('Радиатор в гостиной'), findsOneWidget);
@@ -92,7 +126,7 @@ void main() {
     final repository = FakeProjectRepository();
 
     await _pumpHouseScheme(tester, projectRepository: repository);
-    await _scrollToPlan(tester);
+    await _openPlanEditor(tester);
 
     await _dispatchPan(
       tester,
@@ -106,12 +140,27 @@ void main() {
     expect(room.layout.yMeters, 1);
   });
 
-  testWidgets('add room creates it directly on plan in free space', (
+  testWidgets('add room uses draft placement and envelope assignment flow', (
     tester,
   ) async {
+    final wall = buildWallConstruction();
+    final floor = Construction(
+      id: 'floor-main',
+      title: 'Пол по грунту',
+      elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
+      layers: wall.layers,
+    );
+    final ceiling = Construction(
+      id: 'ceiling-main',
+      title: 'Чердачное перекрытие',
+      elementKind: ConstructionElementKind.ceiling,
+      layers: wall.layers,
+    );
     final repository = FakeProjectRepository(
       projects: [
         buildTestProject(
+          constructions: [wall, floor, ceiling],
           houseModel: HouseModel(
             id: 'house-model',
             title: 'Конструктор дома',
@@ -135,9 +184,25 @@ void main() {
     );
 
     await _pumpHouseScheme(tester, projectRepository: repository);
-    await _scrollToPlan(tester);
+    await _scrollToPlanLauncher(tester);
 
-    await tester.tap(find.text('Добавить помещение').first);
+    await tester.tap(
+      find.byKey(const ValueKey('add-room-via-plan-editor-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Сохранить').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('confirm-room-placement-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-room-placement-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Сохранить ограждения'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Сохранить ограждения'));
     await tester.pumpAndSettle();
 
     final savedProject = (await repository.getProject('demo'))!;
@@ -147,13 +212,25 @@ void main() {
     expect(createdRoom.layout.heightMeters, 3);
     expect(createdRoom.layout.xMeters, 4);
     expect(createdRoom.layout.yMeters, 0);
+    expect(
+      savedProject.houseModel.elements.any(
+        (item) => item.id == 'auto-floor-${createdRoom.id}',
+      ),
+      isTrue,
+    );
+    expect(
+      savedProject.houseModel.elements.any(
+        (item) => item.id == 'auto-top-${createdRoom.id}',
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('room resize snaps to 0.5m grid', (tester) async {
     final repository = FakeProjectRepository();
 
     await _pumpHouseScheme(tester, projectRepository: repository);
-    await _scrollToPlan(tester);
+    await _openPlanEditor(tester);
 
     await _dispatchPan(
       tester,
@@ -173,7 +250,7 @@ void main() {
     final repository = FakeProjectRepository();
 
     await _pumpHouseScheme(tester, projectRepository: repository);
-    await _scrollToPlan(tester);
+    await _openPlanEditor(tester);
 
     await tester.enterText(
       find.byKey(const ValueKey('selected-room-width-field')),
@@ -241,7 +318,7 @@ void main() {
     );
 
     await _pumpHouseScheme(tester, projectRepository: repository);
-    await _scrollToPlan(tester);
+    await _openPlanEditor(tester);
 
     await _dispatchPan(
       tester,
@@ -269,7 +346,7 @@ void main() {
     final repository = FakeProjectRepository();
 
     await _pumpHouseScheme(tester, projectRepository: repository);
-    await _scrollToPlan(tester);
+    await _openPlanEditor(tester);
 
     await tester.tap(
       find.byKey(
@@ -340,7 +417,7 @@ void main() {
     );
 
     await _pumpHouseScheme(tester, projectRepository: repository);
-    await _scrollToPlan(tester);
+    await _openPlanEditor(tester);
 
     await tester.tap(
       find.byKey(const ValueKey('floor-plan-partition-4.0-0.0-4.0-4.0')),
@@ -357,6 +434,95 @@ void main() {
     expect(savedProject.houseModel.rooms, hasLength(1));
     expect(savedProject.houseModel.rooms.single.effectiveCells, hasLength(2));
     expect(savedProject.houseModel.rooms.single.areaSquareMeters, 24);
+  });
+
+  testWidgets('cell edit mode adds a neighboring 0.5m cell to selected room', (
+    tester,
+  ) async {
+    final repository = FakeProjectRepository();
+
+    await _pumpHouseScheme(tester, projectRepository: repository);
+    await _openPlanEditor(tester);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('cell-edit-add-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('cell-edit-add-button')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('floor-plan-cell-add-4.0-0.0')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('floor-plan-cell-add-4.0-0.0')));
+    await tester.pumpAndSettle();
+
+    final savedProject = (await repository.getProject('demo'))!;
+    expect(savedProject.houseModel.rooms.single.areaSquareMeters, 16.25);
+  });
+
+  testWidgets('cell edit mode shows inline error for invalid removal', (
+    tester,
+  ) async {
+    final repository = FakeProjectRepository(
+      projects: [
+        buildTestProject(
+          houseModel: HouseModel(
+            id: 'house-model',
+            title: 'Дом',
+            rooms: [
+              buildRoom(
+                cells: const [
+                  RoomLayoutRect(
+                    xMeters: 0,
+                    yMeters: 0,
+                    widthMeters: 0.5,
+                    heightMeters: 0.5,
+                  ),
+                  RoomLayoutRect(
+                    xMeters: 0.5,
+                    yMeters: 0,
+                    widthMeters: 0.5,
+                    heightMeters: 0.5,
+                  ),
+                  RoomLayoutRect(
+                    xMeters: 1.0,
+                    yMeters: 0,
+                    widthMeters: 0.5,
+                    heightMeters: 0.5,
+                  ),
+                ],
+              ),
+            ],
+            elements: const [],
+            openings: const [],
+          ),
+        ),
+      ],
+    );
+
+    await _pumpHouseScheme(tester, projectRepository: repository);
+    await _openPlanEditor(tester);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('cell-edit-remove-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('cell-edit-remove-button')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('floor-plan-cell-remove-0.5-0.0')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('floor-plan-cell-remove-0.5-0.0')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('floor-plan-inline-error')),
+      findsOneWidget,
+    );
   });
 }
 
@@ -377,8 +543,18 @@ Future<void> _pumpHouseScheme(
   await tester.pumpAndSettle();
 }
 
-Future<void> _scrollToPlan(WidgetTester tester) async {
-  await tester.drag(find.byType(ListView), const Offset(0, -700));
+Future<void> _scrollToPlanLauncher(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.byKey(const ValueKey('open-house-plan-editor-button')),
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openPlanEditor(WidgetTester tester) async {
+  await _scrollToPlanLauncher(tester);
+  await tester.tap(find.byKey(const ValueKey('open-house-plan-editor-button')));
   await tester.pumpAndSettle();
 }
 

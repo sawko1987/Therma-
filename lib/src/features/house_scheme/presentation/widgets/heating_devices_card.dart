@@ -45,9 +45,9 @@ class HeatingDevicesCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Отопительные приборы',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 FilledButton.tonal(
@@ -136,7 +136,9 @@ class HeatingDevicesCard extends StatelessWidget {
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium
-                                          ?.copyWith(fontWeight: FontWeight.w800),
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                     ),
                                     const SizedBox(height: 4),
                                     Wrap(
@@ -144,9 +146,19 @@ class HeatingDevicesCard extends StatelessWidget {
                                       runSpacing: 8,
                                       children: [
                                         _HeatingBalanceBadge(
-                                          label: 'Потери',
+                                          label: 'Наружу',
                                           value:
                                               '${(roomSummary?.heatLossWatts ?? 0).toStringAsFixed(0)} Вт',
+                                        ),
+                                        _HeatingBalanceBadge(
+                                          label: 'Обмен',
+                                          value:
+                                              '${(roomSummary?.adjacentRoomHeatGainWatts ?? 0).toStringAsFixed(0)} Вт',
+                                        ),
+                                        _HeatingBalanceBadge(
+                                          label: 'Нужно',
+                                          value:
+                                              '${(roomSummary?.netHeatingDemandWatts ?? 0).toStringAsFixed(0)} Вт',
                                         ),
                                         _HeatingBalanceBadge(
                                           label: 'Установлено',
@@ -199,8 +211,9 @@ class HeatingDevicesCard extends StatelessWidget {
                                   '${heatingDevice.catalogItemId == null ? '' : ' • ${heatingDevice.catalogItemId}'}'
                                   '${(heatingDevice.notes ?? '').trim().isEmpty ? '' : '\n${heatingDevice.notes!.trim()}'}',
                                 ),
-                                isThreeLine:
-                                    (heatingDevice.notes ?? '').trim().isNotEmpty,
+                                isThreeLine: (heatingDevice.notes ?? '')
+                                    .trim()
+                                    .isNotEmpty,
                                 trailing: PopupMenuButton<String>(
                                   onSelected: (value) {
                                     if (value == 'edit') {
@@ -259,10 +272,7 @@ class _HeatingBalanceBadge extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
           Text(label),
         ],
       ),

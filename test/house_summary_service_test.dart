@@ -61,13 +61,27 @@ void main() {
       expect(summary.totalOpeningCount, 1);
       expect(summary.totalOpeningHeatLossWatts, closeTo(184, 2));
       expect(summary.totalVentilationHeatLossWatts, closeTo(332.86, 0.1));
-      expect(summary.totalHeatLossWatts, closeTo(649.38, 0.2));
+      expect(summary.totalInfiltrationHeatLossWatts, closeTo(184.92, 0.2));
+      expect(summary.totalHeatLossWatts, closeTo(834.30, 0.2));
       expect(summary.totalHeatingDeviceCount, 1);
       expect(summary.totalInstalledHeatingPowerWatts, 450);
-      expect(summary.totalHeatingPowerDeltaWatts, closeTo(-199.38, 0.2));
+      expect(summary.totalHeatingPowerDeltaWatts, closeTo(-384.30, 0.2));
+      expect(summary.internalHeatTransferResults, isEmpty);
       expect(summary.roomResults.single.totalOpaqueAreaSquareMeters, 16);
       expect(summary.roomResults.single.installedHeatingPowerWatts, 450);
-      expect(summary.roomResults.single.ventilationHeatLossWatts, closeTo(332.86, 0.1));
+      expect(
+        summary.roomResults.single.ventilationHeatLossWatts,
+        closeTo(332.86, 0.1),
+      );
+      expect(
+        summary.roomResults.single.infiltrationHeatLossWatts,
+        closeTo(184.92, 0.2),
+      );
+      expect(summary.roomResults.single.adjacentRoomHeatGainWatts, 0);
+      expect(
+        summary.roomResults.single.netHeatingDemandWatts,
+        closeTo(summary.roomResults.single.heatLossWatts, 0.01),
+      );
     },
   );
 
@@ -208,43 +222,245 @@ void main() {
     },
   );
 
-  test('building heat loss adds ventilation using room volume and air change rate', () async {
-    final project = buildTestProject(
-      houseModel: HouseModel(
+  test(
+    'building heat loss adds ventilation using room volume and air change rate',
+    () async {
+      final project = buildTestProject(
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Конструктор дома',
+          rooms: [
+            buildRoom(
+              id: 'bath',
+              title: 'Санузел',
+              kind: RoomKind.bathroom,
+              heightMeters: 2.8,
+              layout: const RoomLayoutRect(
+                xMeters: 0,
+                yMeters: 0,
+                widthMeters: 2,
+                heightMeters: 2,
+              ),
+            ),
+          ],
+          elements: const [],
+          openings: const [],
+        ),
+      );
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
+
+      final summary = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+      );
+      final room = summary.roomResults.single;
+
+      expect(room.roomVolumeCubicMeters, closeTo(11.2, 0.01));
+      expect(room.airChangesPerHour, 1.2);
+      expect(room.ventilationHeatLossWatts, closeTo(225.12, 0.2));
+      expect(room.infiltrationHeatLossWatts, 0);
+      expect(room.heatLossWatts, closeTo(room.ventilationHeatLossWatts, 0.01));
+      expect(room.netHeatingDemandWatts, closeTo(room.heatLossWatts, 0.01));
+      expect(summary.totalVentilationHeatLossWatts, closeTo(225.12, 0.2));
+      expect(summary.totalInfiltrationHeatLossWatts, 0);
+    },
+  );
+
+  test(
+    'building heat loss uses opening leakage preset for infiltration',
+    () async {
+      final project = buildTestProject(
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Дом',
+          rooms: [Room.defaultRoom()],
+          elements: const [
+            HouseEnvelopeElement(
+              id: 'wall-main',
+              roomId: defaultRoomId,
+              title: 'Стена',
+              elementKind: ConstructionElementKind.wall,
+              areaSquareMeters: 12,
+              constructionId: 'wall',
+            ),
+          ],
+          openings: const [
+            EnvelopeOpening(
+              id: 'window-tight',
+              elementId: 'wall-main',
+              title: 'Окно',
+              kind: OpeningKind.window,
+              areaSquareMeters: 1,
+              heatTransferCoefficient: 1.0,
+              leakagePreset: OpeningLeakagePreset.tight,
+            ),
+            EnvelopeOpening(
+              id: 'door-leaky',
+              elementId: 'wall-main',
+              title: 'Дверь',
+              kind: OpeningKind.door,
+              areaSquareMeters: 2,
+              heatTransferCoefficient: 1.5,
+              leakagePreset: OpeningLeakagePreset.leaky,
+            ),
+          ],
+        ),
+      );
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
+
+      final summary = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+      );
+
+      expect(summary.totalInfiltrationHeatLossWatts, closeTo(200.33, 0.2));
+      expect(
+        summary.roomResults.single.infiltrationHeatLossWatts,
+        closeTo(200.33, 0.2),
+      );
+    },
+  );
+
+  test(
+    'building heat loss adds internal heat transfer without changing house total',
+    () async {
+      final houseModel = HouseModel(
         id: 'house-model',
-        title: 'Конструктор дома',
+        title: 'Дом',
         rooms: [
           buildRoom(
-            id: 'bath',
-            title: 'Санузел',
-            kind: RoomKind.bathroom,
-            heightMeters: 2.8,
-            layout: const RoomLayoutRect(
-              xMeters: 0,
-              yMeters: 0,
-              widthMeters: 2,
-              heightMeters: 2,
+            id: 'living',
+            title: 'Гостиная',
+            kind: RoomKind.livingRoom,
+            layout: buildRoomLayout(widthMeters: 4, heightMeters: 4),
+          ),
+          buildRoom(
+            id: 'hall',
+            title: 'Холл',
+            kind: RoomKind.hall,
+            layout: buildRoomLayout(
+              xMeters: 4,
+              widthMeters: 4,
+              heightMeters: 4,
             ),
           ),
         ],
-        elements: const [],
+        elements: const [
+          HouseEnvelopeElement(
+            id: 'living-wall',
+            roomId: 'living',
+            title: 'Стена гостиной',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters: 10,
+            constructionId: 'wall',
+          ),
+          HouseEnvelopeElement(
+            id: 'hall-wall',
+            roomId: 'hall',
+            title: 'Стена холла',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters: 10,
+            constructionId: 'wall',
+          ),
+        ],
         openings: const [],
-      ),
-    );
-    const service = NormativeBuildingHeatLossService(
-      NormativeThermalCalculationEngine(),
-    );
+        internalPartitionConstructionId: 'wall',
+      );
+      final projectWithoutInternal = buildTestProject(houseModel: houseModel);
+      final projectWithInternal = buildTestProject(
+        houseModel: houseModel.copyWith(
+          internalPartitionConstructionId: 'wall',
+        ),
+      );
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
 
-    final summary = await service.calculate(
-      catalog: testCatalogSnapshot,
-      project: project,
-    );
-    final room = summary.roomResults.single;
+      final withoutInternal = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: projectWithoutInternal.copyWith(
+          houseModel: projectWithoutInternal.houseModel.copyWith(
+            clearInternalPartitionConstructionId: true,
+          ),
+        ),
+      );
+      final withInternal = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: projectWithInternal,
+      );
+      final living = withInternal.roomResults.firstWhere(
+        (item) => item.room.id == 'living',
+      );
+      final hall = withInternal.roomResults.firstWhere(
+        (item) => item.room.id == 'hall',
+      );
 
-    expect(room.roomVolumeCubicMeters, closeTo(11.2, 0.01));
-    expect(room.airChangesPerHour, 1.2);
-    expect(room.ventilationHeatLossWatts, closeTo(225.12, 0.2));
-    expect(room.heatLossWatts, closeTo(room.ventilationHeatLossWatts, 0.01));
-    expect(summary.totalVentilationHeatLossWatts, closeTo(225.12, 0.2));
-  });
+      expect(
+        withInternal.totalHeatLossWatts,
+        closeTo(withoutInternal.totalHeatLossWatts, 0.01),
+      );
+      expect(withInternal.internalHeatTransferResults, hasLength(1));
+      expect(
+        living.adjacentRoomHeatGainWatts + hall.adjacentRoomHeatGainWatts,
+        closeTo(0, 0.01),
+      );
+      expect(living.adjacentRoomHeatGainWatts, lessThan(0));
+      expect(hall.adjacentRoomHeatGainWatts, greaterThan(0));
+      expect(living.netHeatingDemandWatts, greaterThan(living.heatLossWatts));
+      expect(hall.netHeatingDemandWatts, lessThan(hall.heatLossWatts));
+    },
+  );
+
+  test(
+    'building heat loss uses minimum room height for internal partition area',
+    () async {
+      final project = buildTestProject(
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Дом',
+          rooms: [
+            buildRoom(
+              id: 'living',
+              title: 'Гостиная',
+              kind: RoomKind.livingRoom,
+              heightMeters: 3.0,
+              layout: buildRoomLayout(widthMeters: 4, heightMeters: 4),
+            ),
+            buildRoom(
+              id: 'hall',
+              title: 'Холл',
+              kind: RoomKind.hall,
+              heightMeters: 2.5,
+              layout: buildRoomLayout(
+                xMeters: 4,
+                widthMeters: 4,
+                heightMeters: 4,
+              ),
+            ),
+          ],
+          elements: const [],
+          openings: const [],
+          internalPartitionConstructionId: 'wall',
+        ),
+      );
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
+
+      final summary = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+      );
+
+      expect(summary.internalHeatTransferResults, hasLength(1));
+      expect(
+        summary.internalHeatTransferResults.single.partitionAreaSquareMeters,
+        closeTo(10, 0.01),
+      );
+    },
+  );
 }

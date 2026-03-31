@@ -317,13 +317,17 @@ Room buildRoom({
   RoomKind kind = RoomKind.livingRoom,
   double heightMeters = defaultRoomHeightMeters,
   RoomLayoutRect? layout,
+  List<RoomLayoutRect>? cells,
 }) {
   return Room(
     id: id,
     title: title,
     kind: kind,
     heightMeters: heightMeters,
-    layout: layout ?? buildRoomLayout(),
+    layout:
+        layout ??
+        (cells == null ? buildRoomLayout() : RoomLayoutRect.boundingBox(cells)),
+    cells: cells ?? const [],
   );
 }
 

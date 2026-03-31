@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/building_heat_loss.dart';
+import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 
 class BuildingHeatLossScreen extends ConsumerWidget {
@@ -28,10 +29,7 @@ class BuildingHeatLossScreen extends ConsumerWidget {
                 if (project == null || result == null) {
                   return const Text('Активный проект не найден.');
                 }
-                return _ResultBody(
-                  projectName: project.name,
-                  result: result,
-                );
+                return _ResultBody(project: project, result: result);
               },
               loading: () => const LinearProgressIndicator(),
               error: (error, _) => Text('Ошибка проекта: $error'),
@@ -46,12 +44,9 @@ class BuildingHeatLossScreen extends ConsumerWidget {
 }
 
 class _ResultBody extends StatelessWidget {
-  const _ResultBody({
-    required this.projectName,
-    required this.result,
-  });
+  const _ResultBody({required this.project, required this.result});
 
-  final String projectName;
+  final Project project;
   final BuildingHeatLossResult result;
 
   @override
@@ -66,14 +61,16 @@ class _ResultBody extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  projectName,
+                  project.name,
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Расчет учитывает потери через непрозрачные участки, проемы и базовую вентиляцию по типу комнаты.',
+                Text(
+                  project.houseModel.internalPartitionConstructionId == null
+                      ? 'Расчет учитывает потери через непрозрачные участки, проемы, инфильтрацию и базовую вентиляцию. Внутренний теплообмен пока не считается: не выбрана конструкция перегородки.'
+                      : 'Расчет учитывает потери через непрозрачные участки, проемы, инфильтрацию, базовую вентиляцию и теплообмен между смежными комнатами.',
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -82,7 +79,8 @@ class _ResultBody extends StatelessWidget {
                   children: [
                     _MetricTile(
                       label: 'Итого потерь',
-                      value: '${result.totalHeatLossWatts.toStringAsFixed(0)} Вт',
+                      value:
+                          '${result.totalHeatLossWatts.toStringAsFixed(0)} Вт',
                     ),
                     _MetricTile(
                       label: 'Через ограждения',
@@ -100,9 +98,18 @@ class _ResultBody extends StatelessWidget {
                           '${result.totalVentilationHeatLossWatts.toStringAsFixed(0)} Вт',
                     ),
                     _MetricTile(
+                      label: 'Инфильтрация',
+                      value:
+                          '${result.totalInfiltrationHeatLossWatts.toStringAsFixed(0)} Вт',
+                    ),
+                    _MetricTile(
                       label: 'Баланс отопления',
                       value:
                           '${result.totalHeatingPowerDeltaWatts.toStringAsFixed(0)} Вт',
+                    ),
+                    _MetricTile(
+                      label: 'Внутренние связи',
+                      value: '${result.internalHeatTransferResults.length}',
                     ),
                     _MetricTile(
                       label: 'Наружная температура',
@@ -163,8 +170,18 @@ class _RoomResultCard extends StatelessWidget {
               runSpacing: 12,
               children: [
                 _MetricTile(
-                  label: 'Потери комнаты',
+                  label: 'Потери наружу',
                   value: '${roomResult.heatLossWatts.toStringAsFixed(0)} Вт',
+                ),
+                _MetricTile(
+                  label: 'Обмен с соседями',
+                  value:
+                      '${roomResult.adjacentRoomHeatGainWatts.toStringAsFixed(0)} Вт',
+                ),
+                _MetricTile(
+                  label: 'Нужно на отопление',
+                  value:
+                      '${roomResult.netHeatingDemandWatts.toStringAsFixed(0)} Вт',
                 ),
                 _MetricTile(
                   label: 'Уставка внутри',
@@ -184,6 +201,11 @@ class _RoomResultCard extends StatelessWidget {
                   label: 'Вентиляция',
                   value:
                       '${roomResult.ventilationHeatLossWatts.toStringAsFixed(0)} Вт',
+                ),
+                _MetricTile(
+                  label: 'Инфильтрация',
+                  value:
+                      '${roomResult.infiltrationHeatLossWatts.toStringAsFixed(0)} Вт',
                 ),
                 _MetricTile(
                   label: 'Баланс отопления',
@@ -207,6 +229,34 @@ class _RoomResultCard extends StatelessWidget {
               'Объем ${roomResult.roomVolumeCubicMeters.toStringAsFixed(1)} м³ · '
               '${roomResult.airChangesPerHour.toStringAsFixed(2)} ACH',
             ),
+            if (roomResult.internalHeatTransferResults.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Теплообмен с соседними комнатами',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              ...roomResult.internalHeatTransferResults.map((item) {
+                final isOutgoing = item.fromRoom.id == roomResult.room.id;
+                final counterpart = isOutgoing
+                    ? item.toRoom.title
+                    : item.fromRoom.title;
+                final signedValue = isOutgoing
+                    ? -item.heatTransferWatts
+                    : item.heatTransferWatts;
+                final directionLabel = isOutgoing
+                    ? 'в соседнюю'
+                    : 'из соседней';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '$counterpart: ${signedValue.toStringAsFixed(0)} Вт $directionLabel комнаты · '
+                    '${item.partitionAreaSquareMeters.toStringAsFixed(1)} м² · '
+                    'R ${item.totalResistance.toStringAsFixed(2)}',
+                  ),
+                );
+              }),
+            ],
             const SizedBox(height: 12),
             ...roomResult.elementResults.map((elementResult) {
               return Padding(
@@ -266,7 +316,8 @@ class _ElementResultTile extends StatelessWidget {
                 ),
                 _MetricTile(
                   label: 'ΔT',
-                  value: '${elementResult.deltaTemperature.toStringAsFixed(0)} °C',
+                  value:
+                      '${elementResult.deltaTemperature.toStringAsFixed(0)} °C',
                 ),
                 _MetricTile(
                   label: 'R конструкции',
@@ -283,10 +334,7 @@ class _ElementResultTile extends StatelessWidget {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.label,
-    required this.value,
-  });
+  const _MetricTile({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -304,10 +352,7 @@ class _MetricTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text(label),
         ],

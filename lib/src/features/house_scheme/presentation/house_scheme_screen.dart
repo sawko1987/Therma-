@@ -30,31 +30,89 @@ class HouseSchemeScreen extends ConsumerWidget {
   final bool showHeatingDevices;
   final Widget? trailingHeader;
 
-  Future<Room?> _handleAddRoom(
-    BuildContext context,
-    WidgetRef ref,
-    Project project,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
+  Future<Room?> _handleAddRoom(BuildContext context, Project project) async {
     final layout = buildFirstAvailableRoomLayout(
       project.houseModel.rooms,
       widthMeters: defaultPlacedRoomWidthMeters,
       heightMeters: defaultPlacedRoomHeightMeters,
     );
     final roomIndex = project.houseModel.rooms.length + 1;
-    final room = Room(
-      id: _buildId('room'),
-      title: 'Помещение $roomIndex',
-      kind: RoomKind.livingRoom,
-      heightMeters: defaultRoomHeightMeters,
-      layout: layout,
+    return _showRoomEditor(
+      context,
+      initialLayout: RoomLayoutRect(
+        xMeters: layout.xMeters,
+        yMeters: layout.yMeters,
+        widthMeters: defaultPlacedRoomWidthMeters,
+        heightMeters: defaultPlacedRoomHeightMeters,
+      ),
+      room: Room(
+        id: _buildId('room'),
+        title: 'Помещение $roomIndex',
+        kind: RoomKind.livingRoom,
+        heightMeters: defaultRoomHeightMeters,
+        layout: layout,
+      ),
     );
+  }
+
+  String? _validateRoomPlacement(
+    WidgetRef ref,
+    Project project,
+    Room room, {
+    String? replacingRoomId,
+  }) {
+    return ref
+        .read(projectEditingServiceProvider)
+        .validateRoomPlacement(project, room, replacingRoomId: replacingRoomId);
+  }
+
+  Future<Project?> _handleCreatePlacedRoom(
+    BuildContext context,
+    WidgetRef ref,
+    Room room,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(projectEditorProvider).addRoom(room);
-      return room;
+      return await ref.read(projectEditorProvider).addRoom(room);
     } catch (error) {
       _showError(messenger, error);
       return null;
+    }
+  }
+
+  Future<String?> _handleFinalizeRoomEnvelope(
+    BuildContext context,
+    WidgetRef ref, {
+    required Project project,
+    required String roomId,
+    required Map<String, String> wallConstructionIdsByElementId,
+    required String? floorConstructionId,
+    required String? topConstructionId,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final editingService = ref.read(projectEditingServiceProvider);
+      var updatedProject = project;
+      for (final entry in wallConstructionIdsByElementId.entries) {
+        final sourceElement = updatedProject.houseModel.elements.firstWhere(
+          (item) => item.id == entry.key,
+        );
+        updatedProject = editingService.updateEnvelopeElement(
+          updatedProject,
+          sourceElement.copyWith(constructionId: entry.value),
+        );
+      }
+      updatedProject = editingService.configureRoomEnvelope(
+        updatedProject,
+        roomId: roomId,
+        floorConstructionId: floorConstructionId,
+        topConstructionId: topConstructionId,
+      );
+      await ref.read(projectEditorProvider).saveProject(updatedProject);
+      return null;
+    } catch (error) {
+      _showError(messenger, error);
+      return _describeError(error);
     }
   }
 
@@ -118,6 +176,38 @@ class HouseSchemeScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(projectEditorProvider).updateRoomLayout(roomId, layout);
+      return null;
+    } catch (error) {
+      _showError(messenger, error);
+      return _describeError(error);
+    }
+  }
+
+  Future<String?> _handleAddRoomCell(
+    BuildContext context,
+    WidgetRef ref,
+    String roomId,
+    RoomLayoutRect cell,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(projectEditorProvider).addRoomCell(roomId, cell);
+      return null;
+    } catch (error) {
+      _showError(messenger, error);
+      return _describeError(error);
+    }
+  }
+
+  Future<String?> _handleRemoveRoomCell(
+    BuildContext context,
+    WidgetRef ref,
+    String roomId,
+    RoomLayoutRect cell,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(projectEditorProvider).removeRoomCell(roomId, cell);
       return null;
     } catch (error) {
       _showError(messenger, error);
@@ -355,6 +445,21 @@ class HouseSchemeScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _handleUpdateInternalPartitionConstruction(
+    BuildContext context,
+    WidgetRef ref,
+    String? constructionId,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(projectEditorProvider)
+          .updateInternalPartitionConstruction(constructionId);
+    } catch (error) {
+      _showError(messenger, error);
+    }
+  }
+
   Future<void> _handleAddConstruction(
     BuildContext context,
     WidgetRef ref,
@@ -474,6 +579,12 @@ class HouseSchemeScreen extends ConsumerWidget {
                   summary: summary,
                   onOpenBuildingHeatLoss: () =>
                       _handleOpenBuildingHeatLoss(context),
+                  onUpdateInternalPartitionConstruction: (constructionId) =>
+                      _handleUpdateInternalPartitionConstruction(
+                        context,
+                        ref,
+                        constructionId,
+                      ),
                 );
               },
               loading: () => const LinearProgressIndicator(),
@@ -497,11 +608,41 @@ class HouseSchemeScreen extends ConsumerWidget {
                       catalog: catalog,
                       summary: summaryAsync.asData?.value,
                       showHeatingDevices: showHeatingDevices,
-                      onAddRoom: () => _handleAddRoom(context, ref, project),
+                      onAddRoom: () => _handleAddRoom(context, project),
+                      onValidateRoomPlacement: (room, {replacingRoomId}) =>
+                          _validateRoomPlacement(
+                            ref,
+                            project,
+                            room,
+                            replacingRoomId: replacingRoomId,
+                          ),
+                      onCreatePlacedRoom: (room) =>
+                          _handleCreatePlacedRoom(context, ref, room),
+                      onFinalizeRoomEnvelope:
+                          ({
+                            required project,
+                            required roomId,
+                            required wallConstructionIdsByElementId,
+                            required floorConstructionId,
+                            required topConstructionId,
+                          }) => _handleFinalizeRoomEnvelope(
+                            context,
+                            ref,
+                            project: project,
+                            roomId: roomId,
+                            wallConstructionIdsByElementId:
+                                wallConstructionIdsByElementId,
+                            floorConstructionId: floorConstructionId,
+                            topConstructionId: topConstructionId,
+                          ),
                       onUpdateRoom: (room) =>
                           _handleUpdateRoom(context, ref, room),
                       onUpdateRoomLayout: (roomId, layout) =>
                           _handleUpdateRoomLayout(context, ref, roomId, layout),
+                      onAddRoomCell: (roomId, cell) =>
+                          _handleAddRoomCell(context, ref, roomId, cell),
+                      onRemoveRoomCell: (roomId, cell) =>
+                          _handleRemoveRoomCell(context, ref, roomId, cell),
                       onEditRoom: (room) => _handleEditRoom(context, ref, room),
                       onDeleteRoom: (room) =>
                           _handleDeleteRoom(context, ref, room),
@@ -600,11 +741,28 @@ class HouseSchemeScreen extends ConsumerWidget {
       return project;
     }
     final selectedIds = project.effectiveSelectedConstructionIds.toSet();
+    final filteredConstructions = [
+      for (final item in project.constructions)
+        if (selectedIds.contains(item.id)) item,
+    ];
+    final filteredWallIds = filteredConstructions
+        .where((item) => item.elementKind == ConstructionElementKind.wall)
+        .map((item) => item.id)
+        .toSet();
+    final currentInternalPartitionConstructionId =
+        project.houseModel.internalPartitionConstructionId;
+    final normalizedInternalPartitionConstructionId =
+        filteredWallIds.contains(currentInternalPartitionConstructionId)
+        ? currentInternalPartitionConstructionId
+        : (filteredWallIds.isEmpty ? null : filteredWallIds.first);
     return project.copyWith(
-      constructions: [
-        for (final item in project.constructions)
-          if (selectedIds.contains(item.id)) item,
-      ],
+      constructions: filteredConstructions,
+      houseModel: project.houseModel.copyWith(
+        internalPartitionConstructionId:
+            normalizedInternalPartitionConstructionId,
+        clearInternalPartitionConstructionId:
+            normalizedInternalPartitionConstructionId == null,
+      ),
     );
   }
 }
@@ -634,14 +792,20 @@ class _SummaryCard extends StatelessWidget {
     required this.project,
     required this.summary,
     required this.onOpenBuildingHeatLoss,
+    required this.onUpdateInternalPartitionConstruction,
   });
 
   final Project project;
   final BuildingHeatLossResult summary;
   final VoidCallback onOpenBuildingHeatLoss;
+  final Future<void> Function(String? constructionId)
+  onUpdateInternalPartitionConstruction;
 
   @override
   Widget build(BuildContext context) {
+    final wallConstructions = project.constructions
+        .where((item) => item.elementKind == ConstructionElementKind.wall)
+        .toList(growable: false);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -661,6 +825,38 @@ class _SummaryCard extends StatelessWidget {
               'Расчетная наружная температура: '
               '${summary.outsideAirTemperature.toStringAsFixed(0)} °C',
             ),
+            const SizedBox(height: 12),
+            if (wallConstructions.isEmpty)
+              const Text(
+                'Для внутреннего теплообмена пока нет доступной стеновой конструкции.',
+              )
+            else
+              DropdownButtonFormField<String>(
+                initialValue:
+                    project.houseModel.internalPartitionConstructionId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Внутренняя перегородка',
+                ),
+                items: wallConstructions
+                    .map(
+                      (construction) => DropdownMenuItem(
+                        value: construction.id,
+                        child: Text(
+                          construction.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  onUpdateInternalPartitionConstruction(value);
+                },
+              ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -742,8 +938,13 @@ class _PlanAndRoomsSection extends StatefulWidget {
     required this.summary,
     required this.showHeatingDevices,
     required this.onAddRoom,
+    required this.onValidateRoomPlacement,
+    required this.onCreatePlacedRoom,
+    required this.onFinalizeRoomEnvelope,
     required this.onUpdateRoom,
     required this.onUpdateRoomLayout,
+    required this.onAddRoomCell,
+    required this.onRemoveRoomCell,
     required this.onEditRoom,
     required this.onDeleteRoom,
     required this.onAddElement,
@@ -765,9 +966,24 @@ class _PlanAndRoomsSection extends StatefulWidget {
   final BuildingHeatLossResult? summary;
   final bool showHeatingDevices;
   final Future<Room?> Function() onAddRoom;
+  final String? Function(Room room, {String? replacingRoomId})
+  onValidateRoomPlacement;
+  final Future<Project?> Function(Room room) onCreatePlacedRoom;
+  final Future<String?> Function({
+    required Project project,
+    required String roomId,
+    required Map<String, String> wallConstructionIdsByElementId,
+    required String? floorConstructionId,
+    required String? topConstructionId,
+  })
+  onFinalizeRoomEnvelope;
   final Future<String?> Function(Room room) onUpdateRoom;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
+  final Future<String?> Function(String roomId, RoomLayoutRect cell)
+  onAddRoomCell;
+  final Future<String?> Function(String roomId, RoomLayoutRect cell)
+  onRemoveRoomCell;
   final ValueChanged<Room> onEditRoom;
   final ValueChanged<Room> onDeleteRoom;
   final ValueChanged<Room> onAddElement;
@@ -791,7 +1007,6 @@ class _PlanAndRoomsSection extends StatefulWidget {
 
 class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
   String? _selectedRoomId;
-  String? _selectedElementId;
 
   String? get _effectiveSelectedRoomId {
     final rooms = widget.project.houseModel.rooms;
@@ -807,60 +1022,55 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
     setState(() => _selectedRoomId = roomId);
   }
 
-  void _selectElement(String elementId, String roomId) {
-    setState(() {
-      _selectedElementId = elementId;
-      _selectedRoomId = roomId;
-    });
-  }
-
-  Future<void> _handleAddRoom() async {
-    final room = await widget.onAddRoom();
-    if (!mounted || room == null) {
+  Future<void> _openEditor({required bool startWithAddRoom}) async {
+    final selectedRoomId = _effectiveSelectedRoomId;
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => _HousePlanEditorScreen(
+          project: widget.project,
+          initialSelectedRoomId: selectedRoomId,
+          startWithAddRoom: startWithAddRoom,
+          onAddRoom: widget.onAddRoom,
+          onValidateRoomPlacement: widget.onValidateRoomPlacement,
+          onCreatePlacedRoom: widget.onCreatePlacedRoom,
+          onFinalizeRoomEnvelope: widget.onFinalizeRoomEnvelope,
+          onUpdateRoom: widget.onUpdateRoom,
+          onUpdateRoomLayout: widget.onUpdateRoomLayout,
+          onAddRoomCell: widget.onAddRoomCell,
+          onRemoveRoomCell: widget.onRemoveRoomCell,
+          onMergeRooms: widget.onMergeRooms,
+          onSplitWall: widget.onSplitWall,
+        ),
+      ),
+    );
+    if (!mounted || result == null) {
       return;
     }
-    setState(() => _selectedRoomId = room.id);
+    setState(() => _selectedRoomId = result);
   }
 
   @override
   Widget build(BuildContext context) {
     final selectedRoomId = _effectiveSelectedRoomId;
-    final selectedRoom = selectedRoomId == null
-        ? null
-        : widget.project.houseModel.rooms.firstWhere(
-            (room) => room.id == selectedRoomId,
-          );
     return Column(
       children: [
-        FloorPlanEditorCard(
+        _PlanEditorLauncherCard(
           project: widget.project,
           selectedRoomId: selectedRoomId,
-          selectedElementId: _selectedElementId,
-          onAddRoom: _handleAddRoom,
-          onSelectRoom: _selectRoom,
-          onSelectElement: _selectElement,
-          onUpdateRoomLayout: widget.onUpdateRoomLayout,
-          onMergeRooms: widget.onMergeRooms,
-          onSplitWall: widget.onSplitWall,
+          onOpenEditor: () => _openEditor(startWithAddRoom: false),
+          onAddRoom: () => _openEditor(startWithAddRoom: true),
         ),
-        if (selectedRoom != null) ...[
-          const SizedBox(height: 16),
-          _SelectedRoomEditorCard(
-            room: selectedRoom,
-            onSave: widget.onUpdateRoom,
-          ),
-        ],
         const SizedBox(height: 16),
         _RoomsCard(
           project: widget.project,
           selectedRoomId: selectedRoomId,
           onSelectRoom: _selectRoom,
-          onAddRoom: _handleAddRoom,
+          onAddRoom: () => _openEditor(startWithAddRoom: true),
           onEditRoom: widget.onEditRoom,
           onDeleteRoom: widget.onDeleteRoom,
           onAddElement: widget.onAddElement,
           onEditElement: widget.onEditElement,
-          onSelectElement: _selectElement,
+          onSelectElement: (_, roomId) => _selectRoom(roomId),
           onDeleteElement: widget.onDeleteElement,
           onAddOpening: widget.onAddOpening,
           onEditOpening: widget.onEditOpening,
@@ -881,6 +1091,362 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _HousePlanEditorScreen extends ConsumerStatefulWidget {
+  const _HousePlanEditorScreen({
+    required this.project,
+    required this.initialSelectedRoomId,
+    required this.startWithAddRoom,
+    required this.onAddRoom,
+    required this.onValidateRoomPlacement,
+    required this.onCreatePlacedRoom,
+    required this.onFinalizeRoomEnvelope,
+    required this.onUpdateRoom,
+    required this.onUpdateRoomLayout,
+    required this.onAddRoomCell,
+    required this.onRemoveRoomCell,
+    required this.onMergeRooms,
+    required this.onSplitWall,
+  });
+
+  final Project project;
+  final String? initialSelectedRoomId;
+  final bool startWithAddRoom;
+  final Future<Room?> Function() onAddRoom;
+  final String? Function(Room room, {String? replacingRoomId})
+  onValidateRoomPlacement;
+  final Future<Project?> Function(Room room) onCreatePlacedRoom;
+  final Future<String?> Function({
+    required Project project,
+    required String roomId,
+    required Map<String, String> wallConstructionIdsByElementId,
+    required String? floorConstructionId,
+    required String? topConstructionId,
+  })
+  onFinalizeRoomEnvelope;
+  final Future<String?> Function(Room room) onUpdateRoom;
+  final Future<String?> Function(String roomId, RoomLayoutRect layout)
+  onUpdateRoomLayout;
+  final Future<String?> Function(String roomId, RoomLayoutRect cell)
+  onAddRoomCell;
+  final Future<String?> Function(String roomId, RoomLayoutRect cell)
+  onRemoveRoomCell;
+  final Future<String?> Function(String primaryRoomId, String secondaryRoomId)
+  onMergeRooms;
+  final Future<String?> Function(String elementId, double splitOffsetMeters)
+  onSplitWall;
+
+  @override
+  ConsumerState<_HousePlanEditorScreen> createState() =>
+      _HousePlanEditorScreenState();
+}
+
+class _HousePlanEditorScreenState
+    extends ConsumerState<_HousePlanEditorScreen> {
+  String? _selectedRoomId;
+  String? _selectedElementId;
+  Room? _placementDraftRoom;
+  RoomLayoutRect? _placementDraftLayout;
+  String? _placementDraftError;
+  bool _placementSaving = false;
+  bool _didHandleInitialAdd = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRoomId = widget.initialSelectedRoomId;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didHandleInitialAdd || !widget.startWithAddRoom) {
+      return;
+    }
+    _didHandleInitialAdd = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _handleAddRoom();
+      }
+    });
+  }
+
+  String? get _effectiveSelectedRoomId {
+    final rooms = _currentProject.houseModel.rooms;
+    if (rooms.isEmpty) {
+      return null;
+    }
+    final selectedRoomId = _selectedRoomId;
+    final exists = rooms.any((room) => room.id == selectedRoomId);
+    return exists ? selectedRoomId : rooms.first.id;
+  }
+
+  Project get _currentProject => ref
+      .read(selectedProjectProvider)
+      .maybeWhen(
+        data: (project) => project ?? widget.project,
+        orElse: () => widget.project,
+      );
+
+  void _selectRoom(String roomId) {
+    setState(() => _selectedRoomId = roomId);
+  }
+
+  void _selectElement(String elementId, String roomId) {
+    setState(() {
+      _selectedElementId = elementId;
+      _selectedRoomId = roomId;
+    });
+  }
+
+  Future<void> _handleAddRoom() async {
+    final room = await widget.onAddRoom();
+    if (!mounted || room == null) {
+      return;
+    }
+    final draftLayout = room.layout;
+    final draftRoom = room.copyWith(cells: [draftLayout], layout: draftLayout);
+    setState(() {
+      _placementDraftRoom = draftRoom;
+      _placementDraftLayout = draftLayout;
+      _placementDraftError = widget.onValidateRoomPlacement(draftRoom);
+      _selectedRoomId = null;
+      _selectedElementId = null;
+    });
+  }
+
+  void _updatePlacementDraft(RoomLayoutRect layout) {
+    final room = _placementDraftRoom;
+    if (room == null) {
+      return;
+    }
+    final draftRoom = room.copyWith(cells: [layout], layout: layout);
+    setState(() {
+      _placementDraftLayout = layout;
+      _placementDraftError = widget.onValidateRoomPlacement(draftRoom);
+    });
+  }
+
+  void _cancelPlacementDraft() {
+    setState(() {
+      _placementDraftRoom = null;
+      _placementDraftLayout = null;
+      _placementDraftError = null;
+    });
+  }
+
+  Future<void> _confirmPlacementDraft() async {
+    final room = _placementDraftRoom;
+    final layout = _placementDraftLayout;
+    if (room == null || layout == null || _placementDraftError != null) {
+      return;
+    }
+    setState(() => _placementSaving = true);
+    final persistedProject = await widget.onCreatePlacedRoom(
+      room.copyWith(cells: [layout], layout: layout),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _placementSaving = false);
+    if (persistedProject == null) {
+      return;
+    }
+    final savedRoom = persistedProject.houseModel.rooms.firstWhere(
+      (item) => item.id == room.id,
+    );
+    setState(() {
+      _placementDraftRoom = null;
+      _placementDraftLayout = null;
+      _placementDraftError = null;
+      _selectedRoomId = savedRoom.id;
+    });
+    final envelopeSelection = await _showRoomEnvelopeAssignmentSheet(
+      context,
+      project: persistedProject,
+      room: savedRoom,
+    );
+    if (!mounted || envelopeSelection == null) {
+      return;
+    }
+    await widget.onFinalizeRoomEnvelope(
+      project: persistedProject,
+      roomId: savedRoom.id,
+      wallConstructionIdsByElementId:
+          envelopeSelection.wallConstructionIdsByElementId,
+      floorConstructionId: envelopeSelection.floorConstructionId,
+      topConstructionId: envelopeSelection.topConstructionId,
+    );
+  }
+
+  void _handleClose() {
+    Navigator.of(context).pop(_effectiveSelectedRoomId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final project = ref
+        .watch(selectedProjectProvider)
+        .maybeWhen(
+          data: (project) => project ?? widget.project,
+          orElse: () => widget.project,
+        );
+    final selectedRoomId = _effectiveSelectedRoomId;
+    final selectedRoom = selectedRoomId == null
+        ? null
+        : project.houseModel.rooms.firstWhere(
+            (room) => room.id == selectedRoomId,
+          );
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          key: const ValueKey('close-house-plan-editor-button'),
+          onPressed: _handleClose,
+          icon: const Icon(Icons.arrow_back),
+        ),
+        title: const Text(
+          'Редактор плана',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompactHeight = constraints.maxHeight < 720;
+            final editorHeight = isCompactHeight
+                ? (constraints.maxHeight * 0.55).clamp(260.0, 420.0)
+                : (constraints.maxHeight - 180).clamp(320.0, 760.0);
+            final content = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FloorPlanEditorCard(
+                  project: project,
+                  selectedRoomId: selectedRoomId,
+                  selectedElementId: _selectedElementId,
+                  onAddRoom: _handleAddRoom,
+                  placementDraftRoom: _placementDraftRoom,
+                  placementDraftLayout: _placementDraftLayout,
+                  placementDraftError: _placementSaving
+                      ? 'Сохраняю помещение...'
+                      : _placementDraftError,
+                  onUpdatePlacementDraft: _placementSaving
+                      ? null
+                      : _updatePlacementDraft,
+                  onConfirmPlacementDraft: _placementSaving
+                      ? null
+                      : _confirmPlacementDraft,
+                  onCancelPlacementDraft: _placementSaving
+                      ? null
+                      : _cancelPlacementDraft,
+                  onSelectRoom: _selectRoom,
+                  onSelectElement: _selectElement,
+                  onUpdateRoomLayout: widget.onUpdateRoomLayout,
+                  onAddRoomCell: widget.onAddRoomCell,
+                  onRemoveRoomCell: widget.onRemoveRoomCell,
+                  onMergeRooms: widget.onMergeRooms,
+                  onSplitWall: widget.onSplitWall,
+                  canvasHeight: editorHeight,
+                  useCardDecoration: false,
+                ),
+                if (selectedRoom != null && _placementDraftRoom == null) ...[
+                  const SizedBox(height: 16),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: isCompactHeight ? 360 : 280,
+                    ),
+                    child: SingleChildScrollView(
+                      child: _SelectedRoomEditorCard(
+                        room: selectedRoom,
+                        onSave: widget.onUpdateRoom,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+            final padded = Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: content,
+            );
+            if (isCompactHeight) {
+              return SingleChildScrollView(child: padded);
+            }
+            return padded;
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanEditorLauncherCard extends StatelessWidget {
+  const _PlanEditorLauncherCard({
+    required this.project,
+    required this.selectedRoomId,
+    required this.onOpenEditor,
+    required this.onAddRoom,
+  });
+
+  final Project project;
+  final String? selectedRoomId;
+  final VoidCallback onOpenEditor;
+  final VoidCallback onAddRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedRoom = selectedRoomId == null
+        ? null
+        : project.houseModel.rooms.firstWhere(
+            (room) => room.id == selectedRoomId,
+          );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'План дома',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Редактор плана вынесен в отдельный полноэкранный экран, чтобы жесты канвы не конфликтовали со скроллом страницы.',
+            ),
+            const SizedBox(height: 12),
+            if (selectedRoom != null)
+              Text(
+                'Выбрано помещение: ${selectedRoom.title} • ${selectedRoom.areaSquareMeters.toStringAsFixed(1)} м²',
+              )
+            else
+              Text('Помещений в проекте: ${project.houseModel.rooms.length}'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  key: const ValueKey('open-house-plan-editor-button'),
+                  onPressed: onOpenEditor,
+                  icon: const Icon(Icons.fullscreen),
+                  label: const Text('Открыть редактор плана'),
+                ),
+                FilledButton.tonalIcon(
+                  key: const ValueKey('add-room-via-plan-editor-button'),
+                  onPressed: onAddRoom,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Добавить помещение'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1207,7 +1773,7 @@ class _RoomsCard extends StatelessWidget {
                                                     ),
                                                   ),
                                                   subtitle: Text(
-                                                    '${opening.kind.label} • ${opening.areaSquareMeters.toStringAsFixed(1)} м² • U ${opening.heatTransferCoefficient.toStringAsFixed(2)} Вт/м²·°C',
+                                                    '${opening.kind.label} • ${opening.areaSquareMeters.toStringAsFixed(1)} м² • U ${opening.heatTransferCoefficient.toStringAsFixed(2)} Вт/м²·°C • ${opening.leakagePreset.label}',
                                                   ),
                                                   trailing:
                                                       PopupMenuButton<String>(
@@ -1395,7 +1961,7 @@ class _RoomsCard extends StatelessWidget {
                                                     ),
                                                   ),
                                                   subtitle: Text(
-                                                    '${opening.kind.label} • ${opening.areaSquareMeters.toStringAsFixed(1)} м² • U ${opening.heatTransferCoefficient.toStringAsFixed(2)} Вт/м²·°C',
+                                                    '${opening.kind.label} • ${opening.areaSquareMeters.toStringAsFixed(1)} м² • U ${opening.heatTransferCoefficient.toStringAsFixed(2)} Вт/м²·°C • ${opening.leakagePreset.label}',
                                                   ),
                                                   trailing:
                                                       PopupMenuButton<String>(
@@ -1487,6 +2053,8 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
     if (oldWidget.room.id != widget.room.id ||
         oldWidget.room.title != widget.room.title ||
         oldWidget.room.kind != widget.room.kind ||
+        oldWidget.room.effectiveCells.length !=
+            widget.room.effectiveCells.length ||
         !layoutsEqual(oldWidget.room.layout, widget.room.layout) ||
         oldWidget.room.heightMeters != widget.room.heightMeters) {
       _syncFromRoom(widget.room);
@@ -1568,7 +2136,7 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              'После добавления помещение сразу появляется на плане. Выберите его и задайте длину, ширину и высоту здесь, а позицию уточняйте перетаскиванием на схеме.',
+              'После добавления помещение сразу появляется на плане. Для прямоугольной комнаты здесь задаются длина, ширина и высота, а для фигурной геометрия меняется через режим ячеек на плане.',
             ),
             const SizedBox(height: 16),
             TextField(
@@ -1594,9 +2162,12 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
               },
             ),
             const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
               children: [
-                Expanded(
+                SizedBox(
+                  width: 180,
                   child: TextField(
                     key: const ValueKey('selected-room-width-field'),
                     controller: _widthController,
@@ -1607,8 +2178,8 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
+                SizedBox(
+                  width: 180,
                   child: TextField(
                     key: const ValueKey('selected-room-height-field'),
                     controller: _heightController,
@@ -1619,8 +2190,8 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
+                SizedBox(
+                  width: 180,
                   child: TextField(
                     key: const ValueKey('selected-room-z-field'),
                     controller: _roomHeightController,
@@ -1644,7 +2215,7 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
             if (widget.room.effectiveCells.length > 1) ...[
               const SizedBox(height: 8),
               const Text(
-                'Для составного помещения размеры отдельных сторон пока меняются через добавление соседней ячейки и удаление перегородки.',
+                'Для составного помещения форма теперь редактируется на плане через добавление и удаление ячеек сетки 0.5 м.',
               ),
             ],
             if (_lastError != null) ...[
@@ -1785,15 +2356,16 @@ class _CardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
         FilledButton.tonal(onPressed: onAction, child: Text(actionLabel)),
       ],
@@ -1832,6 +2404,245 @@ class _MetricTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RoomEnvelopeAssignmentResult {
+  const _RoomEnvelopeAssignmentResult({
+    required this.wallConstructionIdsByElementId,
+    required this.floorConstructionId,
+    required this.topConstructionId,
+  });
+
+  final Map<String, String> wallConstructionIdsByElementId;
+  final String? floorConstructionId;
+  final String? topConstructionId;
+}
+
+Future<_RoomEnvelopeAssignmentResult?> _showRoomEnvelopeAssignmentSheet(
+  BuildContext context, {
+  required Project project,
+  required Room room,
+}) async {
+  final wallElements = project.houseModel.elements
+      .where(
+        (item) =>
+            item.roomId == room.id &&
+            item.elementKind == ConstructionElementKind.wall &&
+            item.lineSegment != null,
+      )
+      .toList(growable: false);
+  final wallConstructions = project.constructions
+      .where((item) => item.elementKind == ConstructionElementKind.wall)
+      .toList(growable: false);
+  final floorConstructions = project.constructions
+      .where((item) => item.elementKind == ConstructionElementKind.floor)
+      .toList(growable: false);
+  final topConstructions = project.constructions
+      .where(
+        (item) =>
+            item.elementKind == ConstructionElementKind.ceiling ||
+            item.elementKind == ConstructionElementKind.roof,
+      )
+      .toList(growable: false);
+  final wallSelections = {
+    for (final item in wallElements)
+      item.id: item.constructionId.isNotEmpty
+          ? item.constructionId
+          : (wallConstructions.isEmpty ? '' : wallConstructions.first.id),
+  };
+  String? applyAllWallConstructionId = wallConstructions.isEmpty
+      ? null
+      : wallConstructions.first.id;
+  String? selectedFloorConstructionId = floorConstructions.isEmpty
+      ? null
+      : floorConstructions.first.id;
+  String? selectedTopConstructionId = topConstructions.isEmpty
+      ? null
+      : topConstructions.first.id;
+
+  return showModalBottomSheet<_RoomEnvelopeAssignmentResult>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ограждения: ${room.title}',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Общие стены со смежными комнатами уже исключены из внешнего контура. Выберите конструкции только для внешних сегментов, пола и верхнего ограждения.',
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Наружные стены',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (wallElements.isEmpty)
+                    const Text('Для этой комнаты нет новых наружных сегментов.')
+                  else ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: applyAllWallConstructionId,
+                      decoration: const InputDecoration(
+                        labelText: 'Конструкция для всех наружных стен',
+                      ),
+                      items: wallConstructions
+                          .map(
+                            (construction) => DropdownMenuItem(
+                              value: construction.id,
+                              child: Text(construction.title),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: wallConstructions.isEmpty
+                          ? null
+                          : (value) {
+                              if (value == null) {
+                                return;
+                              }
+                              setState(() {
+                                applyAllWallConstructionId = value;
+                                for (final wall in wallElements) {
+                                  wallSelections[wall.id] = value;
+                                }
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 12),
+                    ...wallElements.asMap().entries.map((entry) {
+                      final index = entry.key + 1;
+                      final wall = entry.value;
+                      final segment = wall.lineSegment!;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey('room-envelope-wall-${wall.id}'),
+                          initialValue: wallSelections[wall.id],
+                          decoration: InputDecoration(
+                            labelText:
+                                'Сегмент $index • ${segment.lengthMeters.toStringAsFixed(1)} м • '
+                                '${segment.startXMeters.toStringAsFixed(1)}, ${segment.startYMeters.toStringAsFixed(1)} -> '
+                                '${segment.endXMeters.toStringAsFixed(1)}, ${segment.endYMeters.toStringAsFixed(1)}',
+                          ),
+                          items: wallConstructions
+                              .map(
+                                (construction) => DropdownMenuItem(
+                                  value: construction.id,
+                                  child: Text(construction.title),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: wallConstructions.isEmpty
+                              ? null
+                              : (value) {
+                                  if (value == null) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    wallSelections[wall.id] = value;
+                                  });
+                                },
+                        ),
+                      );
+                    }),
+                  ],
+                  const SizedBox(height: 8),
+                  Text(
+                    'Пол и верх',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedFloorConstructionId,
+                    decoration: InputDecoration(
+                      labelText:
+                          'Пол • площадь ${room.areaSquareMeters.toStringAsFixed(1)} м²',
+                    ),
+                    items: floorConstructions
+                        .map(
+                          (construction) => DropdownMenuItem(
+                            value: construction.id,
+                            child: Text(construction.title),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: floorConstructions.isEmpty
+                        ? null
+                        : (value) {
+                            setState(() => selectedFloorConstructionId = value);
+                          },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedTopConstructionId,
+                    decoration: InputDecoration(
+                      labelText:
+                          'Верх • выберите перекрытие или кровлю • площадь ${room.areaSquareMeters.toStringAsFixed(1)} м²',
+                    ),
+                    items: topConstructions
+                        .map(
+                          (construction) => DropdownMenuItem(
+                            value: construction.id,
+                            child: Text(construction.title),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: topConstructions.isEmpty
+                        ? null
+                        : (value) {
+                            setState(() => selectedTopConstructionId = value);
+                          },
+                  ),
+                  if (floorConstructions.isEmpty ||
+                      topConstructions.isEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Для полной настройки комнаты добавьте в проект хотя бы одну конструкцию пола и одну конструкцию перекрытия или кровли.',
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(
+                        _RoomEnvelopeAssignmentResult(
+                          wallConstructionIdsByElementId: Map.unmodifiable(
+                            wallSelections,
+                          ),
+                          floorConstructionId: selectedFloorConstructionId,
+                          topConstructionId: selectedTopConstructionId,
+                        ),
+                      );
+                    },
+                    child: const Text('Сохранить ограждения'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 }
 
 Future<Room?> _showRoomEditor(
@@ -1920,9 +2731,12 @@ Future<Room?> _showRoomEditor(
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
                   children: [
-                    Expanded(
+                    SizedBox(
+                      width: 220,
                       child: TextField(
                         controller: widthController,
                         decoration: const InputDecoration(
@@ -1933,8 +2747,8 @@ Future<Room?> _showRoomEditor(
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                    SizedBox(
+                      width: 220,
                       child: TextField(
                         controller: planHeightController,
                         decoration: const InputDecoration(
@@ -2240,6 +3054,8 @@ Future<EnvelopeOpening?> _showOpeningEditor(
             .toString(),
   );
   var selectedKind = opening?.kind ?? OpeningKind.window;
+  var selectedLeakagePreset =
+      opening?.leakagePreset ?? OpeningLeakagePreset.standard;
 
   final result = await showModalBottomSheet<EnvelopeOpening>(
     context: context,
@@ -2311,6 +3127,28 @@ Future<EnvelopeOpening?> _showOpeningEditor(
                     decimal: true,
                   ),
                 ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<OpeningLeakagePreset>(
+                  initialValue: selectedLeakagePreset,
+                  decoration: const InputDecoration(
+                    labelText: 'Герметичность проёма',
+                  ),
+                  items: OpeningLeakagePreset.values
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item,
+                          child: Text(item.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        selectedLeakagePreset = value;
+                      });
+                    }
+                  },
+                ),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () {
@@ -2331,6 +3169,7 @@ Future<EnvelopeOpening?> _showOpeningEditor(
                           coefficientController.text,
                           fallback: selectedKind.defaultHeatTransferCoefficient,
                         ),
+                        leakagePreset: selectedLeakagePreset,
                       ),
                     );
                   },

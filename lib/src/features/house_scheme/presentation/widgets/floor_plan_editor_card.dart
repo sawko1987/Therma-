@@ -15,8 +15,18 @@ class FloorPlanEditorCard extends StatefulWidget {
     required this.onSelectRoom,
     required this.onSelectElement,
     required this.onUpdateRoomLayout,
+    required this.onAddRoomCell,
+    required this.onRemoveRoomCell,
     required this.onMergeRooms,
     required this.onSplitWall,
+    this.placementDraftRoom,
+    this.placementDraftLayout,
+    this.placementDraftError,
+    this.onUpdatePlacementDraft,
+    this.onConfirmPlacementDraft,
+    this.onCancelPlacementDraft,
+    this.canvasHeight = 360,
+    this.useCardDecoration = true,
   });
 
   final Project project;
@@ -27,10 +37,22 @@ class FloorPlanEditorCard extends StatefulWidget {
   final void Function(String elementId, String roomId) onSelectElement;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
+  final Future<String?> Function(String roomId, RoomLayoutRect cell)
+  onAddRoomCell;
+  final Future<String?> Function(String roomId, RoomLayoutRect cell)
+  onRemoveRoomCell;
   final Future<String?> Function(String primaryRoomId, String secondaryRoomId)
   onMergeRooms;
   final Future<String?> Function(String elementId, double splitOffsetMeters)
   onSplitWall;
+  final Room? placementDraftRoom;
+  final RoomLayoutRect? placementDraftLayout;
+  final String? placementDraftError;
+  final ValueChanged<RoomLayoutRect>? onUpdatePlacementDraft;
+  final VoidCallback? onConfirmPlacementDraft;
+  final VoidCallback? onCancelPlacementDraft;
+  final double canvasHeight;
+  final bool useCardDecoration;
 
   @override
   State<FloorPlanEditorCard> createState() => _FloorPlanEditorCardState();
@@ -51,6 +73,7 @@ class _FloorPlanEditorCardState extends State<FloorPlanEditorCard> {
   String? _lastCanvasError;
   RoomPartitionSegment? _selectedPartition;
   double? _selectedWallSplitOffsetMeters;
+  _CellEditMode? _cellEditMode;
 
   RoomLayoutRect _layoutForRoom(Room room) {
     return _draftLayouts[room.id] ?? room.layout;
@@ -76,6 +99,26 @@ class _FloorPlanEditorCardState extends State<FloorPlanEditorCard> {
       _invalidElementId = elementId;
       _lastCanvasError = error;
     });
+  }
+
+  Future<void> _handleCellEdit(
+    Room room,
+    RoomLayoutRect cell,
+    _CellEditMode mode,
+  ) async {
+    final error = mode == _CellEditMode.add
+        ? await widget.onAddRoomCell(room.id, cell)
+        : await widget.onRemoveRoomCell(room.id, cell);
+    if (!mounted) {
+      return;
+    }
+    if (error == null) {
+      setState(() {
+        _clearTransientCanvasState();
+      });
+      return;
+    }
+    _markRoomCommitFailed(room.id, error);
   }
 
   void _startGesture(Room room, _RoomGestureMode mode) {
@@ -136,9 +179,45 @@ class _FloorPlanEditorCardState extends State<FloorPlanEditorCard> {
     _markRoomCommitFailed(room.id, error);
   }
 
+  void _updatePlacementDraft(DragUpdateDetails details) {
+    final room = widget.placementDraftRoom;
+    final layout = widget.placementDraftLayout;
+    final onUpdate = widget.onUpdatePlacementDraft;
+    if (room == null || layout == null || onUpdate == null) {
+      return;
+    }
+    final deltaXMeters = details.delta.dx / _pixelsPerMeter;
+    final deltaYMeters = details.delta.dy / _pixelsPerMeter;
+    onUpdate(
+      snapRoomLayout(
+        layout.copyWith(
+          xMeters: layout.xMeters + deltaXMeters,
+          yMeters: layout.yMeters + deltaYMeters,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rooms = widget.project.houseModel.rooms;
+    final placementDraftLayout = widget.placementDraftLayout;
+    Room? selectedRoom;
+    if (widget.selectedRoomId != null) {
+      for (final room in rooms) {
+        if (room.id == widget.selectedRoomId) {
+          selectedRoom = room;
+          break;
+        }
+      }
+    }
+    final cellEditTargets = selectedRoom == null || _cellEditMode == null
+        ? const <RoomLayoutRect>[]
+        : buildRoomCellEditTargets(
+            rooms,
+            selectedRoom,
+            removing: _cellEditMode == _CellEditMode.remove,
+          );
     final wallElements = widget.project.houseModel.elements
         .where(
           (element) =>
@@ -149,237 +228,352 @@ class _FloorPlanEditorCardState extends State<FloorPlanEditorCard> {
     final partitions = buildRoomPartitions(rooms);
     final maxRightMeters = math.max(
       _minimumCanvasWidthMeters,
-      rooms.fold<double>(
-            0,
-            (maxValue, room) =>
-                math.max(maxValue, _layoutForRoom(room).rightMeters),
-          ) +
+      [
+            ...rooms.map((room) => _layoutForRoom(room).rightMeters),
+            if (placementDraftLayout != null) placementDraftLayout.rightMeters,
+          ].fold<double>(0, math.max) +
           2,
     );
     final maxBottomMeters = math.max(
       _minimumCanvasHeightMeters,
-      rooms.fold<double>(
-            0,
-            (maxValue, room) =>
-                math.max(maxValue, _layoutForRoom(room).bottomMeters),
-          ) +
+      [
+            ...rooms.map((room) => _layoutForRoom(room).bottomMeters),
+            if (placementDraftLayout != null) placementDraftLayout.bottomMeters,
+          ].fold<double>(0, math.max) +
           2,
     );
     final canvasWidth = maxRightMeters * _pixelsPerMeter + _canvasPadding * 2;
     final canvasHeight = maxBottomMeters * _pixelsPerMeter + _canvasPadding * 2;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _FloorPlanHeader(
-              onAddRoom: widget.onAddRoom,
-              lastCanvasError: _lastCanvasError,
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F3EA),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
+    final content = Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FloorPlanHeader(
+            onAddRoom: widget.onAddRoom,
+            lastCanvasError: widget.placementDraftError ?? _lastCanvasError,
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F3EA),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
                 ),
-                child: SizedBox(
-                  height: 360,
-                  child: InteractiveViewer(
-                    minScale: 0.7,
-                    maxScale: 2.5,
-                    panEnabled: false,
-                    boundaryMargin: const EdgeInsets.all(48),
-                    child: SizedBox(
-                      key: const ValueKey('floor-plan-canvas'),
-                      width: canvasWidth,
-                      height: canvasHeight,
-                      child: Stack(
-                        children: [
-                          CustomPaint(
-                            size: Size(canvasWidth, canvasHeight),
-                            painter: const _FloorPlanGridPainter(
-                              pixelsPerMeter: _pixelsPerMeter,
-                              canvasPadding: _canvasPadding,
-                            ),
+              ),
+              child: SizedBox(
+                height: widget.canvasHeight,
+                child: InteractiveViewer(
+                  minScale: 0.7,
+                  maxScale: 2.5,
+                  panEnabled: false,
+                  boundaryMargin: const EdgeInsets.all(48),
+                  child: SizedBox(
+                    key: const ValueKey('floor-plan-canvas'),
+                    width: canvasWidth,
+                    height: canvasHeight,
+                    child: Stack(
+                      children: [
+                        CustomPaint(
+                          size: Size(canvasWidth, canvasHeight),
+                          painter: const _FloorPlanGridPainter(
+                            pixelsPerMeter: _pixelsPerMeter,
+                            canvasPadding: _canvasPadding,
                           ),
-                          for (final room in rooms)
-                            for (
-                              var cellIndex = 0;
-                              cellIndex < room.effectiveCells.length;
-                              cellIndex++
-                            )
-                              _PositionedRoomTile(
-                                room: room,
-                                layout: room.effectiveCells.length == 1
-                                    ? _layoutForRoom(room)
-                                    : room.effectiveCells[cellIndex],
-                                cellKeySuffix: room.effectiveCells.length == 1
-                                    ? null
-                                    : '$cellIndex',
-                                pixelsPerMeter: _pixelsPerMeter,
-                                canvasPadding: _canvasPadding,
-                                selected: widget.selectedRoomId == room.id,
-                                editing: _draftLayouts.containsKey(room.id),
-                                invalid: _invalidRoomId == room.id,
-                                movable: room.effectiveCells.length == 1,
-                                onTap: () {
-                                  widget.onSelectRoom(room.id);
-                                  setState(() {
-                                    _selectedPartition = null;
-                                    _selectedWallSplitOffsetMeters = null;
-                                    _clearTransientCanvasState();
-                                  });
-                                },
-                                onMoveStart: room.effectiveCells.length == 1
-                                    ? () => _startGesture(
-                                        room,
-                                        _RoomGestureMode.move,
-                                      )
-                                    : null,
-                                onMoveUpdate: room.effectiveCells.length == 1
-                                    ? (details) => _updateGesture(room, details)
-                                    : null,
-                                onMoveEnd: room.effectiveCells.length == 1
-                                    ? () => _commitGesture(room)
-                                    : null,
-                                onResizeStart: room.effectiveCells.length == 1
-                                    ? () => _startGesture(
-                                        room,
-                                        _RoomGestureMode.resize,
-                                      )
-                                    : null,
-                                onResizeUpdate: room.effectiveCells.length == 1
-                                    ? (details) => _updateGesture(room, details)
-                                    : null,
-                                onResizeEnd: room.effectiveCells.length == 1
-                                    ? () => _commitGesture(room)
-                                    : null,
-                              ),
-                          for (final partition in partitions)
-                            _PositionedPartitionSegment(
-                              segment: partition.segment,
+                        ),
+                        for (final room in rooms)
+                          for (
+                            var cellIndex = 0;
+                            cellIndex < room.effectiveCells.length;
+                            cellIndex++
+                          )
+                            _PositionedRoomTile(
+                              room: room,
+                              layout: room.effectiveCells.length == 1
+                                  ? _layoutForRoom(room)
+                                  : room.effectiveCells[cellIndex],
+                              cellKeySuffix: room.effectiveCells.length == 1
+                                  ? null
+                                  : '$cellIndex',
                               pixelsPerMeter: _pixelsPerMeter,
                               canvasPadding: _canvasPadding,
-                              thicknessPixels: 6,
-                              selected: _partitionsEqual(
-                                _selectedPartition,
-                                partition,
-                              ),
+                              selected: widget.selectedRoomId == room.id,
+                              editing: _draftLayouts.containsKey(room.id),
+                              invalid: _invalidRoomId == room.id,
+                              movable: room.effectiveCells.length == 1,
                               onTap: () {
-                                widget.onSelectRoom(partition.primaryRoomId);
+                                widget.onSelectRoom(room.id);
                                 setState(() {
-                                  _clearTransientCanvasState();
-                                  _selectedPartition = partition;
+                                  _selectedPartition = null;
                                   _selectedWallSplitOffsetMeters = null;
+                                  _cellEditMode = null;
+                                  _clearTransientCanvasState();
                                 });
                               },
+                              onMoveStart: room.effectiveCells.length == 1
+                                  ? () => _startGesture(
+                                      room,
+                                      _RoomGestureMode.move,
+                                    )
+                                  : null,
+                              onMoveUpdate: room.effectiveCells.length == 1
+                                  ? (details) => _updateGesture(room, details)
+                                  : null,
+                              onMoveEnd: room.effectiveCells.length == 1
+                                  ? () => _commitGesture(room)
+                                  : null,
+                              onResizeStart: room.effectiveCells.length == 1
+                                  ? () => _startGesture(
+                                      room,
+                                      _RoomGestureMode.resize,
+                                    )
+                                  : null,
+                              onResizeUpdate: room.effectiveCells.length == 1
+                                  ? (details) => _updateGesture(room, details)
+                                  : null,
+                              onResizeEnd: room.effectiveCells.length == 1
+                                  ? () => _commitGesture(room)
+                                  : null,
                             ),
-                          for (final element in wallElements)
-                            _PositionedWallSegment(
-                              elementId: element.id,
-                              segment: element.lineSegment!,
+                        if (selectedRoom != null && _cellEditMode != null)
+                          for (final cell in cellEditTargets)
+                            _PositionedCellEditTarget(
+                              key: ValueKey(
+                                'floor-plan-cell-${_cellEditMode!.name}-${cell.xMeters}-${cell.yMeters}',
+                              ),
+                              cell: cell,
                               pixelsPerMeter: _pixelsPerMeter,
                               canvasPadding: _canvasPadding,
-                              thicknessPixels: _wallThicknessPixels,
-                              selected: widget.selectedElementId == element.id,
-                              invalid: _invalidElementId == element.id,
-                              label: element.title,
-                              onTap: (localPosition) {
-                                widget.onSelectElement(
-                                  element.id,
-                                  element.roomId,
-                                );
-                                setState(() {
-                                  _clearTransientCanvasState();
-                                  _selectedPartition = null;
-                                  _selectedWallSplitOffsetMeters =
-                                      splitOffsetForSegmentTap(
-                                        element.lineSegment!,
-                                        localPosition,
-                                        _pixelsPerMeter,
-                                      );
-                                });
-                              },
+                              removing: _cellEditMode == _CellEditMode.remove,
+                              onTap: () => _handleCellEdit(
+                                selectedRoom!,
+                                cell,
+                                _cellEditMode!,
+                              ),
                             ),
-                        ],
-                      ),
+                        for (final partition in partitions)
+                          _PositionedPartitionSegment(
+                            segment: partition.segment,
+                            pixelsPerMeter: _pixelsPerMeter,
+                            canvasPadding: _canvasPadding,
+                            thicknessPixels: 6,
+                            selected: _partitionsEqual(
+                              _selectedPartition,
+                              partition,
+                            ),
+                            onTap: () {
+                              widget.onSelectRoom(partition.primaryRoomId);
+                              setState(() {
+                                _clearTransientCanvasState();
+                                _selectedPartition = partition;
+                                _selectedWallSplitOffsetMeters = null;
+                                _cellEditMode = null;
+                              });
+                            },
+                          ),
+                        for (final element in wallElements)
+                          _PositionedWallSegment(
+                            elementId: element.id,
+                            segment: element.lineSegment!,
+                            pixelsPerMeter: _pixelsPerMeter,
+                            canvasPadding: _canvasPadding,
+                            thicknessPixels: _wallThicknessPixels,
+                            selected: widget.selectedElementId == element.id,
+                            invalid: _invalidElementId == element.id,
+                            label: element.title,
+                            onTap: (localPosition) {
+                              widget.onSelectElement(element.id, element.roomId);
+                              setState(() {
+                                _clearTransientCanvasState();
+                                _selectedPartition = null;
+                                _cellEditMode = null;
+                                _selectedWallSplitOffsetMeters =
+                                    splitOffsetForSegmentTap(
+                                      element.lineSegment!,
+                                      localPosition,
+                                      _pixelsPerMeter,
+                                    );
+                              });
+                            },
+                          ),
+                        if (widget.placementDraftRoom case final Room draftRoom)
+                          _PositionedRoomTile(
+                            key: const ValueKey('floor-plan-placement-draft'),
+                            room: draftRoom,
+                            layout: placementDraftLayout ?? draftRoom.layout,
+                            cellKeySuffix: 'draft',
+                            pixelsPerMeter: _pixelsPerMeter,
+                            canvasPadding: _canvasPadding,
+                            selected: true,
+                            editing: true,
+                            invalid: widget.placementDraftError != null,
+                            movable: true,
+                            onTap: () {},
+                            onMoveStart: () {},
+                            onMoveUpdate: _updatePlacementDraft,
+                            onMoveEnd: () {},
+                            onResizeStart: null,
+                            onResizeUpdate: null,
+                            onResizeEnd: null,
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
-            if (_selectedPartition != null ||
-                widget.selectedElementId != null) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  if (_selectedPartition != null)
-                    FilledButton.tonalIcon(
-                      key: const ValueKey('merge-rooms-button'),
-                      onPressed: () async {
-                        final partition = _selectedPartition!;
-                        final error = await widget.onMergeRooms(
-                          partition.primaryRoomId,
-                          partition.secondaryRoomId,
-                        );
-                        if (!mounted) {
-                          return;
-                        }
-                        if (error == null) {
-                          setState(() {
-                            _selectedPartition = null;
-                            _selectedWallSplitOffsetMeters = null;
-                            _clearTransientCanvasState();
-                          });
-                        } else {
-                          _markRoomCommitFailed(partition.primaryRoomId, error);
-                        }
-                      },
-                      icon: const Icon(Icons.call_merge),
-                      label: const Text('Удалить перегородку'),
-                    ),
-                  if (widget.selectedElementId != null &&
-                      _selectedWallSplitOffsetMeters != null)
-                    FilledButton.tonalIcon(
-                      key: const ValueKey('split-wall-button'),
-                      onPressed: () async {
-                        final error = await widget.onSplitWall(
-                          widget.selectedElementId!,
-                          _selectedWallSplitOffsetMeters!,
-                        );
-                        if (!mounted) {
-                          return;
-                        }
-                        if (error == null) {
-                          setState(() {
-                            _selectedWallSplitOffsetMeters = null;
-                            _clearTransientCanvasState();
-                          });
-                        } else {
-                          _markElementCommitFailed(
-                            widget.selectedElementId!,
-                            error,
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.content_cut),
-                      label: const Text('Добавить разрез'),
-                    ),
-                ],
-              ),
-            ],
+          ),
+          if (selectedRoom != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.tonalIcon(
+                  key: const ValueKey('cell-edit-add-button'),
+                  onPressed: () {
+                    setState(() {
+                      _selectedPartition = null;
+                      _selectedWallSplitOffsetMeters = null;
+                      _cellEditMode = _cellEditMode == _CellEditMode.add
+                          ? null
+                          : _CellEditMode.add;
+                      _clearTransientCanvasState();
+                    });
+                  },
+                  icon: const Icon(Icons.add_box_outlined),
+                  label: Text(
+                    _cellEditMode == _CellEditMode.add
+                        ? 'Готово: добавление ячеек'
+                        : 'Добавлять ячейки',
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  key: const ValueKey('cell-edit-remove-button'),
+                  onPressed: () {
+                    setState(() {
+                      _selectedPartition = null;
+                      _selectedWallSplitOffsetMeters = null;
+                      _cellEditMode = _cellEditMode == _CellEditMode.remove
+                          ? null
+                          : _CellEditMode.remove;
+                      _clearTransientCanvasState();
+                    });
+                  },
+                  icon: const Icon(Icons.indeterminate_check_box_outlined),
+                  label: Text(
+                    _cellEditMode == _CellEditMode.remove
+                        ? 'Готово: удаление ячеек'
+                        : 'Убирать ячейки',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _cellEditMode == null
+                  ? 'Для составного помещения можно напрямую добавлять и убирать ячейки сетки 0.5 м.'
+                  : _cellEditMode == _CellEditMode.add
+                  ? 'Режим добавления: тапните по свободной соседней ячейке.'
+                  : 'Режим удаления: тапните по ячейке комнаты. Несвязные формы и внутренние пустоты будут отклонены.',
+            ),
           ],
-        ),
+          if (widget.placementDraftRoom != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  key: const ValueKey('confirm-room-placement-button'),
+                  onPressed: widget.onConfirmPlacementDraft,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('ОК: разместить'),
+                ),
+                FilledButton.tonalIcon(
+                  key: const ValueKey('cancel-room-placement-button'),
+                  onPressed: widget.onCancelPlacementDraft,
+                  icon: const Icon(Icons.close),
+                  label: const Text('Отмена'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Разместите помещение на сетке. Сохранение доступно только для валидного примыкания без пересечений.',
+            ),
+          ],
+          if (_selectedPartition != null || widget.selectedElementId != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                if (_selectedPartition != null)
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('merge-rooms-button'),
+                    onPressed: () async {
+                      final partition = _selectedPartition!;
+                      final error = await widget.onMergeRooms(
+                        partition.primaryRoomId,
+                        partition.secondaryRoomId,
+                      );
+                      if (!mounted) {
+                        return;
+                      }
+                      if (error == null) {
+                        setState(() {
+                          _selectedPartition = null;
+                          _selectedWallSplitOffsetMeters = null;
+                          _clearTransientCanvasState();
+                        });
+                      } else {
+                        _markRoomCommitFailed(partition.primaryRoomId, error);
+                      }
+                    },
+                    icon: const Icon(Icons.call_merge),
+                    label: const Text('Удалить перегородку'),
+                  ),
+                if (widget.selectedElementId != null &&
+                    _selectedWallSplitOffsetMeters != null)
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('split-wall-button'),
+                    onPressed: () async {
+                      final error = await widget.onSplitWall(
+                        widget.selectedElementId!,
+                        _selectedWallSplitOffsetMeters!,
+                      );
+                      if (!mounted) {
+                        return;
+                      }
+                      if (error == null) {
+                        setState(() {
+                          _selectedWallSplitOffsetMeters = null;
+                          _clearTransientCanvasState();
+                        });
+                      } else {
+                        _markElementCommitFailed(
+                          widget.selectedElementId!,
+                          error,
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.content_cut),
+                    label: const Text('Добавить разрез'),
+                  ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
+    if (widget.useCardDecoration) {
+      return Card(child: content);
+    }
+    return content;
   }
 
   bool _partitionsEqual(
@@ -412,13 +606,14 @@ class _FloorPlanHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            const Expanded(
-              child: Text(
-                'План дома',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-              ),
+            const Text(
+              'План дома',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             FilledButton.icon(
               onPressed: onAddRoom,
@@ -471,8 +666,63 @@ class _FloorPlanHeader extends StatelessWidget {
 
 enum _RoomGestureMode { move, resize }
 
+enum _CellEditMode { add, remove }
+
+class _PositionedCellEditTarget extends StatelessWidget {
+  const _PositionedCellEditTarget({
+    super.key,
+    required this.cell,
+    required this.pixelsPerMeter,
+    required this.canvasPadding,
+    required this.removing,
+    required this.onTap,
+  });
+
+  final RoomLayoutRect cell;
+  final double pixelsPerMeter;
+  final double canvasPadding;
+  final bool removing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: canvasPadding + cell.xMeters * pixelsPerMeter,
+      top: canvasPadding + cell.yMeters * pixelsPerMeter,
+      width: cell.widthMeters * pixelsPerMeter,
+      height: cell.heightMeters * pixelsPerMeter,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: removing
+                ? const Color(0xFFD98686).withValues(alpha: 0.35)
+                : const Color(0xFF73B27D).withValues(alpha: 0.28),
+            border: Border.all(
+              color: removing
+                  ? const Color(0xFF9C2F2F)
+                  : const Color(0xFF2E6E43),
+            ),
+          ),
+          child: Center(
+            child: Icon(
+              removing ? Icons.remove : Icons.add,
+              size: 14,
+              color: removing
+                  ? const Color(0xFF6F1E1E)
+                  : const Color(0xFF1F4D2C),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PositionedRoomTile extends StatelessWidget {
   const _PositionedRoomTile({
+    super.key,
     required this.room,
     required this.layout,
     required this.cellKeySuffix,

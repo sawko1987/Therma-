@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 13;
+const int currentProjectFormatVersion = 15;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -31,6 +31,8 @@ enum FloorConstructionType {
 enum CrawlSpaceVentilationMode { ventilated, unventilated }
 
 enum OpeningKind { window, door }
+
+enum OpeningLeakagePreset { tight, standard, leaky }
 
 enum RoomSide { top, right, bottom, left }
 
@@ -110,6 +112,26 @@ extension OpeningKindX on OpeningKind {
   double get defaultHeatTransferCoefficient => switch (this) {
     OpeningKind.window => 1.0,
     OpeningKind.door => 1.5,
+  };
+}
+
+extension OpeningLeakagePresetX on OpeningLeakagePreset {
+  String get label => switch (this) {
+    OpeningLeakagePreset.tight => 'Высокая герметичность',
+    OpeningLeakagePreset.standard => 'Средняя герметичность',
+    OpeningLeakagePreset.leaky => 'Низкая герметичность',
+  };
+
+  String get storageKey => switch (this) {
+    OpeningLeakagePreset.tight => 'tight',
+    OpeningLeakagePreset.standard => 'standard',
+    OpeningLeakagePreset.leaky => 'leaky',
+  };
+
+  double get leakageRateCubicMetersPerHourPerSquareMeter => switch (this) {
+    OpeningLeakagePreset.tight => 1.0,
+    OpeningLeakagePreset.standard => 3.0,
+    OpeningLeakagePreset.leaky => 6.0,
   };
 }
 
@@ -292,6 +314,15 @@ OpeningKind parseOpeningKind(String value) {
     'window' => OpeningKind.window,
     'door' => OpeningKind.door,
     _ => throw StateError('Unknown OpeningKind: $value'),
+  };
+}
+
+OpeningLeakagePreset parseOpeningLeakagePreset(String value) {
+  return switch (value) {
+    'tight' => OpeningLeakagePreset.tight,
+    'standard' => OpeningLeakagePreset.standard,
+    'leaky' => OpeningLeakagePreset.leaky,
+    _ => throw StateError('Unknown OpeningLeakagePreset: $value'),
   };
 }
 
@@ -883,6 +914,7 @@ class EnvelopeOpening {
     required this.kind,
     required this.areaSquareMeters,
     required this.heatTransferCoefficient,
+    this.leakagePreset = OpeningLeakagePreset.standard,
   });
 
   factory EnvelopeOpening.fromJson(Map<String, dynamic> json) =>
@@ -897,6 +929,9 @@ class EnvelopeOpening {
             parseOpeningKind(
               json['kind'] as String,
             ).defaultHeatTransferCoefficient,
+        leakagePreset: (json['leakagePreset'] as String?) == null
+            ? OpeningLeakagePreset.standard
+            : parseOpeningLeakagePreset(json['leakagePreset'] as String),
       );
 
   final String id;
@@ -905,6 +940,7 @@ class EnvelopeOpening {
   final OpeningKind kind;
   final double areaSquareMeters;
   final double heatTransferCoefficient;
+  final OpeningLeakagePreset leakagePreset;
 
   EnvelopeOpening copyWith({
     String? id,
@@ -913,6 +949,7 @@ class EnvelopeOpening {
     OpeningKind? kind,
     double? areaSquareMeters,
     double? heatTransferCoefficient,
+    OpeningLeakagePreset? leakagePreset,
   }) {
     return EnvelopeOpening(
       id: id ?? this.id,
@@ -922,6 +959,7 @@ class EnvelopeOpening {
       areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
       heatTransferCoefficient:
           heatTransferCoefficient ?? this.heatTransferCoefficient,
+      leakagePreset: leakagePreset ?? this.leakagePreset,
     );
   }
 
@@ -932,6 +970,7 @@ class EnvelopeOpening {
     'kind': kind.storageKey,
     'areaSquareMeters': areaSquareMeters,
     'heatTransferCoefficient': heatTransferCoefficient,
+    'leakagePreset': leakagePreset.storageKey,
   };
 }
 
@@ -1009,6 +1048,7 @@ class HouseModel {
     required this.elements,
     required this.openings,
     this.heatingDevices = const [],
+    this.internalPartitionConstructionId,
   });
 
   factory HouseModel.fromJson(Map<String, dynamic> json) {
@@ -1026,6 +1066,8 @@ class HouseModel {
         ((json['heatingDevices'] as List<dynamic>?) ?? const [])
             .map((item) => HeatingDevice.fromJson(_asJsonMap(item)))
             .toList(growable: false);
+    final internalPartitionConstructionId =
+        json['internalPartitionConstructionId'] as String?;
     return HouseModel(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -1049,6 +1091,7 @@ class HouseModel {
                   ),
                 )
                 .toList(growable: false),
+      internalPartitionConstructionId: internalPartitionConstructionId,
     );
   }
 
@@ -1142,6 +1185,9 @@ class HouseModel {
       ],
       openings: const [],
       heatingDevices: const [],
+      internalPartitionConstructionId: wallConstructions.isEmpty
+          ? null
+          : wallConstructions.first.id,
     );
   }
 
@@ -1151,6 +1197,7 @@ class HouseModel {
   final List<HouseEnvelopeElement> elements;
   final List<EnvelopeOpening> openings;
   final List<HeatingDevice> heatingDevices;
+  final String? internalPartitionConstructionId;
 
   double get totalRoomAreaSquareMeters =>
       rooms.fold(0, (sum, room) => sum + room.areaSquareMeters);
@@ -1168,6 +1215,8 @@ class HouseModel {
     List<HouseEnvelopeElement>? elements,
     List<EnvelopeOpening>? openings,
     List<HeatingDevice>? heatingDevices,
+    String? internalPartitionConstructionId,
+    bool clearInternalPartitionConstructionId = false,
   }) {
     return HouseModel(
       id: id ?? this.id,
@@ -1176,6 +1225,10 @@ class HouseModel {
       elements: elements ?? this.elements,
       openings: openings ?? this.openings,
       heatingDevices: heatingDevices ?? this.heatingDevices,
+      internalPartitionConstructionId: clearInternalPartitionConstructionId
+          ? null
+          : internalPartitionConstructionId ??
+                this.internalPartitionConstructionId,
     );
   }
 
@@ -1188,6 +1241,7 @@ class HouseModel {
     'heatingDevices': heatingDevices
         .map((item) => item.toJson())
         .toList(growable: false),
+    'internalPartitionConstructionId': internalPartitionConstructionId,
   };
 }
 

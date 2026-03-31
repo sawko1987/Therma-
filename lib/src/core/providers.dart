@@ -166,12 +166,13 @@ class ProjectEditor {
     _ref.invalidate(selectedProjectProvider);
   }
 
-  Future<void> addRoom(Room room) async {
+  Future<Project> addRoom(Room room) async {
     final project = await _requireProject();
     final updated = _ref
         .read(projectEditingServiceProvider)
         .addRoom(project, room);
     await saveProject(updated);
+    return updated;
   }
 
   Future<void> updateRoom(Room room) async {
@@ -180,6 +181,24 @@ class ProjectEditor {
         .read(projectEditingServiceProvider)
         .updateRoom(project, room);
     await saveProject(updated);
+  }
+
+  Future<Project> configureRoomEnvelope(
+    String roomId, {
+    String? floorConstructionId,
+    String? topConstructionId,
+  }) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .configureRoomEnvelope(
+          project,
+          roomId: roomId,
+          floorConstructionId: floorConstructionId,
+          topConstructionId: topConstructionId,
+        );
+    await saveProject(updated);
+    return updated;
   }
 
   Future<void> deleteRoom(String roomId) async {
@@ -206,6 +225,22 @@ class ProjectEditor {
     final updated = _ref
         .read(projectEditingServiceProvider)
         .updateRoomLayout(project, roomId, layout);
+    await saveProject(updated);
+  }
+
+  Future<void> addRoomCell(String roomId, RoomLayoutRect cell) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addRoomCell(project, roomId, cell);
+    await saveProject(updated);
+  }
+
+  Future<void> removeRoomCell(String roomId, RoomLayoutRect cell) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .removeRoomCell(project, roomId, cell);
     await saveProject(updated);
   }
 
@@ -330,6 +365,16 @@ class ProjectEditor {
   ) async {
     final project = await _requireProject();
     await saveProject(project.copyWith(heatingEconomicsSettings: settings));
+  }
+
+  Future<void> updateInternalPartitionConstruction(
+    String? constructionId,
+  ) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateInternalPartitionConstruction(project, constructionId);
+    await saveProject(updated);
   }
 
   Future<void> addConstruction(Construction construction) async {

@@ -104,6 +104,76 @@ bool layoutsOverlap(RoomLayoutRect left, RoomLayoutRect right) {
       left.bottomMeters > right.yMeters;
 }
 
+List<RoomLayoutRect> explodeRoomCells(List<RoomLayoutRect> cells) {
+  final unique = <String, RoomLayoutRect>{};
+  for (final source in cells) {
+    final normalized = RoomLayoutRect(
+      xMeters: math.max(0, snapToStep(source.xMeters)),
+      yMeters: math.max(0, snapToStep(source.yMeters)),
+      widthMeters: math.max(
+        roomLayoutSnapStepMeters,
+        snapToStep(source.widthMeters),
+      ),
+      heightMeters: math.max(
+        roomLayoutSnapStepMeters,
+        snapToStep(source.heightMeters),
+      ),
+    );
+    final startX = (normalized.xMeters / roomLayoutSnapStepMeters).round();
+    final endX = (normalized.rightMeters / roomLayoutSnapStepMeters).round();
+    final startY = (normalized.yMeters / roomLayoutSnapStepMeters).round();
+    final endY = (normalized.bottomMeters / roomLayoutSnapStepMeters).round();
+    for (var x = startX; x < endX; x++) {
+      for (var y = startY; y < endY; y++) {
+        final cell = RoomLayoutRect(
+          xMeters: x * roomLayoutSnapStepMeters,
+          yMeters: y * roomLayoutSnapStepMeters,
+          widthMeters: roomLayoutSnapStepMeters,
+          heightMeters: roomLayoutSnapStepMeters,
+        );
+        unique[_gridCellKey(cell)] = cell;
+      }
+    }
+  }
+  final result = unique.values.toList(growable: false);
+  result.sort((left, right) {
+    final yCompare = left.yMeters.compareTo(right.yMeters);
+    if (yCompare != 0) {
+      return yCompare;
+    }
+    return left.xMeters.compareTo(right.xMeters);
+  });
+  return result;
+}
+
+List<RoomLayoutRect> buildRoomCellEditTargets(
+  List<Room> rooms,
+  Room room, {
+  required bool removing,
+}) {
+  final roomCells = explodeRoomCells(room.effectiveCells);
+  if (removing) {
+    return roomCells;
+  }
+  final occupied = <String>{
+    for (final otherRoom in rooms)
+      for (final cell in explodeRoomCells(otherRoom.effectiveCells))
+        _gridCellKey(cell),
+  };
+  final candidates = <String, RoomLayoutRect>{};
+  for (final cell in roomCells) {
+    for (final neighbor in _neighborCells(cell)) {
+      final key = _gridCellKey(neighbor);
+      if (!occupied.contains(key) &&
+          neighbor.xMeters >= 0 &&
+          neighbor.yMeters >= 0) {
+        candidates[key] = neighbor;
+      }
+    }
+  }
+  return candidates.values.toList(growable: false);
+}
+
 class RoomPartitionSegment {
   const RoomPartitionSegment({
     required this.primaryRoomId,
@@ -183,7 +253,7 @@ Rect wallSegmentRect({
 }
 
 List<RoomPartitionSegment> buildRoomPartitions(List<Room> rooms) {
-  final partitions = <String, RoomPartitionSegment>{};
+  final partitions = <String, List<HouseLineSegment>>{};
   for (var roomIndex = 0; roomIndex < rooms.length; roomIndex++) {
     final room = rooms[roomIndex];
     for (
@@ -192,19 +262,14 @@ List<RoomPartitionSegment> buildRoomPartitions(List<Room> rooms) {
       otherIndex++
     ) {
       final other = rooms[otherIndex];
-      for (final roomCell in room.effectiveCells) {
-        for (final otherCell in other.effectiveCells) {
+      for (final roomCell in explodeRoomCells(room.effectiveCells)) {
+        for (final otherCell in explodeRoomCells(other.effectiveCells)) {
           for (final roomEdge in _cellEdges(roomCell)) {
             for (final otherEdge in _cellEdges(otherCell)) {
               if (_segmentsEqual(roomEdge, otherEdge)) {
                 final normalized = roomEdge.normalized();
-                final key =
-                    '${room.id}:${other.id}:${normalized.startXMeters}:${normalized.startYMeters}:${normalized.endXMeters}:${normalized.endYMeters}';
-                partitions[key] = RoomPartitionSegment(
-                  primaryRoomId: room.id,
-                  secondaryRoomId: other.id,
-                  segment: normalized,
-                );
+                final key = '${room.id}:${other.id}';
+                partitions.putIfAbsent(key, () => []).add(normalized);
               }
             }
           }
@@ -212,7 +277,73 @@ List<RoomPartitionSegment> buildRoomPartitions(List<Room> rooms) {
       }
     }
   }
-  return partitions.values.toList(growable: false);
+  final mergedPartitions = <RoomPartitionSegment>[];
+  for (final entry in partitions.entries) {
+    final roomIds = entry.key.split(':');
+    for (final segment in _mergeLineSegments(entry.value)) {
+      mergedPartitions.add(
+        RoomPartitionSegment(
+          primaryRoomId: roomIds.first,
+          secondaryRoomId: roomIds.last,
+          segment: segment,
+        ),
+      );
+    }
+  }
+  return mergedPartitions;
+}
+
+List<RoomLayoutRect> _neighborCells(RoomLayoutRect cell) => [
+  cell.copyWith(xMeters: cell.xMeters - roomLayoutSnapStepMeters),
+  cell.copyWith(xMeters: cell.xMeters + roomLayoutSnapStepMeters),
+  cell.copyWith(yMeters: cell.yMeters - roomLayoutSnapStepMeters),
+  cell.copyWith(yMeters: cell.yMeters + roomLayoutSnapStepMeters),
+];
+
+String _gridCellKey(RoomLayoutRect cell) =>
+    '${cell.xMeters}:${cell.yMeters}:${cell.widthMeters}:${cell.heightMeters}';
+
+List<HouseLineSegment> _mergeLineSegments(List<HouseLineSegment> segments) {
+  final horizontals = <double, List<HouseLineSegment>>{};
+  final verticals = <double, List<HouseLineSegment>>{};
+  for (final segment in segments.map((item) => item.normalized())) {
+    if (segment.isHorizontal) {
+      horizontals.putIfAbsent(segment.startYMeters, () => []).add(segment);
+    } else {
+      verticals.putIfAbsent(segment.startXMeters, () => []).add(segment);
+    }
+  }
+
+  final merged = <HouseLineSegment>[];
+  for (final entry in horizontals.entries) {
+    final items = entry.value
+      ..sort((a, b) => a.startXMeters.compareTo(b.startXMeters));
+    var cursor = items.first;
+    for (final item in items.skip(1)) {
+      if ((item.startXMeters - cursor.endXMeters).abs() < 0.0001) {
+        cursor = cursor.copyWith(endXMeters: item.endXMeters);
+      } else {
+        merged.add(cursor);
+        cursor = item;
+      }
+    }
+    merged.add(cursor);
+  }
+  for (final entry in verticals.entries) {
+    final items = entry.value
+      ..sort((a, b) => a.startYMeters.compareTo(b.startYMeters));
+    var cursor = items.first;
+    for (final item in items.skip(1)) {
+      if ((item.startYMeters - cursor.endYMeters).abs() < 0.0001) {
+        cursor = cursor.copyWith(endYMeters: item.endYMeters);
+      } else {
+        merged.add(cursor);
+        cursor = item;
+      }
+    }
+    merged.add(cursor);
+  }
+  return merged;
 }
 
 double splitOffsetForSegmentTap(

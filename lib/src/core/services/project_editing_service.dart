@@ -5,6 +5,93 @@ import '../models/project.dart';
 class ProjectEditingService {
   const ProjectEditingService();
 
+  String? validateRoomPlacement(
+    Project project,
+    Room room, {
+    String? replacingRoomId,
+  }) {
+    try {
+      final normalizedRoom = _normalizeRoom(room);
+      final nextRooms = [
+        for (final item in project.houseModel.rooms)
+          if (item.id != replacingRoomId) item,
+        normalizedRoom,
+      ];
+      _validateRooms(nextRooms);
+      return null;
+    } on StateError catch (error) {
+      return error.message;
+    }
+  }
+
+  Project configureRoomEnvelope(
+    Project project, {
+    required String roomId,
+    String? floorConstructionId,
+    String? topConstructionId,
+  }) {
+    _ensureRoomExists(project, roomId);
+    if (floorConstructionId != null) {
+      final floorConstruction = project.constructions.firstWhere(
+        (item) => item.id == floorConstructionId,
+        orElse: () =>
+            throw StateError('Конструкция $floorConstructionId не найдена.'),
+      );
+      if (floorConstruction.elementKind != ConstructionElementKind.floor) {
+        throw StateError('Для пола можно выбрать только конструкцию пола.');
+      }
+    }
+    if (topConstructionId != null) {
+      final topConstruction = project.constructions.firstWhere(
+        (item) => item.id == topConstructionId,
+        orElse: () =>
+            throw StateError('Конструкция $topConstructionId не найдена.'),
+      );
+      if (topConstruction.elementKind != ConstructionElementKind.ceiling &&
+          topConstruction.elementKind != ConstructionElementKind.roof) {
+        throw StateError(
+          'Для верхнего ограждения можно выбрать только перекрытие или кровлю.',
+        );
+      }
+    }
+
+    final room = project.houseModel.rooms.firstWhere(
+      (item) => item.id == roomId,
+    );
+    final retainedElements = [
+      for (final item in project.houseModel.elements)
+        if (item.id != _autoFloorElementId(roomId) &&
+            item.id != _autoTopElementId(roomId))
+          item,
+    ];
+    final configuredElements = [
+      ...retainedElements,
+      if (floorConstructionId != null)
+        _buildAutoRoomSurfaceElement(
+          room: room,
+          id: _autoFloorElementId(roomId),
+          title: 'Пол ${room.title}',
+          elementKind: ConstructionElementKind.floor,
+          constructionId: floorConstructionId,
+        ),
+      if (topConstructionId != null)
+        _buildAutoRoomSurfaceElement(
+          room: room,
+          id: _autoTopElementId(roomId),
+          title: 'Верх ${room.title}',
+          elementKind: project.constructions
+              .firstWhere((item) => item.id == topConstructionId)
+              .elementKind,
+          constructionId: topConstructionId,
+        ),
+    ];
+    return _syncProjectGeometry(
+      project.copyWith(
+        houseModel: project.houseModel.copyWith(elements: configuredElements),
+      ),
+    );
+  }
+
   Project addRoom(Project project, Room room) {
     final normalizedRoom = _normalizeRoom(room);
     final updatedProject = project.copyWith(
@@ -39,10 +126,76 @@ class ProjectEditingService {
     );
     if (room.effectiveCells.length != 1) {
       throw StateError(
-        'Составное помещение нельзя менять как один прямоугольник. Добавьте соседнюю ячейку и объедините комнаты заново.',
+        'Составное помещение нельзя менять как один прямоугольник. '
+        'Используйте режим ячеек на плане.',
       );
     }
     return updateRoom(project, room.copyWith(cells: [layout], layout: layout));
+  }
+
+  Project addRoomCell(Project project, String roomId, RoomLayoutRect cell) {
+    final room = project.houseModel.rooms.firstWhere(
+      (item) => item.id == roomId,
+    );
+    final normalizedCell = _normalizeGridCell(cell);
+    final existingCells = _explodeToGridCells(room.effectiveCells);
+    if (_gridCellListContains(existingCells, normalizedCell)) {
+      throw StateError('Ячейка уже входит в состав помещения.');
+    }
+    if (!_hasAdjacentCell(existingCells, normalizedCell)) {
+      throw StateError(
+        'Добавлять можно только соседнюю ячейку по общей стороне.',
+      );
+    }
+    return updateRoom(
+      project,
+      room.copyWith(cells: [...existingCells, normalizedCell]),
+    );
+  }
+
+  Project removeRoomCell(Project project, String roomId, RoomLayoutRect cell) {
+    final room = project.houseModel.rooms.firstWhere(
+      (item) => item.id == roomId,
+    );
+    final normalizedCell = _normalizeGridCell(cell);
+    final existingCells = _explodeToGridCells(room.effectiveCells);
+    if (!_gridCellListContains(existingCells, normalizedCell)) {
+      throw StateError('Выбранная ячейка не принадлежит помещению.');
+    }
+    if (existingCells.length <= 1) {
+      throw StateError('Нельзя удалить последнюю ячейку помещения.');
+    }
+    final reducedCells = [
+      for (final item in existingCells)
+        if (!_gridCellsEqual(item, normalizedCell)) item,
+    ];
+    return updateRoom(project, room.copyWith(cells: reducedCells));
+  }
+
+  Project updateInternalPartitionConstruction(
+    Project project,
+    String? constructionId,
+  ) {
+    if (constructionId != null) {
+      final construction = project.constructions.firstWhere(
+        (item) => item.id == constructionId,
+        orElse: () =>
+            throw StateError('Конструкция $constructionId не найдена.'),
+      );
+      if (construction.elementKind != ConstructionElementKind.wall) {
+        throw StateError(
+          'Для внутренней перегородки можно выбрать только стеновую конструкцию.',
+        );
+      }
+    }
+    return _syncInternalPartitionConstruction(
+      project.copyWith(
+        houseModel: project.houseModel.copyWith(
+          internalPartitionConstructionId: constructionId,
+          clearInternalPartitionConstructionId: constructionId == null,
+        ),
+      ),
+    );
   }
 
   Project mergeRoomsAcrossPartition(
@@ -74,7 +227,8 @@ class ProjectEditingService {
     final transferredElements = [
       for (final element in project.houseModel.elements)
         if (element.roomId == secondaryRoomId &&
-            element.elementKind != ConstructionElementKind.wall)
+            element.elementKind != ConstructionElementKind.wall &&
+            !_isAutoRoomSurfaceElement(element))
           element.copyWith(roomId: primaryRoomId)
         else if (element.roomId != secondaryRoomId)
           element,
@@ -111,7 +265,8 @@ class ProjectEditingService {
     final linkedManualElements = project.houseModel.elements.where(
       (item) =>
           item.roomId == roomId &&
-          item.elementKind != ConstructionElementKind.wall,
+          item.elementKind != ConstructionElementKind.wall &&
+          !_isAutoRoomSurfaceElement(item),
     );
     if (linkedManualElements.isNotEmpty) {
       throw StateError(
@@ -143,6 +298,10 @@ class ProjectEditingService {
         rooms: [
           for (final item in project.houseModel.rooms)
             if (item.id != roomId) item,
+        ],
+        elements: [
+          for (final item in project.houseModel.elements)
+            if (item.roomId != roomId || !_isAutoRoomSurfaceElement(item)) item,
         ],
       ),
     );
@@ -363,9 +522,11 @@ class ProjectEditingService {
 
   Project addConstruction(Project project, Construction construction) {
     final selectedIds = project.effectiveSelectedConstructionIds;
-    return project.copyWith(
-      constructions: [...project.constructions, construction],
-      selectedConstructionIds: [...selectedIds, construction.id],
+    return _syncInternalPartitionConstruction(
+      project.copyWith(
+        constructions: [...project.constructions, construction],
+        selectedConstructionIds: [...selectedIds, construction.id],
+      ),
     );
   }
 
@@ -389,7 +550,9 @@ class ProjectEditingService {
         ],
       ),
     );
-    return _syncProjectGeometry(updatedProject);
+    return _syncInternalPartitionConstruction(
+      _syncProjectGeometry(updatedProject),
+    );
   }
 
   Project deleteConstruction(Project project, String constructionId) {
@@ -405,15 +568,17 @@ class ProjectEditingService {
       throw StateError('В проекте должна остаться хотя бы одна конструкция.');
     }
 
-    return project.copyWith(
-      constructions: [
-        for (final item in project.constructions)
-          if (item.id != constructionId) item,
-      ],
-      selectedConstructionIds: [
-        for (final item in project.effectiveSelectedConstructionIds)
-          if (item != constructionId) item,
-      ],
+    return _syncInternalPartitionConstruction(
+      project.copyWith(
+        constructions: [
+          for (final item in project.constructions)
+            if (item.id != constructionId) item,
+        ],
+        selectedConstructionIds: [
+          for (final item in project.effectiveSelectedConstructionIds)
+            if (item != constructionId) item,
+        ],
+      ),
     );
   }
 
@@ -421,12 +586,14 @@ class ProjectEditingService {
     if (project.effectiveSelectedConstructionIds.contains(construction.id)) {
       return project;
     }
-    return project.copyWith(
-      constructions: [...project.constructions, construction],
-      selectedConstructionIds: [
-        ...project.effectiveSelectedConstructionIds,
-        construction.id,
-      ],
+    return _syncInternalPartitionConstruction(
+      project.copyWith(
+        constructions: [...project.constructions, construction],
+        selectedConstructionIds: [
+          ...project.effectiveSelectedConstructionIds,
+          construction.id,
+        ],
+      ),
     );
   }
 
@@ -451,15 +618,17 @@ class ProjectEditingService {
     if (selectedIds.length <= 1) {
       throw StateError('В проекте должна остаться хотя бы одна конструкция.');
     }
-    return project.copyWith(
-      constructions: [
-        for (final item in project.constructions)
-          if (item.id != constructionId) item,
-      ],
-      selectedConstructionIds: [
-        for (final item in selectedIds)
-          if (item != constructionId) item,
-      ],
+    return _syncInternalPartitionConstruction(
+      project.copyWith(
+        constructions: [
+          for (final item in project.constructions)
+            if (item.id != constructionId) item,
+        ],
+        selectedConstructionIds: [
+          for (final item in selectedIds)
+            if (item != constructionId) item,
+        ],
+      ),
     );
   }
 
@@ -488,7 +657,11 @@ class ProjectEditingService {
       normalizedProject,
       previousWallElements,
     );
-    final elements = [...manualElements, ...rebuiltWalls];
+    final syncedRoomSurfaces = _syncAutoRoomSurfaceElements(
+      normalizedProject,
+      manualElements,
+    );
+    final elements = [...syncedRoomSurfaces, ...rebuiltWalls];
     final elementIds = elements.map((item) => item.id).toSet();
     final syncedProject = normalizedProject.copyWith(
       houseModel: normalizedProject.houseModel.copyWith(
@@ -522,6 +695,11 @@ class ProjectEditingService {
       final roomPreviousWalls = previousWalls
           .where((item) => item.roomId == room.id && item.lineSegment != null)
           .toList(growable: false);
+      final openingAreasByWallId = _buildOpeningAreasByWallId(
+        project,
+        roomPreviousWalls,
+      );
+      final nextSegments = <HouseLineSegment>[];
       for (final segment in baseSegments) {
         final splitPoints = _buildSplitPointsForSegment(
           segment,
@@ -536,20 +714,27 @@ class ProjectEditingService {
           if (subSegment.lengthMeters < roomLayoutSnapStepMeters - 0.0001) {
             continue;
           }
-          walls.add(
-            _buildAutoWallElement(
-              room: room,
-              segment: subSegment,
-              constructionId:
-                  _resolveConstructionForSegment(
-                    subSegment,
-                    roomPreviousWalls,
-                  ) ??
-                  defaultWallConstructionId,
-              previousWalls: roomPreviousWalls,
-            ),
-          );
+          nextSegments.add(subSegment);
         }
+      }
+      final matchedPreviousWalls = _matchPreviousWallsToSegments(
+        previousWalls: roomPreviousWalls,
+        nextSegments: nextSegments,
+        openingAreasByWallId: openingAreasByWallId,
+      );
+      for (final subSegment in nextSegments) {
+        walls.add(
+          _buildAutoWallElement(
+            room: room,
+            segment: subSegment,
+            constructionId:
+                _resolveConstructionForSegment(subSegment, roomPreviousWalls) ??
+                defaultWallConstructionId,
+            previousWalls: roomPreviousWalls,
+            matchedPreviousWall:
+                matchedPreviousWalls[_segmentKey(subSegment.normalized())],
+          ),
+        );
       }
     }
     return walls;
@@ -560,6 +745,7 @@ class ProjectEditingService {
     required HouseLineSegment segment,
     required String constructionId,
     required List<HouseEnvelopeElement> previousWalls,
+    HouseEnvelopeElement? matchedPreviousWall,
   }) {
     final normalizedSegment = segment.normalized();
     final existing = previousWalls.where(
@@ -567,14 +753,15 @@ class ProjectEditingService {
           item.lineSegment != null &&
           _segmentsEqual(item.lineSegment!, normalizedSegment),
     );
-    final matched = existing.isEmpty ? null : existing.first;
+    final matched =
+        matchedPreviousWall ?? (existing.isEmpty ? null : existing.first);
     return HouseEnvelopeElement(
-      id: _buildWallElementId(room.id, normalizedSegment),
+      id: matched?.id ?? _buildWallElementId(room.id, normalizedSegment),
       roomId: room.id,
       title: matched?.title ?? 'Стена ${room.title}',
       elementKind: ConstructionElementKind.wall,
       areaSquareMeters: normalizedSegment.lengthMeters * room.heightMeters,
-      constructionId: constructionId,
+      constructionId: matched?.constructionId ?? constructionId,
       lineSegment: normalizedSegment,
       source: EnvelopeElementSource.autoExteriorWall,
     );
@@ -595,6 +782,86 @@ class ProjectEditingService {
       }
     }
     return null;
+  }
+
+  Map<String, double> _buildOpeningAreasByWallId(
+    Project project,
+    List<HouseEnvelopeElement> roomPreviousWalls,
+  ) {
+    final wallIds = roomPreviousWalls.map((item) => item.id).toSet();
+    final totals = <String, double>{};
+    for (final opening in project.houseModel.openings) {
+      if (!wallIds.contains(opening.elementId)) {
+        continue;
+      }
+      totals.update(
+        opening.elementId,
+        (value) => value + opening.areaSquareMeters,
+        ifAbsent: () => opening.areaSquareMeters,
+      );
+    }
+    return totals;
+  }
+
+  Map<String, HouseEnvelopeElement> _matchPreviousWallsToSegments({
+    required List<HouseEnvelopeElement> previousWalls,
+    required List<HouseLineSegment> nextSegments,
+    required Map<String, double> openingAreasByWallId,
+  }) {
+    final matchedBySegmentKey = <String, HouseEnvelopeElement>{};
+    final claimedSegmentKeys = <String>{};
+    for (final wall in previousWalls) {
+      final previousSegment = wall.lineSegment?.normalized();
+      if (previousSegment == null) {
+        continue;
+      }
+      final candidates = nextSegments
+          .where((segment) {
+            final normalized = segment.normalized();
+            return _segmentsEqual(previousSegment, normalized) ||
+                _segmentContains(previousSegment, normalized) ||
+                _segmentContains(normalized, previousSegment);
+          })
+          .toList(growable: false);
+      final openingArea = openingAreasByWallId[wall.id];
+      if (candidates.length != 1) {
+        if (openingArea != null) {
+          throw StateError(
+            'Нельзя изменить форму помещения: сегмент стены с проёмами '
+            'теряет однозначную привязку.',
+          );
+        }
+        continue;
+      }
+      final segment = candidates.single.normalized();
+      final segmentKey = _segmentKey(segment);
+      if (openingArea != null &&
+          openingArea > segment.lengthMeters * _heightForWallSegment(wall)) {
+        throw StateError(
+          'Нельзя изменить форму помещения: проёмы больше нового сегмента стены.',
+        );
+      }
+      if (claimedSegmentKeys.contains(segmentKey)) {
+        if (openingArea != null) {
+          throw StateError(
+            'Нельзя изменить форму помещения: сегмент стены с проёмами '
+            'получает неоднозначного наследника.',
+          );
+        }
+        continue;
+      }
+      claimedSegmentKeys.add(segmentKey);
+      matchedBySegmentKey[segmentKey] = wall;
+    }
+    return matchedBySegmentKey;
+  }
+
+  double _heightForWallSegment(HouseEnvelopeElement wall) {
+    final segment = wall.lineSegment;
+    if (segment == null || segment.lengthMeters <= 0) {
+      return defaultRoomHeightMeters;
+    }
+    return wall.areaSquareMeters / segment.lengthMeters;
   }
 
   List<double> _buildSplitPointsForSegment(
@@ -633,7 +900,7 @@ class ProjectEditingService {
     Map<String, int> globalCounts,
   ) {
     final segments = <HouseLineSegment>[];
-    for (final cell in room.effectiveCells) {
+    for (final cell in _explodeToGridCells(room.effectiveCells)) {
       for (final edge in _edgesForCell(cell)) {
         if ((globalCounts[_edgeKey(edge)] ?? 0) == 1) {
           segments.add(edge);
@@ -646,7 +913,7 @@ class ProjectEditingService {
   Map<String, int> _buildGlobalEdgeCounts(List<Room> rooms) {
     final counts = <String, int>{};
     for (final room in rooms) {
-      for (final cell in room.effectiveCells) {
+      for (final cell in _explodeToGridCells(room.effectiveCells)) {
         for (final edge in _edgesForCell(cell)) {
           counts.update(
             _edgeKey(edge),
@@ -741,12 +1008,46 @@ class ProjectEditingService {
 
   String _f(double value) => value.toStringAsFixed(1).replaceAll('.', '_');
 
+  String _segmentKey(HouseLineSegment segment) {
+    final normalized = segment.normalized();
+    return '${_f(normalized.startXMeters)}:${_f(normalized.startYMeters)}:${_f(normalized.endXMeters)}:${_f(normalized.endYMeters)}';
+  }
+
+  String _gridCellKey(RoomLayoutRect cell) =>
+      '${_f(cell.xMeters)}:${_f(cell.yMeters)}';
+
+  bool _gridCellsEqual(RoomLayoutRect left, RoomLayoutRect right) =>
+      left.xMeters == right.xMeters &&
+      left.yMeters == right.yMeters &&
+      left.widthMeters == right.widthMeters &&
+      left.heightMeters == right.heightMeters;
+
+  bool _gridCellListContains(
+    List<RoomLayoutRect> cells,
+    RoomLayoutRect target,
+  ) => cells.any((item) => _gridCellsEqual(item, target));
+
   Room _normalizeRoom(Room room) {
     final sourceCells = room.effectiveCells.length == 1
         ? [room.layout]
         : room.effectiveCells;
     final cells = sourceCells
-        .map((item) => _normalizeCell(item))
+        .map(
+          (item) => room.effectiveCells.length == 1
+              ? _normalizeCell(item)
+              : RoomLayoutRect(
+                  xMeters: _snap(item.xMeters),
+                  yMeters: _snap(item.yMeters),
+                  widthMeters: math.max(
+                    roomLayoutSnapStepMeters,
+                    _snap(item.widthMeters),
+                  ),
+                  heightMeters: math.max(
+                    roomLayoutSnapStepMeters,
+                    _snap(item.heightMeters),
+                  ),
+                ),
+        )
         .toList(growable: false);
     return room.copyWith(
       cells: cells,
@@ -769,6 +1070,70 @@ class ProjectEditingService {
     );
   }
 
+  RoomLayoutRect _normalizeGridCell(RoomLayoutRect cell) {
+    final normalized = RoomLayoutRect(
+      xMeters: _snap(cell.xMeters),
+      yMeters: _snap(cell.yMeters),
+      widthMeters: roomLayoutSnapStepMeters,
+      heightMeters: roomLayoutSnapStepMeters,
+    );
+    return normalized;
+  }
+
+  List<RoomLayoutRect> _explodeToGridCells(List<RoomLayoutRect> cells) {
+    final unique = <String, RoomLayoutRect>{};
+    for (final source in cells) {
+      final normalized = RoomLayoutRect(
+        xMeters: _snap(source.xMeters),
+        yMeters: _snap(source.yMeters),
+        widthMeters: math.max(
+          roomLayoutSnapStepMeters,
+          _snap(source.widthMeters),
+        ),
+        heightMeters: math.max(
+          roomLayoutSnapStepMeters,
+          _snap(source.heightMeters),
+        ),
+      );
+      final startX = (normalized.xMeters / roomLayoutSnapStepMeters).round();
+      final endX = (normalized.rightMeters / roomLayoutSnapStepMeters).round();
+      final startY = (normalized.yMeters / roomLayoutSnapStepMeters).round();
+      final endY = (normalized.bottomMeters / roomLayoutSnapStepMeters).round();
+      for (var x = startX; x < endX; x++) {
+        for (var y = startY; y < endY; y++) {
+          final cell = RoomLayoutRect(
+            xMeters: x * roomLayoutSnapStepMeters,
+            yMeters: y * roomLayoutSnapStepMeters,
+            widthMeters: roomLayoutSnapStepMeters,
+            heightMeters: roomLayoutSnapStepMeters,
+          );
+          unique[_gridCellKey(cell)] = cell;
+        }
+      }
+    }
+    final exploded = unique.values.toList(growable: false);
+    exploded.sort((left, right) {
+      final yCompare = left.yMeters.compareTo(right.yMeters);
+      if (yCompare != 0) {
+        return yCompare;
+      }
+      return left.xMeters.compareTo(right.xMeters);
+    });
+    return exploded;
+  }
+
+  bool _hasAdjacentCell(List<RoomLayoutRect> cells, RoomLayoutRect target) {
+    return cells.any((item) {
+      final sameRow =
+          item.yMeters == target.yMeters &&
+          (item.xMeters - target.xMeters).abs() == roomLayoutSnapStepMeters;
+      final sameColumn =
+          item.xMeters == target.xMeters &&
+          (item.yMeters - target.yMeters).abs() == roomLayoutSnapStepMeters;
+      return sameRow || sameColumn;
+    });
+  }
+
   double _snap(double value) =>
       (value / roomLayoutSnapStepMeters).round() * roomLayoutSnapStepMeters;
 
@@ -787,8 +1152,12 @@ class ProjectEditingService {
     );
 
     if (effectiveKind != ConstructionElementKind.wall) {
+      final normalizedArea = _isAutoRoomSurfaceElement(element)
+          ? room.areaSquareMeters
+          : element.areaSquareMeters;
       return element.copyWith(
         elementKind: effectiveKind,
+        areaSquareMeters: normalizedArea,
         clearWallPlacement: true,
         clearLineSegment: true,
         source: EnvelopeElementSource.manual,
@@ -851,17 +1220,34 @@ class ProjectEditingService {
     final allCells =
         <({String roomId, String roomTitle, RoomLayoutRect cell})>[];
     for (final room in rooms) {
-      for (final cell in room.effectiveCells) {
+      final explodedCells = _explodeToGridCells(room.effectiveCells);
+      final uniqueCellKeys = explodedCells.map(_gridCellKey).toSet();
+      if (uniqueCellKeys.length != explodedCells.length) {
+        throw StateError(
+          'Комната ${room.title} содержит пересекающиеся ячейки.',
+        );
+      }
+      if (!_gridCellsFormConnectedShape(explodedCells)) {
+        throw StateError(
+          'Комната ${room.title} должна оставаться одной связной фигурой.',
+        );
+      }
+      if (_gridCellsContainHole(explodedCells)) {
+        throw StateError(
+          'Комната ${room.title} не должна содержать внутренних пустот.',
+        );
+      }
+      for (final cell in explodedCells) {
         if (cell.xMeters < 0 || cell.yMeters < 0) {
           throw StateError(
             'Комната не может выходить в отрицательные координаты.',
           );
         }
-        if (cell.widthMeters < minimumRoomLayoutDimensionMeters ||
-            cell.heightMeters < minimumRoomLayoutDimensionMeters) {
+        if (cell.widthMeters < roomLayoutSnapStepMeters ||
+            cell.heightMeters < roomLayoutSnapStepMeters) {
           throw StateError(
             'Размер комнаты не может быть меньше '
-            '${minimumRoomLayoutDimensionMeters.toStringAsFixed(1)} м.',
+            '${roomLayoutSnapStepMeters.toStringAsFixed(1)} м.',
           );
         }
         allCells.add((roomId: room.id, roomTitle: room.title, cell: cell));
@@ -884,6 +1270,12 @@ class ProjectEditingService {
         }
       }
     }
+
+    if (rooms.length > 1 && !_roomsFormConnectedHouse(rooms)) {
+      throw StateError(
+        'Все помещения должны образовывать единый связный план дома.',
+      );
+    }
   }
 
   bool _rectanglesOverlap(RoomLayoutRect left, RoomLayoutRect right) {
@@ -894,8 +1286,8 @@ class ProjectEditingService {
   }
 
   bool _roomsAreAdjacent(Room left, Room right) {
-    for (final leftCell in left.effectiveCells) {
-      for (final rightCell in right.effectiveCells) {
+    for (final leftCell in _explodeToGridCells(left.effectiveCells)) {
+      for (final rightCell in _explodeToGridCells(right.effectiveCells)) {
         for (final leftEdge in _edgesForCell(leftCell)) {
           for (final rightEdge in _edgesForCell(rightCell)) {
             if (_segmentsEqual(leftEdge, rightEdge)) {
@@ -907,6 +1299,69 @@ class ProjectEditingService {
     }
     return false;
   }
+
+  bool _roomsFormConnectedHouse(List<Room> rooms) {
+    if (rooms.isEmpty) {
+      return true;
+    }
+    final visited = <String>{};
+    final queue = <Room>[rooms.first];
+    while (queue.isNotEmpty) {
+      final current = queue.removeLast();
+      if (!visited.add(current.id)) {
+        continue;
+      }
+      for (final candidate in rooms) {
+        if (candidate.id != current.id &&
+            !visited.contains(candidate.id) &&
+            _roomsAreAdjacent(current, candidate)) {
+          queue.add(candidate);
+        }
+      }
+    }
+    return visited.length == rooms.length;
+  }
+
+  List<HouseEnvelopeElement> _syncAutoRoomSurfaceElements(
+    Project project,
+    List<HouseEnvelopeElement> elements,
+  ) {
+    final roomsById = {
+      for (final room in project.houseModel.rooms) room.id: room,
+    };
+    return [
+      for (final element in elements)
+        if (!_isAutoRoomSurfaceElement(element))
+          element
+        else if (roomsById[element.roomId] case final Room room)
+          element.copyWith(areaSquareMeters: room.areaSquareMeters),
+    ];
+  }
+
+  HouseEnvelopeElement _buildAutoRoomSurfaceElement({
+    required Room room,
+    required String id,
+    required String title,
+    required ConstructionElementKind elementKind,
+    required String constructionId,
+  }) {
+    return HouseEnvelopeElement(
+      id: id,
+      roomId: room.id,
+      title: title,
+      elementKind: elementKind,
+      areaSquareMeters: room.areaSquareMeters,
+      constructionId: constructionId,
+    );
+  }
+
+  bool _isAutoRoomSurfaceElement(HouseEnvelopeElement element) =>
+      element.id == _autoFloorElementId(element.roomId) ||
+      element.id == _autoTopElementId(element.roomId);
+
+  String _autoFloorElementId(String roomId) => 'auto-floor-$roomId';
+
+  String _autoTopElementId(String roomId) => 'auto-top-$roomId';
 
   void _ensureRoomExists(Project project, String roomId) {
     final exists = project.houseModel.rooms.any((item) => item.id == roomId);
@@ -945,37 +1400,127 @@ class ProjectEditingService {
   }
 
   void _ensureLineSegmentFitsRoom(Room room, HouseLineSegment segment) {
-    final box = room.layout;
     final normalized = segment.normalized();
-    final onBounds =
-        (normalized.startXMeters == box.xMeters &&
-            normalized.endXMeters == box.xMeters) ||
-        (normalized.startXMeters == box.rightMeters &&
-            normalized.endXMeters == box.rightMeters) ||
-        (normalized.startYMeters == box.yMeters &&
-            normalized.endYMeters == box.yMeters) ||
-        (normalized.startYMeters == box.bottomMeters &&
-            normalized.endYMeters == box.bottomMeters);
-    if (!onBounds) {
-      throw StateError(
-        'Сегмент стены должен лежать на внешней границе комнаты.',
-      );
-    }
-    if (normalized.isHorizontal) {
-      if (normalized.startXMeters < box.xMeters - 0.0001 ||
-          normalized.endXMeters > box.rightMeters + 0.0001) {
-        throw StateError('Сегмент стены выходит за пределы комнаты.');
-      }
-    } else if (normalized.isVertical) {
-      if (normalized.startYMeters < box.yMeters - 0.0001 ||
-          normalized.endYMeters > box.bottomMeters + 0.0001) {
-        throw StateError('Сегмент стены выходит за пределы комнаты.');
-      }
-    } else {
+    if (!normalized.isHorizontal && !normalized.isVertical) {
       throw StateError(
         'Поддерживаются только горизонтальные и вертикальные стены.',
       );
     }
+    final exteriorSegments = _buildRoomExteriorSegments(room);
+    final fitsExterior = exteriorSegments.any(
+      (item) => _segmentContains(item, normalized),
+    );
+    if (!fitsExterior) {
+      throw StateError(
+        'Сегмент стены должен лежать на внешней границе комнаты.',
+      );
+    }
+  }
+
+  bool _gridCellsFormConnectedShape(List<RoomLayoutRect> cells) {
+    if (cells.isEmpty) {
+      return false;
+    }
+    final cellMap = {for (final cell in cells) _gridCellKey(cell): cell};
+    final queue = <RoomLayoutRect>[cells.first];
+    final visited = <String>{};
+    while (queue.isNotEmpty) {
+      final current = queue.removeLast();
+      final key = _gridCellKey(current);
+      if (!visited.add(key)) {
+        continue;
+      }
+      for (final neighbor in _neighborCells(current)) {
+        final matched = cellMap[_gridCellKey(neighbor)];
+        if (matched != null && !visited.contains(_gridCellKey(matched))) {
+          queue.add(matched);
+        }
+      }
+    }
+    return visited.length == cells.length;
+  }
+
+  bool _gridCellsContainHole(List<RoomLayoutRect> cells) {
+    if (cells.isEmpty) {
+      return false;
+    }
+    final occupancy = <String>{for (final cell in cells) _gridCellKey(cell)};
+    final minX = cells.map((item) => item.xMeters).reduce(math.min);
+    final maxX = cells.map((item) => item.xMeters).reduce(math.max);
+    final minY = cells.map((item) => item.yMeters).reduce(math.min);
+    final maxY = cells.map((item) => item.yMeters).reduce(math.max);
+    final queue = <RoomLayoutRect>[
+      RoomLayoutRect(
+        xMeters: minX - roomLayoutSnapStepMeters,
+        yMeters: minY - roomLayoutSnapStepMeters,
+        widthMeters: roomLayoutSnapStepMeters,
+        heightMeters: roomLayoutSnapStepMeters,
+      ),
+    ];
+    final visited = <String>{};
+    final minVisitX = minX - roomLayoutSnapStepMeters;
+    final maxVisitX = maxX + roomLayoutSnapStepMeters;
+    final minVisitY = minY - roomLayoutSnapStepMeters;
+    final maxVisitY = maxY + roomLayoutSnapStepMeters;
+    while (queue.isNotEmpty) {
+      final current = queue.removeLast();
+      final key = _gridCellKey(current);
+      if (!visited.add(key)) {
+        continue;
+      }
+      for (final neighbor in _neighborCells(current)) {
+        if (neighbor.xMeters < minVisitX - 0.0001 ||
+            neighbor.xMeters > maxVisitX + 0.0001 ||
+            neighbor.yMeters < minVisitY - 0.0001 ||
+            neighbor.yMeters > maxVisitY + 0.0001) {
+          continue;
+        }
+        final neighborKey = _gridCellKey(neighbor);
+        if (occupancy.contains(neighborKey) || visited.contains(neighborKey)) {
+          continue;
+        }
+        queue.add(neighbor);
+      }
+    }
+    for (double x = minX; x <= maxX + 0.0001; x += roomLayoutSnapStepMeters) {
+      for (double y = minY; y <= maxY + 0.0001; y += roomLayoutSnapStepMeters) {
+        final candidate = RoomLayoutRect(
+          xMeters: _snap(x),
+          yMeters: _snap(y),
+          widthMeters: roomLayoutSnapStepMeters,
+          heightMeters: roomLayoutSnapStepMeters,
+        );
+        final key = _gridCellKey(candidate);
+        if (!occupancy.contains(key) && !visited.contains(key)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  List<RoomLayoutRect> _neighborCells(RoomLayoutRect cell) => [
+    cell.copyWith(xMeters: cell.xMeters - roomLayoutSnapStepMeters),
+    cell.copyWith(xMeters: cell.xMeters + roomLayoutSnapStepMeters),
+    cell.copyWith(yMeters: cell.yMeters - roomLayoutSnapStepMeters),
+    cell.copyWith(yMeters: cell.yMeters + roomLayoutSnapStepMeters),
+  ];
+
+  List<HouseLineSegment> _buildRoomExteriorSegments(Room room) {
+    final cells = _explodeToGridCells(room.effectiveCells);
+    final counts = <String, int>{};
+    final edgesByKey = <String, HouseLineSegment>{};
+    for (final cell in cells) {
+      for (final edge in _edgesForCell(cell)) {
+        final key = _edgeKey(edge);
+        counts.update(key, (value) => value + 1, ifAbsent: () => 1);
+        edgesByKey.putIfAbsent(key, () => edge.normalized());
+      }
+    }
+    return _mergeSegments([
+      for (final entry in counts.entries)
+        if (entry.value == 1) edgesByKey[entry.key]!,
+    ]);
   }
 
   void _ensureAllOpeningsFit(Project project) {
@@ -1042,6 +1587,23 @@ class ProjectEditingService {
       (item) => item.elementKind == ConstructionElementKind.wall,
     );
     return anyWall.isEmpty ? null : anyWall.first.id;
+  }
+
+  Project _syncInternalPartitionConstruction(Project project) {
+    final currentId = project.houseModel.internalPartitionConstructionId;
+    final selectedWallIds = project.constructions
+        .where((item) => item.elementKind == ConstructionElementKind.wall)
+        .map((item) => item.id)
+        .toSet();
+    final resolvedId = selectedWallIds.contains(currentId)
+        ? currentId
+        : _defaultWallConstructionId(project);
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        internalPartitionConstructionId: resolvedId,
+        clearInternalPartitionConstructionId: resolvedId == null,
+      ),
+    );
   }
 
   HouseLineSegment _lineSegmentForWallPlacement(

@@ -100,6 +100,92 @@ void main() {
     expect(restored.migratedFromDatasetVersion, isNull);
   });
 
+  test('saveProject preserves multi-cell rooms and segmented walls', () async {
+    final source = buildTestProject(
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: [
+          buildRoom(
+            cells: const [
+              RoomLayoutRect(
+                xMeters: 0,
+                yMeters: 0,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+              RoomLayoutRect(
+                xMeters: 0.5,
+                yMeters: 0,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+              RoomLayoutRect(
+                xMeters: 0.5,
+                yMeters: 0.5,
+                widthMeters: 0.5,
+                heightMeters: 0.5,
+              ),
+            ],
+          ),
+        ],
+        elements: const [
+          HouseEnvelopeElement(
+            id: 'wall-top-a',
+            roomId: defaultRoomId,
+            title: 'Стена A',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters: 1.35,
+            constructionId: 'wall',
+            lineSegment: HouseLineSegment(
+              startXMeters: 0,
+              startYMeters: 0,
+              endXMeters: 0.5,
+              endYMeters: 0,
+            ),
+            source: EnvelopeElementSource.autoExteriorWall,
+          ),
+          HouseEnvelopeElement(
+            id: 'wall-top-b',
+            roomId: defaultRoomId,
+            title: 'Стена B',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters: 1.35,
+            constructionId: 'wall',
+            lineSegment: HouseLineSegment(
+              startXMeters: 0.5,
+              startYMeters: 0,
+              endXMeters: 1.0,
+              endYMeters: 0,
+            ),
+            source: EnvelopeElementSource.autoExteriorWall,
+          ),
+        ],
+        openings: const [
+          EnvelopeOpening(
+            id: 'opening-window',
+            elementId: 'wall-top-a',
+            title: 'Окно',
+            kind: OpeningKind.window,
+            areaSquareMeters: 0.4,
+            heatTransferCoefficient: 1.0,
+          ),
+        ],
+      ),
+    );
+
+    await repository.saveProject(source);
+    final restored = await repository.getProject(source.id);
+
+    expect(restored, isNotNull);
+    expect(restored!.houseModel.rooms.single.effectiveCells, hasLength(3));
+    expect(
+      restored.houseModel.elements.map((item) => item.id),
+      containsAll(['wall-top-a', 'wall-top-b']),
+    );
+    expect(restored.houseModel.openings.single.elementId, 'wall-top-a');
+  });
+
   test('project json accepts legacy payload without dataset version', () {
     final legacyPayload = {
       'projectFormatVersion': 1,
@@ -133,6 +219,64 @@ void main() {
     expect(restored.customMaterials, isEmpty);
     expect(restored.sourceProjectFormatVersion, 1);
     expect(restored.heatingEconomicsSettings.heatPumpCop, defaultHeatPumpCop);
+  });
+
+  test('project json defaults opening leakage preset for legacy payload', () {
+    final legacyPayload = {
+      'projectFormatVersion': 14,
+      'id': 'legacy-opening',
+      'name': 'Legacy opening project',
+      'climatePointId': 'moscow',
+      'roomPreset': 'livingRoom',
+      'constructions': [
+        {
+          'id': 'wall',
+          'title': 'Наружная стена',
+          'elementKind': 'wall',
+          'layers': [
+            {
+              'id': 'aac',
+              'materialId': 'aac_d500',
+              'kind': 'masonry',
+              'thicknessMm': 375,
+              'enabled': true,
+            },
+          ],
+        },
+      ],
+      'houseModel': {
+        'id': 'house-model',
+        'title': 'Дом',
+        'rooms': [Room.defaultRoom().toJson()],
+        'elements': [
+          const HouseEnvelopeElement(
+            id: 'wall-main',
+            roomId: defaultRoomId,
+            title: 'Стена',
+            elementKind: ConstructionElementKind.wall,
+            areaSquareMeters: 10,
+            constructionId: 'wall',
+          ).toJson(),
+        ],
+        'openings': [
+          const {
+            'id': 'opening-window',
+            'elementId': 'wall-main',
+            'title': 'Окно',
+            'kind': 'window',
+            'areaSquareMeters': 2.0,
+            'heatTransferCoefficient': 1.0,
+          },
+        ],
+      },
+    };
+
+    final restored = Project.fromJson(legacyPayload);
+
+    expect(
+      restored.houseModel.openings.single.leakagePreset,
+      OpeningLeakagePreset.standard,
+    );
   });
 
   test('project json rejects future project format version', () {
@@ -304,6 +448,77 @@ void main() {
         currentProjectFormatVersion,
       );
       expect(projects.single.houseModel.rooms.single.layout.widthMeters, 4);
+    },
+  );
+
+  test(
+    'getProject migrates legacy opening leakage preset and persists it',
+    () async {
+      final source = buildTestProject(
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Дом',
+          rooms: [Room.defaultRoom()],
+          elements: const [
+            HouseEnvelopeElement(
+              id: 'wall-main',
+              roomId: defaultRoomId,
+              title: 'Стена',
+              elementKind: ConstructionElementKind.wall,
+              areaSquareMeters: 10,
+              constructionId: 'wall',
+            ),
+          ],
+          openings: const [
+            EnvelopeOpening(
+              id: 'opening-window',
+              elementId: 'wall-main',
+              title: 'Окно',
+              kind: OpeningKind.window,
+              areaSquareMeters: 2,
+              heatTransferCoefficient: 1.0,
+            ),
+          ],
+        ),
+      );
+      final legacyPayload = Map<String, dynamic>.from(source.toJson())
+        ..['projectFormatVersion'] = 14;
+      final openings =
+          ((legacyPayload['houseModel'] as Map<String, dynamic>)['openings']
+                  as List<dynamic>)
+              .cast<Map<String, dynamic>>();
+      openings[0].remove('leakagePreset');
+
+      await database
+          .into(database.projectEntries)
+          .insert(
+            ProjectEntriesCompanion.insert(
+              id: source.id,
+              name: source.name,
+              climatePointId: source.climatePointId,
+              roomPreset: source.roomPreset.storageKey,
+              payloadJson: jsonEncode(legacyPayload),
+              projectFormatVersion: 14,
+              datasetVersion: Value(source.datasetVersion!),
+              updatedAtEpochMs: 999,
+            ),
+          );
+
+      final restored = await repository.getProject(source.id);
+      final storedRow = await (database.select(
+        database.projectEntries,
+      )..where((table) => table.id.equals(source.id))).getSingle();
+      final storedProject = Project.fromJson(jsonDecode(storedRow.payloadJson));
+
+      expect(
+        restored?.houseModel.openings.single.leakagePreset,
+        OpeningLeakagePreset.standard,
+      );
+      expect(
+        storedProject.houseModel.openings.single.leakagePreset,
+        OpeningLeakagePreset.standard,
+      );
+      expect(restored?.sourceProjectFormatVersion, currentProjectFormatVersion);
     },
   );
 

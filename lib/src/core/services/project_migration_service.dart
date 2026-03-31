@@ -116,16 +116,35 @@ class ProjectMigrationService {
     final elementIds = wallElements.map((item) => item.id).toSet();
     final openings = houseModel.openings
         .where((item) => elementIds.contains(item.elementId))
+        .map(
+          (item) => project.sourceProjectFormatVersion < 15
+              ? item.copyWith(leakagePreset: OpeningLeakagePreset.standard)
+              : item,
+        )
         .toList(growable: false);
     final heatingDevices = houseModel.heatingDevices
         .where((item) => roomIds.contains(item.roomId))
         .toList(growable: false);
+    final wallConstructionIds = project.constructions
+        .where((item) => item.elementKind == ConstructionElementKind.wall)
+        .map((item) => item.id)
+        .toSet();
+    final internalPartitionConstructionId =
+        houseModel.internalPartitionConstructionId;
+    final normalizedInternalPartitionConstructionId =
+        wallConstructionIds.contains(internalPartitionConstructionId)
+        ? internalPartitionConstructionId
+        : (wallConstructionIds.isEmpty ? null : wallConstructionIds.first);
 
     return houseModel.copyWith(
       rooms: roomsWithCells,
       elements: wallElements,
       openings: openings,
       heatingDevices: heatingDevices,
+      internalPartitionConstructionId:
+          normalizedInternalPartitionConstructionId,
+      clearInternalPartitionConstructionId:
+          normalizedInternalPartitionConstructionId == null,
     );
   }
 

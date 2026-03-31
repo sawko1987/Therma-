@@ -34,10 +34,37 @@ class BuildingElementHeatLossResult {
   double get totalHeatLossWatts => opaqueHeatLossWatts + openingHeatLossWatts;
 }
 
+class BuildingInternalHeatTransferResult {
+  const BuildingInternalHeatTransferResult({
+    required this.fromRoom,
+    required this.toRoom,
+    required this.construction,
+    required this.segment,
+    required this.partitionAreaSquareMeters,
+    required this.fromRoomTemperature,
+    required this.toRoomTemperature,
+    required this.deltaTemperature,
+    required this.totalResistance,
+    required this.heatTransferWatts,
+  });
+
+  final Room fromRoom;
+  final Room toRoom;
+  final Construction construction;
+  final HouseLineSegment segment;
+  final double partitionAreaSquareMeters;
+  final double fromRoomTemperature;
+  final double toRoomTemperature;
+  final double deltaTemperature;
+  final double totalResistance;
+  final double heatTransferWatts;
+}
+
 class BuildingRoomHeatLossResult {
   const BuildingRoomHeatLossResult({
     required this.room,
     required this.elementResults,
+    required this.internalHeatTransferResults,
     required this.unresolvedElements,
     required this.elementCount,
     required this.openingCount,
@@ -53,12 +80,16 @@ class BuildingRoomHeatLossResult {
     required this.opaqueHeatLossWatts,
     required this.openingHeatLossWatts,
     required this.ventilationHeatLossWatts,
+    required this.infiltrationHeatLossWatts,
+    required this.adjacentRoomHeatGainWatts,
+    required this.netHeatingDemandWatts,
     required this.installedHeatingPowerWatts,
     required this.heatingPowerDeltaWatts,
   });
 
   final Room room;
   final List<BuildingElementHeatLossResult> elementResults;
+  final List<BuildingInternalHeatTransferResult> internalHeatTransferResults;
   final List<HouseEnvelopeElement> unresolvedElements;
   final int elementCount;
   final int openingCount;
@@ -74,6 +105,9 @@ class BuildingRoomHeatLossResult {
   final double opaqueHeatLossWatts;
   final double openingHeatLossWatts;
   final double ventilationHeatLossWatts;
+  final double infiltrationHeatLossWatts;
+  final double adjacentRoomHeatGainWatts;
+  final double netHeatingDemandWatts;
   final double installedHeatingPowerWatts;
   final double heatingPowerDeltaWatts;
 }
@@ -81,6 +115,7 @@ class BuildingRoomHeatLossResult {
 class BuildingHeatLossResult {
   const BuildingHeatLossResult({
     required this.roomResults,
+    required this.internalHeatTransferResults,
     required this.totalHeatLossWatts,
     required this.totalEnvelopeAreaSquareMeters,
     required this.totalOpaqueAreaSquareMeters,
@@ -90,6 +125,7 @@ class BuildingHeatLossResult {
     required this.totalOpaqueHeatLossWatts,
     required this.totalOpeningHeatLossWatts,
     required this.totalVentilationHeatLossWatts,
+    required this.totalInfiltrationHeatLossWatts,
     required this.totalHeatingDeviceCount,
     required this.totalInstalledHeatingPowerWatts,
     required this.totalHeatingPowerDeltaWatts,
@@ -98,6 +134,7 @@ class BuildingHeatLossResult {
   });
 
   final List<BuildingRoomHeatLossResult> roomResults;
+  final List<BuildingInternalHeatTransferResult> internalHeatTransferResults;
   final double totalHeatLossWatts;
   final double totalEnvelopeAreaSquareMeters;
   final double totalOpaqueAreaSquareMeters;
@@ -107,6 +144,7 @@ class BuildingHeatLossResult {
   final double totalOpaqueHeatLossWatts;
   final double totalOpeningHeatLossWatts;
   final double totalVentilationHeatLossWatts;
+  final double totalInfiltrationHeatLossWatts;
   final int totalHeatingDeviceCount;
   final double totalInstalledHeatingPowerWatts;
   final double totalHeatingPowerDeltaWatts;

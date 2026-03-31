@@ -446,7 +446,7 @@ class _EconomicsBody extends StatelessWidget {
                   'КПД газового котла: ${settings.gasBoilerEfficiency.toStringAsFixed(2)}. '
                   'COP теплового насоса: ${settings.heatPumpCop.toStringAsFixed(1)}. '
                   'Теплота газа: 9.3 кВт·ч/м³. '
-                  'v1 не учитывает вентиляцию, инфильтрацию и мостики холода.',
+                  'v1 уже учитывает вентиляцию и инфильтрацию, но пока не учитывает мостики холода.',
                 ),
                 const SizedBox(height: 12),
                 FilledButton.tonalIcon(

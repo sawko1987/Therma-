@@ -551,6 +551,7 @@ class _ClimateSelector extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: selectedRegion,
           decoration: const InputDecoration(labelText: 'Регион'),
           items: regions
@@ -573,6 +574,7 @@ class _ClimateSelector extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: selectedCity,
           decoration: const InputDecoration(labelText: 'Город'),
           items: regionCities
