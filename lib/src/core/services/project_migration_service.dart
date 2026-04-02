@@ -1,5 +1,6 @@
 import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
+import '../models/ventilation_settings.dart';
 import '../models/versioning.dart';
 
 class MigratedProject {
@@ -33,6 +34,7 @@ class ProjectMigrationService {
         constructions: _migrateConstructions(project),
         houseModel: _migrateHouseModel(project),
         groundFloorCalculations: _migrateGroundFloorCalculations(project),
+        ventilationSettings: _migrateVentilationSettings(project),
         datasetVersion: currentDatasetVersion,
         migratedFromDatasetVersion: requiresDatasetMigration
             ? effectiveSourceDatasetVersion
@@ -55,6 +57,20 @@ class ProjectMigrationService {
           .toList(growable: false);
     }
     return const [];
+  }
+
+  List<VentilationSettings> _migrateVentilationSettings(Project project) {
+    if (project.sourceProjectFormatVersion < 18) {
+      return const [];
+    }
+    final roomIds = project.houseModel.rooms.map((item) => item.id).toSet();
+    return project.ventilationSettings
+        .map(
+          (item) => item.roomId == null || roomIds.contains(item.roomId)
+              ? item
+              : item.copyWith(clearRoomId: true),
+        )
+        .toList(growable: false);
   }
 
   List<Construction> _migrateConstructions(Project project) {

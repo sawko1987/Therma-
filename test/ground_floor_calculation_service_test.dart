@@ -112,7 +112,7 @@ void main() {
     );
 
     expect(result.isSupported, isTrue);
-    expect(result.equivalentGroundResistance, closeTo(1.60, 0.05));
+    expect(result.equivalentGroundResistance, closeTo(1.94, 0.05));
     expect(result.statusMessage, contains('ленте'));
   });
 

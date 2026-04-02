@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/calculation.dart';
@@ -697,7 +698,7 @@ class _ConstructionCard extends StatelessWidget {
   }
 }
 
-class _ConstructionStatusFooter extends ConsumerWidget {
+class _ConstructionStatusFooter extends ConsumerStatefulWidget {
   const _ConstructionStatusFooter({
     required this.constructionId,
     required this.onOpenCalculation,
@@ -707,9 +708,92 @@ class _ConstructionStatusFooter extends ConsumerWidget {
   final VoidCallback onOpenCalculation;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ConstructionStatusFooter> createState() =>
+      _ConstructionStatusFooterState();
+}
+
+class _ConstructionStatusFooterState
+    extends ConsumerState<_ConstructionStatusFooter> {
+  ScrollPosition? _scrollPosition;
+  bool _isActivated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _attachAndCheck());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _attachAndCheck();
+  }
+
+  @override
+  void dispose() {
+    _scrollPosition?.removeListener(_updateVisibility);
+    super.dispose();
+  }
+
+  void _attachAndCheck() {
+    if (_isActivated || !mounted) {
+      return;
+    }
+    final position = Scrollable.maybeOf(context)?.position;
+    if (_scrollPosition != position) {
+      _scrollPosition?.removeListener(_updateVisibility);
+      _scrollPosition = position;
+      _scrollPosition?.addListener(_updateVisibility);
+    }
+    _updateVisibility();
+  }
+
+  void _updateVisibility() {
+    if (_isActivated || !mounted) {
+      return;
+    }
+    final renderObject = context.findRenderObject();
+    final viewport = renderObject == null
+        ? null
+        : RenderAbstractViewport.maybeOf(renderObject);
+    final position = _scrollPosition;
+    if (renderObject is! RenderBox || viewport == null || position == null) {
+      return;
+    }
+    final topOffset = viewport.getOffsetToReveal(renderObject, 0).offset;
+    final bottomOffset = viewport.getOffsetToReveal(renderObject, 1).offset;
+    final visibleStart = position.pixels;
+    final visibleEnd = position.pixels + position.viewportDimension;
+    final isVisible = bottomOffset >= visibleStart && topOffset <= visibleEnd;
+    if (!isVisible) {
+      return;
+    }
+    _scrollPosition?.removeListener(_updateVisibility);
+    setState(() {
+      _isActivated = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isActivated) {
+      return _StatusContainer(
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text('Статус загрузится, когда карточка попадет в экран.'),
+            ),
+            FilledButton.icon(
+              onPressed: widget.onOpenCalculation,
+              icon: const Icon(Icons.analytics_outlined),
+              label: const Text('Открыть расчет'),
+            ),
+          ],
+        ),
+      );
+    }
     final calculationAsync = ref.watch(
-      calculationResultForConstructionProvider(constructionId),
+      calculationResultForConstructionProvider(widget.constructionId),
     );
 
     return calculationAsync.when(
@@ -722,7 +806,7 @@ class _ConstructionStatusFooter extends ConsumerWidget {
                   child: Text('Расчет недоступен для этой конструкции.'),
                 ),
                 FilledButton.icon(
-                  onPressed: onOpenCalculation,
+                  onPressed: widget.onOpenCalculation,
                   icon: const Icon(Icons.analytics_outlined),
                   label: const Text('Проверить расчет'),
                 ),
@@ -741,7 +825,7 @@ class _ConstructionStatusFooter extends ConsumerWidget {
                 Text(result.scenarioMessage),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: onOpenCalculation,
+                  onPressed: widget.onOpenCalculation,
                   icon: const Icon(Icons.analytics_outlined),
                   label: const Text('Открыть расчет'),
                 ),
@@ -781,7 +865,7 @@ class _ConstructionStatusFooter extends ConsumerWidget {
               Text(result.moistureCheck.summary),
               const SizedBox(height: 12),
               FilledButton.icon(
-                onPressed: onOpenCalculation,
+                onPressed: widget.onOpenCalculation,
                 icon: const Icon(Icons.analytics_outlined),
                 label: const Text('Проверить расчет'),
               ),
@@ -797,7 +881,7 @@ class _ConstructionStatusFooter extends ConsumerWidget {
             Text('Ошибка расчета: $error'),
             const SizedBox(height: 8),
             FilledButton.icon(
-              onPressed: onOpenCalculation,
+              onPressed: widget.onOpenCalculation,
               icon: const Icon(Icons.analytics_outlined),
               label: const Text('Открыть расчет'),
             ),

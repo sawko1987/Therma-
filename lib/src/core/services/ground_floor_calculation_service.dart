@@ -128,6 +128,12 @@ class NormativeGroundFloorCalculationService
         'Параметры утепления кромки не могут быть отрицательными.',
       );
     }
+    if ((calculation.foundationDepthMeters ?? 0) < 0 ||
+        (calculation.foundationWidthMeters ?? 0) < 0) {
+      throw StateError(
+        'Параметры фундамента не могут быть отрицательными.',
+      );
+    }
   }
 
   bool _supportsKindForFloorType(
@@ -183,9 +189,12 @@ class NormativeGroundFloorCalculationService
   ) {
     final characteristicSize =
         calculation.areaSquareMeters / calculation.perimeterMeters;
-    final geometryTerm = 0.95 + characteristicSize * 0.12;
-    final edgeWidthBonus = calculation.edgeInsulationWidthMeters * 0.28;
-    final edgeResistanceBonus = calculation.edgeInsulationResistance * 0.20;
-    return geometryTerm + edgeWidthBonus + edgeResistanceBonus;
+    final foundationDepthMeters = calculation.foundationDepthMeters ?? 0.5;
+    final geometryFactor =
+        1.05 + characteristicSize * 0.20 + foundationDepthMeters * 0.15;
+    final edgeBonus =
+        calculation.edgeInsulationWidthMeters * 0.30 +
+        calculation.edgeInsulationResistance * 0.22;
+    return geometryFactor + edgeBonus;
   }
 }

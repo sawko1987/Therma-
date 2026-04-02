@@ -3,6 +3,7 @@ import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/models/report.dart';
 import 'package:smartcalc_mobile/src/core/models/versioning.dart';
+import 'package:smartcalc_mobile/src/core/models/ventilation_settings.dart';
 import 'package:smartcalc_mobile/src/core/services/interfaces.dart';
 
 const testCatalogSnapshot = CatalogSnapshot(
@@ -155,6 +156,12 @@ const testCatalogSnapshot = CatalogSnapshot(
       code: 'ГОСТ Р 54851-2011',
       clause: 'Ограждающие конструкции',
       title: 'Приведённое сопротивление теплопередаче',
+    ),
+    NormReference(
+      id: 'sp_60',
+      code: 'СП 60.13330.2020',
+      clause: 'Отопление, вентиляция и кондиционирование воздуха',
+      title: 'Расчет теплопотерь на вентиляцию и рекуперацию',
     ),
   ],
   moistureRules: MoistureRuleSet(
@@ -371,6 +378,7 @@ Project buildTestProject({
   List<Construction>? constructions,
   HouseModel? houseModel,
   List<GroundFloorCalculation>? groundFloorCalculations,
+  List<VentilationSettings>? ventilationSettings,
   String datasetVersion = currentDatasetVersion,
   String? migratedFromDatasetVersion,
 }) {
@@ -384,6 +392,7 @@ Project buildTestProject({
     houseModel:
         houseModel ?? buildHouseModel(constructions: effectiveConstructions),
     groundFloorCalculations: groundFloorCalculations ?? const [],
+    ventilationSettings: ventilationSettings ?? const [],
     datasetVersion: datasetVersion,
     migratedFromDatasetVersion: migratedFromDatasetVersion,
     constructions: effectiveConstructions,

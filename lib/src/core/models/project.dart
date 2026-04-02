@@ -2,8 +2,9 @@ import 'dart:math' as math;
 
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
+import 'ventilation_settings.dart';
 
-const int currentProjectFormatVersion = 17;
+const int currentProjectFormatVersion = 18;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -1008,6 +1009,7 @@ class HouseEnvelopeElement {
     required this.elementKind,
     required this.areaSquareMeters,
     required this.constructionId,
+    this.thermalBridgePsiWPerMK,
     this.wallPlacement,
     this.lineSegment,
     this.source = EnvelopeElementSource.manual,
@@ -1023,6 +1025,8 @@ class HouseEnvelopeElement {
         ),
         areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
         constructionId: json['constructionId'] as String,
+        thermalBridgePsiWPerMK:
+            (json['thermalBridgePsiWPerMK'] as num?)?.toDouble(),
         wallPlacement: json['wallPlacement'] == null
             ? null
             : EnvelopeWallPlacement.fromJson(_asJsonMap(json['wallPlacement'])),
@@ -1078,6 +1082,7 @@ class HouseEnvelopeElement {
   final ConstructionElementKind elementKind;
   final double areaSquareMeters;
   final String constructionId;
+  final double? thermalBridgePsiWPerMK;
   final EnvelopeWallPlacement? wallPlacement;
   final HouseLineSegment? lineSegment;
   final EnvelopeElementSource source;
@@ -1089,11 +1094,13 @@ class HouseEnvelopeElement {
     ConstructionElementKind? elementKind,
     double? areaSquareMeters,
     String? constructionId,
+    double? thermalBridgePsiWPerMK,
     EnvelopeWallPlacement? wallPlacement,
     HouseLineSegment? lineSegment,
     EnvelopeElementSource? source,
     bool clearWallPlacement = false,
     bool clearLineSegment = false,
+    bool clearThermalBridgePsiWPerMK = false,
   }) {
     return HouseEnvelopeElement(
       id: id ?? this.id,
@@ -1102,6 +1109,9 @@ class HouseEnvelopeElement {
       elementKind: elementKind ?? this.elementKind,
       areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
       constructionId: constructionId ?? this.constructionId,
+      thermalBridgePsiWPerMK: clearThermalBridgePsiWPerMK
+          ? null
+          : thermalBridgePsiWPerMK ?? this.thermalBridgePsiWPerMK,
       wallPlacement: clearWallPlacement
           ? null
           : wallPlacement ?? this.wallPlacement,
@@ -1117,6 +1127,7 @@ class HouseEnvelopeElement {
     'elementKind': elementKind.storageKey,
     'areaSquareMeters': areaSquareMeters,
     'constructionId': constructionId,
+    'thermalBridgePsiWPerMK': thermalBridgePsiWPerMK,
     'wallPlacement': wallPlacement?.toJson(),
     'lineSegment': lineSegment?.toJson(),
     'source': source.storageKey,
@@ -1593,6 +1604,7 @@ class Project {
     required this.houseModel,
     this.selectedConstructionIds = const [],
     this.groundFloorCalculations = const [],
+    this.ventilationSettings = const [],
     this.heatingEconomicsSettings = const HeatingEconomicsSettings(),
     this.datasetVersion,
     this.migratedFromDatasetVersion,
@@ -1612,6 +1624,10 @@ class Project {
     final groundFloorCalculations =
         ((json['groundFloorCalculations'] as List<dynamic>?) ?? const [])
             .map((item) => GroundFloorCalculation.fromJson(_asJsonMap(item)))
+            .toList(growable: false);
+    final ventilationSettings =
+        ((json['ventilationSettings'] as List<dynamic>?) ?? const [])
+            .map((item) => VentilationSettings.fromJson(_asJsonMap(item)))
             .toList(growable: false);
     final heatingEconomicsSettingsJson = json['heatingEconomicsSettings'];
 
@@ -1636,6 +1652,7 @@ class Project {
               .map((item) => item as String)
               .toList(growable: false),
       groundFloorCalculations: groundFloorCalculations,
+      ventilationSettings: ventilationSettings,
       heatingEconomicsSettings: heatingEconomicsSettingsJson == null
           ? const HeatingEconomicsSettings()
           : HeatingEconomicsSettings.fromJson(
@@ -1657,6 +1674,7 @@ class Project {
   final HouseModel houseModel;
   final List<String> selectedConstructionIds;
   final List<GroundFloorCalculation> groundFloorCalculations;
+  final List<VentilationSettings> ventilationSettings;
   final HeatingEconomicsSettings heatingEconomicsSettings;
   final String? datasetVersion;
   final String? migratedFromDatasetVersion;
@@ -1689,6 +1707,7 @@ class Project {
     HouseModel? houseModel,
     List<String>? selectedConstructionIds,
     List<GroundFloorCalculation>? groundFloorCalculations,
+    List<VentilationSettings>? ventilationSettings,
     HeatingEconomicsSettings? heatingEconomicsSettings,
     String? datasetVersion,
     String? migratedFromDatasetVersion,
@@ -1709,6 +1728,7 @@ class Project {
           selectedConstructionIds ?? this.selectedConstructionIds,
       groundFloorCalculations:
           groundFloorCalculations ?? this.groundFloorCalculations,
+      ventilationSettings: ventilationSettings ?? this.ventilationSettings,
       heatingEconomicsSettings:
           heatingEconomicsSettings ?? this.heatingEconomicsSettings,
       datasetVersion: datasetVersion ?? this.datasetVersion,
@@ -1738,6 +1758,9 @@ class Project {
     'houseModel': houseModel.toJson(),
     'selectedConstructionIds': effectiveSelectedConstructionIds,
     'groundFloorCalculations': groundFloorCalculations
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'ventilationSettings': ventilationSettings
         .map((item) => item.toJson())
         .toList(growable: false),
     'heatingEconomicsSettings': heatingEconomicsSettings.toJson(),

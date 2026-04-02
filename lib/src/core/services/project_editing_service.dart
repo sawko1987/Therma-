@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
+import '../models/ventilation_settings.dart';
 
 class ProjectEditingService {
   const ProjectEditingService();
@@ -290,6 +291,14 @@ class ProjectEditingService {
         'Нельзя удалить помещение, пока в нем есть отопительные приборы.',
       );
     }
+    final linkedVentilationSettings = project.ventilationSettings.where(
+      (item) => item.roomId == roomId,
+    );
+    if (linkedVentilationSettings.isNotEmpty) {
+      throw StateError(
+        'Нельзя удалить помещение, пока к нему привязаны настройки вентиляции.',
+      );
+    }
     if (project.houseModel.rooms.length <= 1) {
       throw StateError('В проекте должно остаться хотя бы одно помещение.');
     }
@@ -541,6 +550,38 @@ class ProjectEditingService {
     );
   }
 
+  Project addVentilationSettings(
+    Project project,
+    VentilationSettings settings,
+  ) {
+    final normalized = _normalizeVentilationSettings(project, settings);
+    return project.copyWith(
+      ventilationSettings: [...project.ventilationSettings, normalized],
+    );
+  }
+
+  Project updateVentilationSettings(
+    Project project,
+    VentilationSettings settings,
+  ) {
+    final normalized = _normalizeVentilationSettings(project, settings);
+    return project.copyWith(
+      ventilationSettings: [
+        for (final item in project.ventilationSettings)
+          if (item.id == settings.id) normalized else item,
+      ],
+    );
+  }
+
+  Project deleteVentilationSettings(Project project, String settingsId) {
+    return project.copyWith(
+      ventilationSettings: [
+        for (final item in project.ventilationSettings)
+          if (item.id != settingsId) item,
+      ],
+    );
+  }
+
   Project updateHeatingDevice(Project project, HeatingDevice device) {
     _ensureHeatingDeviceExists(project, device.id);
     final normalized = _normalizeHeatingDevice(project, device);
@@ -720,8 +761,11 @@ class ProjectEditingService {
     final projectWithSyncedGroundFloorLinks = _syncGroundFloorCalculationLinks(
       syncedProject,
     );
-    _ensureAllOpeningsFit(projectWithSyncedGroundFloorLinks);
-    return projectWithSyncedGroundFloorLinks;
+    final projectWithSyncedVentilationSettings = _syncVentilationSettings(
+      projectWithSyncedGroundFloorLinks,
+    );
+    _ensureAllOpeningsFit(projectWithSyncedVentilationSettings);
+    return projectWithSyncedVentilationSettings;
   }
 
   List<HouseEnvelopeElement> _buildAutoExteriorWalls(
@@ -1684,6 +1728,19 @@ class ProjectEditingService {
     return project.copyWith(groundFloorCalculations: syncedCalculations);
   }
 
+  Project _syncVentilationSettings(Project project) {
+    final roomIds = project.houseModel.rooms.map((item) => item.id).toSet();
+    return project.copyWith(
+      ventilationSettings: project.ventilationSettings
+          .map(
+            (item) => item.roomId == null || roomIds.contains(item.roomId)
+                ? item
+                : item.copyWith(clearRoomId: true),
+          )
+          .toList(growable: false),
+    );
+  }
+
   GroundFloorCalculation _normalizeGroundFloorCalculation(
     Project project,
     GroundFloorCalculation calculation, {
@@ -1718,6 +1775,31 @@ class ProjectEditingService {
       constructionId: element.constructionId,
       areaSquareMeters: element.areaSquareMeters,
     );
+  }
+
+  VentilationSettings _normalizeVentilationSettings(
+    Project project,
+    VentilationSettings settings,
+  ) {
+    if (settings.title.trim().isEmpty) {
+      throw StateError('Название вентиляции не может быть пустым.');
+    }
+    if (settings.airExchangeRate < 0) {
+      throw StateError('Кратность воздухообмена не может быть отрицательной.');
+    }
+    if (settings.roomId case final String roomId) {
+      _ensureRoomExists(project, roomId);
+    }
+    final efficiency = settings.heatRecoveryEfficiency;
+    if (settings.kind == VentilationKind.heatRecovery) {
+      if (efficiency == null || efficiency < 0 || efficiency > 1) {
+        throw StateError(
+          'Для рекуперации КПД должен быть в диапазоне от 0 до 1.',
+        );
+      }
+      return settings;
+    }
+    return settings.copyWith(clearHeatRecoveryEfficiency: true);
   }
 
   HouseLineSegment _lineSegmentForWallPlacement(

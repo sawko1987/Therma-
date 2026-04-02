@@ -11,6 +11,7 @@ import '../../heating_economics/presentation/heating_economics_screen.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
 import '../../object_step/presentation/object_step_screen.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
+import '../../ventilation/presentation/ventilation_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -89,6 +90,13 @@ class DashboardScreen extends ConsumerWidget {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => const GroundFloorScreen(),
+                ),
+              );
+            },
+            onOpenVentilation: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const VentilationScreen(),
                 ),
               );
             },
@@ -338,6 +346,7 @@ class _RoadmapCard extends StatelessWidget {
     required this.onOpenHouseScheme,
     required this.onOpenPreview,
     required this.onOpenGroundFloor,
+    required this.onOpenVentilation,
     required this.onOpenHeatingEconomics,
   });
 
@@ -348,6 +357,7 @@ class _RoadmapCard extends StatelessWidget {
   final VoidCallback onOpenHouseScheme;
   final VoidCallback onOpenPreview;
   final VoidCallback onOpenGroundFloor;
+  final VoidCallback onOpenVentilation;
   final VoidCallback onOpenHeatingEconomics;
 
   @override
@@ -403,6 +413,12 @@ class _RoadmapCard extends StatelessWidget {
               onPressed: hasSelectedObject ? onOpenGroundFloor : null,
               icon: const Icon(Icons.foundation_outlined),
               label: const Text('Открыть полы по грунту'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: hasSelectedObject ? onOpenVentilation : null,
+              icon: const Icon(Icons.air_outlined),
+              label: const Text('Открыть вентиляцию'),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(

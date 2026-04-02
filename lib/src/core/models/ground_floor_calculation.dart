@@ -10,6 +10,8 @@ class GroundFloorCalculation {
     required this.slabLengthMeters,
     required this.edgeInsulationWidthMeters,
     required this.edgeInsulationResistance,
+    this.foundationDepthMeters,
+    this.foundationWidthMeters,
     this.houseElementId,
     this.notes,
   });
@@ -28,6 +30,10 @@ class GroundFloorCalculation {
           (json['edgeInsulationWidthMeters'] as num?)?.toDouble() ?? 0.6,
       edgeInsulationResistance:
           (json['edgeInsulationResistance'] as num?)?.toDouble() ?? 1.5,
+      foundationDepthMeters:
+          (json['foundationDepthMeters'] as num?)?.toDouble(),
+      foundationWidthMeters:
+          (json['foundationWidthMeters'] as num?)?.toDouble(),
       houseElementId: json['houseElementId'] as String?,
       notes: json['notes'] as String?,
     );
@@ -43,6 +49,8 @@ class GroundFloorCalculation {
   final double slabLengthMeters;
   final double edgeInsulationWidthMeters;
   final double edgeInsulationResistance;
+  final double? foundationDepthMeters;
+  final double? foundationWidthMeters;
   final String? houseElementId;
   final String? notes;
 
@@ -60,10 +68,14 @@ class GroundFloorCalculation {
     double? slabLengthMeters,
     double? edgeInsulationWidthMeters,
     double? edgeInsulationResistance,
+    double? foundationDepthMeters,
+    double? foundationWidthMeters,
     String? houseElementId,
     String? notes,
     bool clearHouseElementId = false,
     bool clearNotes = false,
+    bool clearFoundationDepthMeters = false,
+    bool clearFoundationWidthMeters = false,
   }) {
     return GroundFloorCalculation(
       id: id ?? this.id,
@@ -78,6 +90,12 @@ class GroundFloorCalculation {
           edgeInsulationWidthMeters ?? this.edgeInsulationWidthMeters,
       edgeInsulationResistance:
           edgeInsulationResistance ?? this.edgeInsulationResistance,
+      foundationDepthMeters: clearFoundationDepthMeters
+          ? null
+          : foundationDepthMeters ?? this.foundationDepthMeters,
+      foundationWidthMeters: clearFoundationWidthMeters
+          ? null
+          : foundationWidthMeters ?? this.foundationWidthMeters,
       houseElementId: clearHouseElementId
           ? null
           : houseElementId ?? this.houseElementId,
@@ -96,6 +114,8 @@ class GroundFloorCalculation {
     'slabLengthMeters': slabLengthMeters,
     'edgeInsulationWidthMeters': edgeInsulationWidthMeters,
     'edgeInsulationResistance': edgeInsulationResistance,
+    'foundationDepthMeters': foundationDepthMeters,
+    'foundationWidthMeters': foundationWidthMeters,
     'houseElementId': houseElementId,
     'notes': notes,
   };
@@ -121,6 +141,10 @@ extension GroundFloorCalculationKindX on GroundFloorCalculationKind {
   };
 
   bool get isGroundContactScenario =>
+      this == GroundFloorCalculationKind.slabOnGround ||
+      this == GroundFloorCalculationKind.stripFoundationFloor;
+
+  bool get isSupportedInV1 =>
       this == GroundFloorCalculationKind.slabOnGround ||
       this == GroundFloorCalculationKind.stripFoundationFloor;
 }

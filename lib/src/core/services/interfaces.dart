@@ -5,6 +5,7 @@ import '../models/ground_floor_calculation.dart';
 import '../models/heating_economics.dart';
 import '../models/project.dart';
 import '../models/report.dart';
+import 'ventilation_heat_loss_service.dart';
 
 abstract interface class CatalogRepository {
   Future<CatalogSnapshot> loadSnapshot();
@@ -58,6 +59,13 @@ abstract interface class GroundFloorCalculationService {
     required CatalogSnapshot catalog,
     required Project project,
     required GroundFloorCalculation calculation,
+  });
+}
+
+abstract interface class VentilationHeatLossService {
+  Future<List<VentilationHeatLossResult>> calculate({
+    required CatalogSnapshot catalog,
+    required Project project,
   });
 }
 

@@ -15,6 +15,7 @@ class BuildingElementHeatLossResult {
     required this.totalResistance,
     required this.opaqueHeatLossWatts,
     required this.openingHeatLossWatts,
+    required this.thermalBridgeHeatLossWatts,
   });
 
   final HouseEnvelopeElement element;
@@ -30,8 +31,10 @@ class BuildingElementHeatLossResult {
   final double totalResistance;
   final double opaqueHeatLossWatts;
   final double openingHeatLossWatts;
+  final double thermalBridgeHeatLossWatts;
 
-  double get totalHeatLossWatts => opaqueHeatLossWatts + openingHeatLossWatts;
+  double get totalHeatLossWatts =>
+      opaqueHeatLossWatts + openingHeatLossWatts + thermalBridgeHeatLossWatts;
 }
 
 class BuildingInternalHeatTransferResult {
@@ -79,6 +82,7 @@ class BuildingRoomHeatLossResult {
     required this.heatLossWatts,
     required this.opaqueHeatLossWatts,
     required this.openingHeatLossWatts,
+    required this.thermalBridgeHeatLossWatts,
     required this.ventilationHeatLossWatts,
     required this.infiltrationHeatLossWatts,
     required this.adjacentRoomHeatGainWatts,
@@ -104,6 +108,7 @@ class BuildingRoomHeatLossResult {
   final double heatLossWatts;
   final double opaqueHeatLossWatts;
   final double openingHeatLossWatts;
+  final double thermalBridgeHeatLossWatts;
   final double ventilationHeatLossWatts;
   final double infiltrationHeatLossWatts;
   final double adjacentRoomHeatGainWatts;
@@ -124,6 +129,7 @@ class BuildingHeatLossResult {
     required this.totalOpeningCount,
     required this.totalOpaqueHeatLossWatts,
     required this.totalOpeningHeatLossWatts,
+    required this.totalThermalBridgeHeatLossWatts,
     required this.totalVentilationHeatLossWatts,
     required this.totalInfiltrationHeatLossWatts,
     required this.totalHeatingDeviceCount,
@@ -143,6 +149,7 @@ class BuildingHeatLossResult {
   final int totalOpeningCount;
   final double totalOpaqueHeatLossWatts;
   final double totalOpeningHeatLossWatts;
+  final double totalThermalBridgeHeatLossWatts;
   final double totalVentilationHeatLossWatts;
   final double totalInfiltrationHeatLossWatts;
   final int totalHeatingDeviceCount;

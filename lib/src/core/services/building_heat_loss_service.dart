@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../models/building_heat_loss.dart';
 import '../models/calculation.dart';
 import '../models/catalog.dart';
@@ -6,12 +8,17 @@ import '../models/project.dart';
 import 'interfaces.dart';
 import 'ground_floor_calculation_service.dart';
 import 'room_adjacency_geometry.dart';
+import 'ventilation_heat_loss_service.dart';
 
 class NormativeBuildingHeatLossService implements BuildingHeatLossService {
-  const NormativeBuildingHeatLossService(this._engine);
+  const NormativeBuildingHeatLossService(
+    this._engine, [
+    this._ventilationService = const NormativeVentilationCalculationService(),
+  ]);
 
   final ThermalCalculationEngine _engine;
-  static const double _ventilationHeatCapacityFactor = 0.335;
+  final VentilationHeatLossService _ventilationService;
+  static const double _infiltrationHeatCapacityFactor = 0.335;
   static const double _internalSurfaceResistance = 0.13;
 
   @override
@@ -20,6 +27,10 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
     required Project project,
   }) async {
     final groundFloorService = NormativeGroundFloorCalculationService(_engine);
+    final ventilationResults = await _ventilationService.calculate(
+      catalog: catalog,
+      project: project,
+    );
     final climate = catalog.climatePoints.firstWhere(
       (point) => point.id == project.climatePointId,
       orElse: () => throw StateError(
@@ -43,6 +54,47 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         if (calculation.houseElementId != null)
           calculation.houseElementId!: calculation,
     };
+    final roomVolumeById = {
+      for (final room in project.houseModel.rooms)
+        room.id: room.areaSquareMeters * room.heightMeters,
+    };
+    final roomVentilationHeatLossById = <String, double>{
+      for (final room in project.houseModel.rooms) room.id: 0.0,
+    };
+    final roomVentilationAirFlowById = <String, double>{
+      for (final room in project.houseModel.rooms) room.id: 0.0,
+    };
+    for (final ventilationResult in ventilationResults) {
+      final setting = ventilationResult.settings;
+      if (ventilationResult.room case final Room room) {
+        roomVentilationHeatLossById.update(
+          room.id,
+          (value) => value + ventilationResult.heatLossWatts,
+        );
+        roomVentilationAirFlowById.update(
+          room.id,
+          (value) =>
+              value + setting.airExchangeRate * ventilationResult.volumeCubicMeters,
+        );
+        continue;
+      }
+      final totalVolume = ventilationResult.volumeCubicMeters;
+      if (totalVolume <= 0) {
+        continue;
+      }
+      for (final room in project.houseModel.rooms) {
+        final roomVolume = roomVolumeById[room.id] ?? 0.0;
+        final volumeShare = roomVolume / totalVolume;
+        roomVentilationHeatLossById.update(
+          room.id,
+          (value) => value + ventilationResult.heatLossWatts * volumeShare,
+        );
+        roomVentilationAirFlowById.update(
+          room.id,
+          (value) => value + setting.airExchangeRate * roomVolume,
+        );
+      }
+    }
 
     final roomCalculationData = <String, _RoomCalculationData>{};
     final unresolvedElements = <HouseEnvelopeElement>[];
@@ -70,8 +122,10 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       final outsideAirTemperature = climate.designTemperature;
       final insideAirTemperature = roomCondition.insideTemperature;
       final deltaTemperature = insideAirTemperature - outsideAirTemperature;
-      final airChangesPerHour = roomCondition.airChangesPerHour ?? 0.0;
       final roomVolumeCubicMeters = room.areaSquareMeters * room.heightMeters;
+      final airChangesPerHour = roomVolumeCubicMeters <= 0
+          ? 0.0
+          : (roomVentilationAirFlowById[room.id] ?? 0.0) / roomVolumeCubicMeters;
 
       for (final element in roomElements) {
         final construction = constructionMap[element.constructionId];
@@ -131,6 +185,19 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
                   item.heatTransferCoefficient *
                   item.areaSquareMeters,
         );
+        final thermalBridgeLengthMeters = switch (element.elementKind) {
+          ConstructionElementKind.wall => element.lineSegment?.lengthMeters ?? 0,
+          ConstructionElementKind.floor ||
+          ConstructionElementKind.roof ||
+          ConstructionElementKind.ceiling =>
+            math.sqrt(element.areaSquareMeters).isFinite
+                ? 4 * math.sqrt(element.areaSquareMeters)
+                : 0.0,
+        };
+        final thermalBridgeHeatLoss =
+            (element.thermalBridgePsiWPerMK ?? 0.0) *
+            thermalBridgeLengthMeters *
+            deltaTemperature;
 
         elementResults.add(
           BuildingElementHeatLossResult(
@@ -147,6 +214,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
             totalResistance: totalResistance,
             opaqueHeatLossWatts: opaqueHeatLoss,
             openingHeatLossWatts: openingHeatLoss,
+            thermalBridgeHeatLossWatts: thermalBridgeHeatLoss,
           ),
         );
       }
@@ -163,11 +231,12 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         0,
         (sum, item) => sum + item.openingHeatLossWatts,
       );
+      final thermalBridgeHeatLossWatts = elementResults.fold<double>(
+        0,
+        (sum, item) => sum + item.thermalBridgeHeatLossWatts,
+      );
       final ventilationHeatLossWatts =
-          _ventilationHeatCapacityFactor *
-          airChangesPerHour *
-          roomVolumeCubicMeters *
-          deltaTemperature;
+          roomVentilationHeatLossById[room.id] ?? 0.0;
       final infiltrationAirFlowCubicMetersPerHour = roomOpenings.fold<double>(
         0,
         (sum, item) =>
@@ -176,7 +245,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
                 item.leakagePreset.leakageRateCubicMetersPerHourPerSquareMeter,
       );
       final infiltrationHeatLossWatts =
-          _ventilationHeatCapacityFactor *
+          _infiltrationHeatCapacityFactor *
           infiltrationAirFlowCubicMetersPerHour *
           deltaTemperature;
       final totalEnvelopeAreaSquareMeters = roomElements.fold<double>(
@@ -210,10 +279,12 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         roomVolumeCubicMeters: roomVolumeCubicMeters,
         heatLossWatts:
             heatLossWatts +
+            thermalBridgeHeatLossWatts +
             ventilationHeatLossWatts +
             infiltrationHeatLossWatts,
         opaqueHeatLossWatts: opaqueHeatLossWatts,
         openingHeatLossWatts: openingHeatLossWatts,
+        thermalBridgeHeatLossWatts: thermalBridgeHeatLossWatts,
         ventilationHeatLossWatts: ventilationHeatLossWatts,
         infiltrationHeatLossWatts: infiltrationHeatLossWatts,
         installedHeatingPowerWatts: installedHeatingPowerWatts,
@@ -320,6 +391,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
             heatLossWatts: item.heatLossWatts,
             opaqueHeatLossWatts: item.opaqueHeatLossWatts,
             openingHeatLossWatts: item.openingHeatLossWatts,
+            thermalBridgeHeatLossWatts: item.thermalBridgeHeatLossWatts,
             ventilationHeatLossWatts: item.ventilationHeatLossWatts,
             infiltrationHeatLossWatts: item.infiltrationHeatLossWatts,
             adjacentRoomHeatGainWatts: adjacentRoomHeatGainWatts,
@@ -357,6 +429,10 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       totalOpeningHeatLossWatts: roomResults.fold<double>(
         0,
         (sum, item) => sum + item.openingHeatLossWatts,
+      ),
+      totalThermalBridgeHeatLossWatts: roomResults.fold<double>(
+        0,
+        (sum, item) => sum + item.thermalBridgeHeatLossWatts,
       ),
       totalVentilationHeatLossWatts: roomResults.fold<double>(
         0,
@@ -434,6 +510,7 @@ class _RoomCalculationData {
     required this.heatLossWatts,
     required this.opaqueHeatLossWatts,
     required this.openingHeatLossWatts,
+    required this.thermalBridgeHeatLossWatts,
     required this.ventilationHeatLossWatts,
     required this.infiltrationHeatLossWatts,
     required this.installedHeatingPowerWatts,
@@ -455,6 +532,7 @@ class _RoomCalculationData {
   final double heatLossWatts;
   final double opaqueHeatLossWatts;
   final double openingHeatLossWatts;
+  final double thermalBridgeHeatLossWatts;
   final double ventilationHeatLossWatts;
   final double infiltrationHeatLossWatts;
   final double installedHeatingPowerWatts;

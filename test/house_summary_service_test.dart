@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smartcalc_mobile/src/core/models/catalog.dart';
 import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
+import 'package:smartcalc_mobile/src/core/models/ventilation_settings.dart';
 import 'package:smartcalc_mobile/src/core/services/building_heat_loss_service.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
 
@@ -12,6 +13,14 @@ void main() {
     'building heat loss subtracts openings and tracks heating balance',
     () async {
       final project = buildTestProject(
+        ventilationSettings: const [
+          VentilationSettings(
+            id: 'vent-house',
+            title: 'Общедомовая вентиляция',
+            kind: VentilationKind.natural,
+            airExchangeRate: 0.5,
+          ),
+        ],
         houseModel: HouseModel(
           id: 'house-model',
           title: 'Конструктор дома',
@@ -61,18 +70,18 @@ void main() {
       expect(summary.totalOpaqueAreaSquareMeters, 16);
       expect(summary.totalOpeningCount, 1);
       expect(summary.totalOpeningHeatLossWatts, closeTo(184, 2));
-      expect(summary.totalVentilationHeatLossWatts, closeTo(332.86, 0.1));
+      expect(summary.totalVentilationHeatLossWatts, closeTo(333.12, 0.1));
       expect(summary.totalInfiltrationHeatLossWatts, closeTo(184.92, 0.2));
-      expect(summary.totalHeatLossWatts, closeTo(834.30, 0.2));
+      expect(summary.totalHeatLossWatts, closeTo(834.56, 0.2));
       expect(summary.totalHeatingDeviceCount, 1);
       expect(summary.totalInstalledHeatingPowerWatts, 450);
-      expect(summary.totalHeatingPowerDeltaWatts, closeTo(-384.30, 0.2));
+      expect(summary.totalHeatingPowerDeltaWatts, closeTo(-384.56, 0.2));
       expect(summary.internalHeatTransferResults, isEmpty);
       expect(summary.roomResults.single.totalOpaqueAreaSquareMeters, 16);
       expect(summary.roomResults.single.installedHeatingPowerWatts, 450);
       expect(
         summary.roomResults.single.ventilationHeatLossWatts,
-        closeTo(332.86, 0.1),
+        closeTo(333.12, 0.1),
       );
       expect(
         summary.roomResults.single.infiltrationHeatLossWatts,
@@ -167,8 +176,8 @@ void main() {
       expect(livingRoom.insideAirTemperature, 20);
       expect(bedroom.insideAirTemperature, 18);
       expect(livingRoom.heatLossWatts, greaterThan(bedroom.heatLossWatts));
-      expect(livingRoom.airChangesPerHour, 0.5);
-      expect(bedroom.airChangesPerHour, 0.3);
+      expect(livingRoom.airChangesPerHour, 0);
+      expect(bedroom.airChangesPerHour, 0);
     },
   );
 
@@ -286,6 +295,15 @@ void main() {
     'building heat loss adds ventilation using room volume and air change rate',
     () async {
       final project = buildTestProject(
+        ventilationSettings: const [
+          VentilationSettings(
+            id: 'vent-bath',
+            title: 'Санузел',
+            kind: VentilationKind.forced,
+            airExchangeRate: 1.2,
+            roomId: 'bath',
+          ),
+        ],
         houseModel: HouseModel(
           id: 'house-model',
           title: 'Конструктор дома',
@@ -319,11 +337,11 @@ void main() {
 
       expect(room.roomVolumeCubicMeters, closeTo(11.2, 0.01));
       expect(room.airChangesPerHour, 1.2);
-      expect(room.ventilationHeatLossWatts, closeTo(225.12, 0.2));
+      expect(room.ventilationHeatLossWatts, closeTo(225.19, 0.2));
       expect(room.infiltrationHeatLossWatts, 0);
       expect(room.heatLossWatts, closeTo(room.ventilationHeatLossWatts, 0.01));
       expect(room.netHeatingDemandWatts, closeTo(room.heatLossWatts, 0.01));
-      expect(summary.totalVentilationHeatLossWatts, closeTo(225.12, 0.2));
+      expect(summary.totalVentilationHeatLossWatts, closeTo(225.19, 0.2));
       expect(summary.totalInfiltrationHeatLossWatts, 0);
     },
   );

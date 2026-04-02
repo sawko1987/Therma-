@@ -240,6 +240,11 @@ class _HeatLossSummaryCard extends StatelessWidget {
                       '${result.totalOpeningHeatLossWatts.toStringAsFixed(0)} Вт',
                 ),
                 _MetricTile(
+                  label: 'Вентиляция',
+                  value:
+                      '${result.totalVentilationHeatLossWatts.toStringAsFixed(0)} Вт',
+                ),
+                _MetricTile(
                   label: 'Баланс отопления',
                   value:
                       '${result.totalHeatingPowerDeltaWatts.toStringAsFixed(0)} Вт',
@@ -395,6 +400,8 @@ class _EconomicsBody extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
+                _LossBreakdownCard(buildingHeatLoss: buildingHeatLoss),
+                const SizedBox(height: 16),
                 _SourceCard(
                   title: 'Электричество',
                   energyLabel:
@@ -446,7 +453,7 @@ class _EconomicsBody extends StatelessWidget {
                   'КПД газового котла: ${settings.gasBoilerEfficiency.toStringAsFixed(2)}. '
                   'COP теплового насоса: ${settings.heatPumpCop.toStringAsFixed(1)}. '
                   'Теплота газа: 9.3 кВт·ч/м³. '
-                  'v1 уже учитывает вентиляцию и инфильтрацию, но пока не учитывает мостики холода.',
+                  'Текущий расчет учитывает вентиляцию, инфильтрацию и линейные мостики холода.',
                 ),
                 const SizedBox(height: 12),
                 FilledButton.tonalIcon(
@@ -465,6 +472,77 @@ class _EconomicsBody extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LossBreakdownCard extends StatelessWidget {
+  const _LossBreakdownCard({required this.buildingHeatLoss});
+
+  final BuildingHeatLossResult buildingHeatLoss;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F5EE),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Структура потерь',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            _LossRow(
+              label: 'Ограждения',
+              value: buildingHeatLoss.totalOpaqueHeatLossWatts,
+            ),
+            _LossRow(
+              label: 'Проемы',
+              value: buildingHeatLoss.totalOpeningHeatLossWatts,
+            ),
+            _LossRow(
+              label: 'Вентиляция',
+              value: buildingHeatLoss.totalVentilationHeatLossWatts,
+            ),
+            _LossRow(
+              label: 'Инфильтрация',
+              value: buildingHeatLoss.totalInfiltrationHeatLossWatts,
+            ),
+            _LossRow(
+              label: 'Тепловые мосты',
+              value: buildingHeatLoss.totalThermalBridgeHeatLossWatts,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LossRow extends StatelessWidget {
+  const _LossRow({required this.label, required this.value});
+
+  final String label;
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text('${value.toStringAsFixed(0)} Вт'),
+        ],
+      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import 'models/ground_floor_calculation.dart';
 import 'models/heating_economics.dart';
 import 'models/project.dart';
 import 'models/report.dart';
+import 'models/ventilation_settings.dart';
 import 'services/asset_catalog_repository.dart';
 import 'services/building_heat_loss_service.dart';
 import 'services/drift_project_repository.dart';
@@ -20,6 +21,7 @@ import 'services/normative_thermal_calculation_engine.dart';
 import 'services/pdf_report_service.dart';
 import 'services/project_editing_service.dart';
 import 'services/thermal_report_content_builder.dart';
+import 'services/ventilation_heat_loss_service.dart';
 import 'storage/app_database.dart';
 
 class SelectedProjectIdNotifier extends Notifier<String?> {
@@ -67,6 +69,15 @@ class SelectedGroundFloorCalculationIdNotifier extends Notifier<String?> {
   }
 }
 
+class SelectedVentilationSettingsIdNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String? settingsId) {
+    state = settingsId;
+  }
+}
+
 class ProjectEditor {
   ProjectEditor(this._ref);
 
@@ -84,6 +95,8 @@ class ProjectEditor {
     _ref.invalidate(heatingEconomicsResultProvider);
     _ref.invalidate(selectedGroundFloorCalculationProvider);
     _ref.invalidate(groundFloorCalculationResultProvider);
+    _ref.invalidate(selectedVentilationSettingsProvider);
+    _ref.invalidate(ventilationResultProvider);
     _ref.invalidate(constructionLibraryProvider);
     _ref.invalidate(objectListProvider);
     _ref.invalidate(selectedObjectProvider);
@@ -578,6 +591,37 @@ class ProjectEditor {
     _ref.read(selectedGroundFloorCalculationIdProvider.notifier).select(null);
   }
 
+  Future<void> addVentilationSettings(VentilationSettings settings) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addVentilationSettings(project, settings);
+    await saveProject(updated);
+    _ref
+        .read(selectedVentilationSettingsIdProvider.notifier)
+        .select(settings.id);
+  }
+
+  Future<void> updateVentilationSettings(VentilationSettings settings) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateVentilationSettings(project, settings);
+    await saveProject(updated);
+    _ref
+        .read(selectedVentilationSettingsIdProvider.notifier)
+        .select(settings.id);
+  }
+
+  Future<void> deleteVentilationSettings(String settingsId) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .deleteVentilationSettings(project, settingsId);
+    await saveProject(updated);
+    _ref.read(selectedVentilationSettingsIdProvider.notifier).select(null);
+  }
+
   void selectEnvelopeElement(HouseEnvelopeElement element) {
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(element.id);
     _ref
@@ -693,6 +737,10 @@ final groundFloorCalculationServiceProvider =
       ),
     );
 
+final ventilationHeatLossServiceProvider = Provider<VentilationHeatLossService>(
+  (ref) => const NormativeVentilationCalculationService(),
+);
+
 final heatingEconomicsServiceProvider = Provider<HeatingEconomicsService>(
   (ref) => const NormativeHeatingEconomicsService(),
 );
@@ -792,6 +840,11 @@ final selectedEnvelopeElementIdProvider =
 final selectedGroundFloorCalculationIdProvider =
     NotifierProvider<SelectedGroundFloorCalculationIdNotifier, String?>(
       SelectedGroundFloorCalculationIdNotifier.new,
+    );
+
+final selectedVentilationSettingsIdProvider =
+    NotifierProvider<SelectedVentilationSettingsIdNotifier, String?>(
+      SelectedVentilationSettingsIdNotifier.new,
     );
 
 final projectListProvider = FutureProvider<List<Project>>((ref) async {
@@ -1119,6 +1172,27 @@ final selectedGroundFloorCalculationProvider =
       return fallback;
     });
 
+final selectedVentilationSettingsProvider =
+    FutureProvider<VentilationSettings?>((ref) async {
+      final project = await ref.watch(selectedProjectProvider.future);
+      if (project == null || project.ventilationSettings.isEmpty) {
+        return null;
+      }
+
+      final selectedSettingsId = ref.watch(selectedVentilationSettingsIdProvider);
+      for (final settings in project.ventilationSettings) {
+        if (settings.id == selectedSettingsId) {
+          return settings;
+        }
+      }
+
+      final fallback = project.ventilationSettings.first;
+      ref
+          .read(selectedVentilationSettingsIdProvider.notifier)
+          .select(fallback.id);
+      return fallback;
+    });
+
 final buildingHeatLossResultProvider = FutureProvider<BuildingHeatLossResult?>((
   ref,
 ) async {
@@ -1169,6 +1243,18 @@ final groundFloorCalculationResultProvider =
             project: project,
             calculation: calculation,
           );
+    });
+
+final ventilationResultProvider =
+    FutureProvider<List<VentilationHeatLossResult>>((ref) async {
+      final catalog = await ref.watch(catalogSnapshotProvider.future);
+      final project = await ref.watch(selectedProjectProvider.future);
+      if (project == null) {
+        return const [];
+      }
+      return ref
+          .read(ventilationHeatLossServiceProvider)
+          .calculate(catalog: catalog, project: project);
     });
 
 final calculationResultProvider = FutureProvider<CalculationResult?>((

@@ -69,8 +69,8 @@ class _ResultBody extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   project.houseModel.internalPartitionConstructionId == null
-                      ? 'Расчет учитывает потери через непрозрачные участки, проемы, инфильтрацию и базовую вентиляцию. Внутренний теплообмен пока не считается: не выбрана конструкция перегородки.'
-                      : 'Расчет учитывает потери через непрозрачные участки, проемы, инфильтрацию, базовую вентиляцию и теплообмен между смежными комнатами.',
+                      ? 'Расчет учитывает потери через непрозрачные участки, проемы, вентиляцию, инфильтрацию и линейные мостики холода. Внутренний теплообмен пока не считается: не выбрана конструкция перегородки.'
+                      : 'Расчет учитывает потери через непрозрачные участки, проемы, вентиляцию, инфильтрацию, линейные мостики холода и теплообмен между смежными комнатами.',
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -91,6 +91,11 @@ class _ResultBody extends StatelessWidget {
                       label: 'Через проемы',
                       value:
                           '${result.totalOpeningHeatLossWatts.toStringAsFixed(0)} Вт',
+                    ),
+                    _MetricTile(
+                      label: 'Тепловые мосты',
+                      value:
+                          '${result.totalThermalBridgeHeatLossWatts.toStringAsFixed(0)} Вт',
                     ),
                     _MetricTile(
                       label: 'Вентиляция',
@@ -201,6 +206,11 @@ class _RoomResultCard extends StatelessWidget {
                   label: 'Вентиляция',
                   value:
                       '${roomResult.ventilationHeatLossWatts.toStringAsFixed(0)} Вт',
+                ),
+                _MetricTile(
+                  label: 'Тепловые мосты',
+                  value:
+                      '${roomResult.thermalBridgeHeatLossWatts.toStringAsFixed(0)} Вт',
                 ),
                 _MetricTile(
                   label: 'Инфильтрация',

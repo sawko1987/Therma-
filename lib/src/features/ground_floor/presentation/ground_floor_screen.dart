@@ -26,6 +26,8 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
   final _lengthController = TextEditingController();
   final _edgeWidthController = TextEditingController();
   final _edgeResistanceController = TextEditingController();
+  final _foundationDepthController = TextEditingController();
+  final _foundationWidthController = TextEditingController();
   final _notesController = TextEditingController();
 
   String? _syncedCalculationId;
@@ -42,6 +44,8 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
     _lengthController.dispose();
     _edgeWidthController.dispose();
     _edgeResistanceController.dispose();
+    _foundationDepthController.dispose();
+    _foundationWidthController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -143,6 +147,10 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
                               edgeWidthController: _edgeWidthController,
                               edgeResistanceController:
                                   _edgeResistanceController,
+                              foundationDepthController:
+                                  _foundationDepthController,
+                              foundationWidthController:
+                                  _foundationWidthController,
                               notesController: _notesController,
                               onKindChanged: (value) {
                                 setState(() {
@@ -214,6 +222,10 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
         .toStringAsFixed(1);
     _edgeResistanceController.text = calculation.edgeInsulationResistance
         .toStringAsFixed(1);
+    _foundationDepthController.text =
+        (calculation.foundationDepthMeters ?? 0.5).toStringAsFixed(2);
+    _foundationWidthController.text =
+        (calculation.foundationWidthMeters ?? 0.4).toStringAsFixed(2);
     _notesController.text = calculation.notes ?? '';
     _selectedConstructionId = calculation.constructionId;
     _selectedKind = calculation.kind;
@@ -337,6 +349,14 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
       slabLengthMeters: lengthMeters,
       edgeInsulationWidthMeters: isBasement ? 0 : 0.6,
       edgeInsulationResistance: isBasement ? 0 : 1.5,
+      foundationDepthMeters: linkedContext.supportedKinds.first ==
+              GroundFloorCalculationKind.stripFoundationFloor
+          ? 0.5
+          : null,
+      foundationWidthMeters: linkedContext.supportedKinds.first ==
+              GroundFloorCalculationKind.stripFoundationFloor
+          ? 0.4
+          : null,
       houseElementId: linkedContext.element.id,
     );
   }
@@ -357,9 +377,21 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
         edgeInsulationResistance: double.parse(
           _edgeResistanceController.text.trim(),
         ),
+        foundationDepthMeters:
+            _selectedKind == GroundFloorCalculationKind.stripFoundationFloor
+            ? double.parse(_foundationDepthController.text.trim())
+            : null,
+        foundationWidthMeters:
+            _selectedKind == GroundFloorCalculationKind.stripFoundationFloor
+            ? double.parse(_foundationWidthController.text.trim())
+            : null,
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        clearFoundationDepthMeters:
+            _selectedKind != GroundFloorCalculationKind.stripFoundationFloor,
+        clearFoundationWidthMeters:
+            _selectedKind != GroundFloorCalculationKind.stripFoundationFloor,
         clearNotes: _notesController.text.trim().isEmpty,
       );
       await ref
@@ -608,6 +640,8 @@ class _EditorCard extends StatelessWidget {
     required this.lengthController,
     required this.edgeWidthController,
     required this.edgeResistanceController,
+    required this.foundationDepthController,
+    required this.foundationWidthController,
     required this.notesController,
     required this.onKindChanged,
     required this.onConstructionChanged,
@@ -626,6 +660,8 @@ class _EditorCard extends StatelessWidget {
   final TextEditingController lengthController;
   final TextEditingController edgeWidthController;
   final TextEditingController edgeResistanceController;
+  final TextEditingController foundationDepthController;
+  final TextEditingController foundationWidthController;
   final TextEditingController notesController;
   final ValueChanged<GroundFloorCalculationKind> onKindChanged;
   final ValueChanged<String?> onConstructionChanged;
@@ -647,6 +683,8 @@ class _EditorCard extends StatelessWidget {
         linkedContext?.supportedKinds ?? GroundFloorCalculationKind.values;
     final showEdgeFields =
         selectedKind != GroundFloorCalculationKind.basementSlab;
+    final showStripFoundationFields =
+        selectedKind == GroundFloorCalculationKind.stripFoundationFloor;
 
     return Card(
       child: Padding(
@@ -728,6 +766,15 @@ class _EditorCard extends StatelessWidget {
                 firstController: edgeWidthController,
                 secondLabel: 'R утепления кромки',
                 secondController: edgeResistanceController,
+              ),
+            ],
+            if (showStripFoundationFields) ...[
+              const SizedBox(height: 12),
+              _NumericFieldRow(
+                firstLabel: 'Глубина заложения, м',
+                firstController: foundationDepthController,
+                secondLabel: 'Ширина ленты, м',
+                secondController: foundationWidthController,
               ),
             ],
             const SizedBox(height: 12),
