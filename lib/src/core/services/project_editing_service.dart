@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
 
 class ProjectEditingService {
@@ -436,16 +437,18 @@ class ProjectEditingService {
         'Автоматический наружный сегмент нельзя удалить вручную.',
       );
     }
-    return project.copyWith(
-      houseModel: project.houseModel.copyWith(
-        elements: [
-          for (final item in project.houseModel.elements)
-            if (item.id != elementId) item,
-        ],
-        openings: [
-          for (final item in project.houseModel.openings)
-            if (item.elementId != elementId) item,
-        ],
+    return _syncGroundFloorCalculationLinks(
+      project.copyWith(
+        houseModel: project.houseModel.copyWith(
+          elements: [
+            for (final item in project.houseModel.elements)
+              if (item.id != elementId) item,
+          ],
+          openings: [
+            for (final item in project.houseModel.openings)
+              if (item.elementId != elementId) item,
+          ],
+        ),
       ),
     );
   }
@@ -492,6 +495,49 @@ class ProjectEditingService {
       houseModel: project.houseModel.copyWith(
         heatingDevices: [...project.houseModel.heatingDevices, normalized],
       ),
+    );
+  }
+
+  Project addGroundFloorCalculation(
+    Project project,
+    GroundFloorCalculation calculation,
+  ) {
+    final normalized = _normalizeGroundFloorCalculation(project, calculation);
+    return _syncGroundFloorCalculationLinks(
+      project.copyWith(
+        groundFloorCalculations: [
+          ...project.groundFloorCalculations,
+          normalized,
+        ],
+      ),
+    );
+  }
+
+  Project updateGroundFloorCalculation(
+    Project project,
+    GroundFloorCalculation calculation,
+  ) {
+    final normalized = _normalizeGroundFloorCalculation(
+      project,
+      calculation,
+      replacingCalculationId: calculation.id,
+    );
+    return _syncGroundFloorCalculationLinks(
+      project.copyWith(
+        groundFloorCalculations: [
+          for (final item in project.groundFloorCalculations)
+            if (item.id == calculation.id) normalized else item,
+        ],
+      ),
+    );
+  }
+
+  Project deleteGroundFloorCalculation(Project project, String calculationId) {
+    return project.copyWith(
+      groundFloorCalculations: [
+        for (final item in project.groundFloorCalculations)
+          if (item.id != calculationId) item,
+      ],
     );
   }
 
@@ -671,8 +717,11 @@ class ProjectEditingService {
             .toList(growable: false),
       ),
     );
-    _ensureAllOpeningsFit(syncedProject);
-    return syncedProject;
+    final projectWithSyncedGroundFloorLinks = _syncGroundFloorCalculationLinks(
+      syncedProject,
+    );
+    _ensureAllOpeningsFit(projectWithSyncedGroundFloorLinks);
+    return projectWithSyncedGroundFloorLinks;
   }
 
   List<HouseEnvelopeElement> _buildAutoExteriorWalls(
@@ -1598,11 +1647,76 @@ class ProjectEditingService {
     final resolvedId = selectedWallIds.contains(currentId)
         ? currentId
         : _defaultWallConstructionId(project);
-    return project.copyWith(
-      houseModel: project.houseModel.copyWith(
-        internalPartitionConstructionId: resolvedId,
-        clearInternalPartitionConstructionId: resolvedId == null,
+    return _syncGroundFloorCalculationLinks(
+      project.copyWith(
+        houseModel: project.houseModel.copyWith(
+          internalPartitionConstructionId: resolvedId,
+          clearInternalPartitionConstructionId: resolvedId == null,
+        ),
       ),
+    );
+  }
+
+  Project _syncGroundFloorCalculationLinks(Project project) {
+    final floorElementsById = {
+      for (final element in project.houseModel.elements)
+        if (element.elementKind == ConstructionElementKind.floor) element.id: element,
+    };
+    final claimedElementIds = <String>{};
+    final syncedCalculations = project.groundFloorCalculations
+        .map((calculation) {
+          final houseElementId = calculation.houseElementId;
+          if (houseElementId == null) {
+            return calculation;
+          }
+          final linkedElement = floorElementsById[houseElementId];
+          if (linkedElement == null ||
+              claimedElementIds.contains(houseElementId)) {
+            return calculation.copyWith(clearHouseElementId: true);
+          }
+          claimedElementIds.add(houseElementId);
+          return calculation.copyWith(
+            constructionId: linkedElement.constructionId,
+            areaSquareMeters: linkedElement.areaSquareMeters,
+          );
+        })
+        .toList(growable: false);
+    return project.copyWith(groundFloorCalculations: syncedCalculations);
+  }
+
+  GroundFloorCalculation _normalizeGroundFloorCalculation(
+    Project project,
+    GroundFloorCalculation calculation, {
+    String? replacingCalculationId,
+  }) {
+    _ensureConstructionExists(project, calculation.constructionId);
+    final houseElementId = calculation.houseElementId;
+    if (houseElementId == null) {
+      return calculation;
+    }
+    final element = project.houseModel.elements.firstWhere(
+      (item) => item.id == houseElementId,
+      orElse: () => throw StateError(
+        'Ограждение $houseElementId не найдено в модели дома.',
+      ),
+    );
+    if (element.elementKind != ConstructionElementKind.floor) {
+      throw StateError('Связать расчет можно только с floor-элементом дома.');
+    }
+    final hasDuplicateLink = project.groundFloorCalculations.any(
+      (item) =>
+          item.id != replacingCalculationId &&
+          item.houseElementId == houseElementId,
+    );
+    if (hasDuplicateLink) {
+      throw StateError(
+        'Для этого floor-элемента уже существует связанный расчет пола.',
+      );
+    }
+    _ensureConstructionExists(project, element.constructionId);
+    return calculation.copyWith(
+      constructionId: element.constructionId,
+      areaSquareMeters: element.areaSquareMeters,
     );
   }
 

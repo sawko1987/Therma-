@@ -196,6 +196,7 @@ void main() {
         ),
       ],
       constructionTemplates: const [],
+      roomShapeTemplates: const [],
       norms: testCatalogSnapshot.norms,
       moistureRules: testCatalogSnapshot.moistureRules,
       roomKindConditions: testCatalogSnapshot.roomKindConditions,
@@ -248,22 +249,27 @@ void main() {
       );
     }
 
-    test('floor on ground stays routed to dedicated ground-floor module', () async {
-      final construction = buildFloorConstruction(FloorConstructionType.onGround);
-      final project = buildTestProject(construction: construction);
+    test(
+      'floor on ground stays routed to dedicated ground-floor module',
+      () async {
+        final construction = buildFloorConstruction(
+          FloorConstructionType.onGround,
+        );
+        final project = buildTestProject(construction: construction);
 
-      final result = await engine.calculate(
-        catalog: testCatalogSnapshot,
-        project: project,
-        construction: construction,
-      );
+        final result = await engine.calculate(
+          catalog: testCatalogSnapshot,
+          project: project,
+          construction: construction,
+        );
 
-      expect(
-        result.scenarioStatus,
-        CalculationScenarioStatus.routedToGroundFloor,
-      );
-      expect(result.scenarioMessage, contains('Полы по грунту'));
-    });
+        expect(
+          result.scenarioStatus,
+          CalculationScenarioStatus.routedToGroundFloor,
+        );
+        expect(result.scenarioMessage, contains('Полы по грунту'));
+      },
+    );
 
     test('floor over crawl space is supported in thermocalc', () async {
       final construction = buildFloorConstruction(
@@ -332,30 +338,41 @@ void main() {
       expect(result.scenarioMessage, contains('неотапливаемым подвалом'));
     });
 
-    test('floor over driveway is supported with stronger requirement group', () async {
-      final construction = buildFloorConstruction(
-        FloorConstructionType.overDriveway,
-      );
-      final project = buildTestProject(construction: construction);
-      final basementConstruction = buildFloorConstruction(
-        FloorConstructionType.overBasement,
-      );
-      final basementProject = buildTestProject(construction: basementConstruction);
+    test(
+      'floor over driveway is supported with stronger requirement group',
+      () async {
+        final construction = buildFloorConstruction(
+          FloorConstructionType.overDriveway,
+        );
+        final project = buildTestProject(construction: construction);
+        final basementConstruction = buildFloorConstruction(
+          FloorConstructionType.overBasement,
+        );
+        final basementProject = buildTestProject(
+          construction: basementConstruction,
+        );
 
-      final result = await engine.calculate(
-        catalog: testCatalogSnapshot,
-        project: project,
-        construction: construction,
-      );
-      final basementResult = await engine.calculate(
-        catalog: testCatalogSnapshot,
-        project: basementProject,
-        construction: basementConstruction,
-      );
+        final result = await engine.calculate(
+          catalog: testCatalogSnapshot,
+          project: project,
+          construction: construction,
+        );
+        final basementResult = await engine.calculate(
+          catalog: testCatalogSnapshot,
+          project: basementProject,
+          construction: basementConstruction,
+        );
 
-      expect(result.scenarioStatus, CalculationScenarioStatus.supported);
-      expect(result.requiredResistance, greaterThan(basementResult.requiredResistance));
-      expect(result.totalResistance, lessThan(basementResult.totalResistance));
-    });
+        expect(result.scenarioStatus, CalculationScenarioStatus.supported);
+        expect(
+          result.requiredResistance,
+          greaterThan(basementResult.requiredResistance),
+        );
+        expect(
+          result.totalResistance,
+          lessThan(basementResult.totalResistance),
+        );
+      },
+    );
   });
 }

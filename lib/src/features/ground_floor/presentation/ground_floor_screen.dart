@@ -7,7 +7,12 @@ import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 
 class GroundFloorScreen extends ConsumerStatefulWidget {
-  const GroundFloorScreen({super.key});
+  const GroundFloorScreen({
+    super.key,
+    this.forceLinkedToSelectedElement = false,
+  });
+
+  final bool forceLinkedToSelectedElement;
 
   @override
   ConsumerState<GroundFloorScreen> createState() => _GroundFloorScreenState();
@@ -47,6 +52,8 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
     final calculationAsync = ref.watch(selectedGroundFloorCalculationProvider);
     final resultAsync = ref.watch(groundFloorCalculationResultProvider);
     final catalogAsync = ref.watch(catalogSnapshotProvider);
+    final selectedElementAsync = ref.watch(selectedEnvelopeElementProvider);
+    final selectedElementId = ref.watch(selectedEnvelopeElementIdProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -65,86 +72,124 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
               if (project == null) {
                 return const Text('Активный проект не найден.');
               }
-              return calculationAsync.when(
-                data: (calculation) {
-                  _syncForm(calculation);
-                  return Column(
-                    children: [
-                      _ProjectSummary(
-                        project: project,
-                        selectedConstructionId: _selectedConstructionId,
-                      ),
-                      const SizedBox(height: 16),
-                      _CalculationListCard(
-                        project: project,
-                        selectedCalculationId: calculation?.id,
-                        onSelect: (id) {
-                          ref
-                              .read(
-                                selectedGroundFloorCalculationIdProvider
-                                    .notifier,
-                              )
-                              .select(id);
-                        },
-                        onAdd: () => _handleAdd(project),
-                      ),
-                      const SizedBox(height: 16),
-                      if (calculation == null)
-                        const Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Text(
-                              'В проекте пока нет сохраненных расчетов пола по грунту.',
+              return selectedElementAsync.when(
+                data: (selectedElement) {
+                  return calculationAsync.when(
+                    data: (calculation) {
+                      final linkedContext = _resolveLinkedContext(
+                        project,
+                        widget.forceLinkedToSelectedElement &&
+                                selectedElementId != null
+                            ? selectedElement
+                            : null,
+                      );
+                      final effectiveCalculation =
+                          linkedContext?.linkedCalculation ?? calculation;
+                      _syncForm(effectiveCalculation);
+                      return Column(
+                        children: [
+                          _ProjectSummary(
+                            project: project,
+                            selectedConstructionId: _selectedConstructionId,
+                            linkedContext: linkedContext,
+                          ),
+                          const SizedBox(height: 16),
+                          _CalculationListCard(
+                            project: project,
+                            selectedCalculationId: effectiveCalculation?.id,
+                            onSelect: (id) {
+                              ref
+                                  .read(
+                                    selectedGroundFloorCalculationIdProvider
+                                        .notifier,
+                                  )
+                                  .select(id);
+                            },
+                            onAdd: () => _handleAdd(
+                              project,
+                              linkedContext: linkedContext,
                             ),
                           ),
-                        )
-                      else
-                        _EditorCard(
-                          project: project,
-                          selectedKind: _selectedKind,
-                          selectedConstructionId: _selectedConstructionId,
-                          titleController: _titleController,
-                          areaController: _areaController,
-                          perimeterController: _perimeterController,
-                          widthController: _widthController,
-                          lengthController: _lengthController,
-                          edgeWidthController: _edgeWidthController,
-                          edgeResistanceController: _edgeResistanceController,
-                          notesController: _notesController,
-                          onKindChanged: (value) {
-                            setState(() {
-                              _selectedKind = value;
-                            });
-                          },
-                          onConstructionChanged: (value) {
-                            setState(() {
-                              _selectedConstructionId = value;
-                            });
-                          },
-                          onSave: () => _handleSave(calculation),
-                          onDelete: () => _handleDelete(calculation.id),
-                        ),
-                      const SizedBox(height: 16),
-                      resultAsync.when(
-                        data: (result) => catalogAsync.when(
-                          data: (catalog) =>
-                              _ResultCard(result: result, catalog: catalog),
-                          loading: () => const LinearProgressIndicator(),
-                          error: (error, _) => Text('Ошибка каталога: $error'),
-                        ),
-                        loading: () => const LinearProgressIndicator(),
-                        error: (error, _) => Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Text('Ошибка расчета: $error'),
-                          ),
-                        ),
-                      ),
-                    ],
+                          const SizedBox(height: 16),
+                          if (linkedContext != null &&
+                              linkedContext.linkedCalculation == null)
+                            _LinkedCalculationPromptCard(
+                              linkedContext: linkedContext,
+                              onCreate: () => _handleAdd(
+                                project,
+                                linkedContext: linkedContext,
+                              ),
+                            )
+                          else if (effectiveCalculation == null)
+                            const Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Text(
+                                  'В проекте пока нет сохраненных расчетов пола по грунту.',
+                                ),
+                              ),
+                            )
+                          else
+                            _EditorCard(
+                              project: project,
+                              linkedContext: linkedContext,
+                              selectedKind: _selectedKind,
+                              selectedConstructionId: _selectedConstructionId,
+                              titleController: _titleController,
+                              areaController: _areaController,
+                              perimeterController: _perimeterController,
+                              widthController: _widthController,
+                              lengthController: _lengthController,
+                              edgeWidthController: _edgeWidthController,
+                              edgeResistanceController:
+                                  _edgeResistanceController,
+                              notesController: _notesController,
+                              onKindChanged: (value) {
+                                setState(() {
+                                  _selectedKind = value;
+                                });
+                              },
+                              onConstructionChanged: (value) {
+                                setState(() {
+                                  _selectedConstructionId = value;
+                                });
+                              },
+                              onSave: () => _handleSave(effectiveCalculation),
+                              onDelete: () =>
+                                  _handleDelete(effectiveCalculation.id),
+                            ),
+                          const SizedBox(height: 16),
+                          if (linkedContext == null ||
+                              linkedContext.linkedCalculation != null)
+                            resultAsync.when(
+                              data: (result) => catalogAsync.when(
+                                data: (catalog) => _ResultCard(
+                                  result:
+                                      effectiveCalculation == null ? null : result,
+                                  catalog: catalog,
+                                ),
+                                loading: () => const LinearProgressIndicator(),
+                                error: (error, _) =>
+                                    Text('Ошибка каталога: $error'),
+                              ),
+                              loading: () => const LinearProgressIndicator(),
+                              error: (error, _) => Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Text('Ошибка расчета: $error'),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                    loading: () => const LinearProgressIndicator(),
+                    error: (error, _) =>
+                        Text('Ошибка выбранного расчета: $error'),
                   );
                 },
                 loading: () => const LinearProgressIndicator(),
-                error: (error, _) => Text('Ошибка выбранного расчета: $error'),
+                error: (error, _) => Text('Ошибка выбранного элемента: $error'),
               );
             },
             loading: () => const LinearProgressIndicator(),
@@ -174,27 +219,56 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
     _selectedKind = calculation.kind;
   }
 
-  Future<void> _handleAdd(Project project) async {
-    final floorConstruction = project.constructions.firstWhere(
-      (item) =>
-          item.elementKind == ConstructionElementKind.floor &&
-          item.floorConstructionType == FloorConstructionType.onGround,
-      orElse: () => throw StateError(
-        'Для нового расчета нужна хотя бы одна конструкция типа "Пол по грунту".',
-      ),
+  _LinkedGroundFloorContext? _resolveLinkedContext(
+    Project project,
+    HouseEnvelopeElement? selectedElement,
+  ) {
+    if (selectedElement == null ||
+        selectedElement.elementKind != ConstructionElementKind.floor) {
+      return null;
+    }
+    final construction = project.constructions
+        .where((item) => item.id == selectedElement.constructionId)
+        .toList(growable: false);
+    if (construction.isEmpty) {
+      return null;
+    }
+    final floorType = construction.first.floorConstructionType;
+    final supportedKinds = switch (floorType) {
+      FloorConstructionType.onGround => const [
+        GroundFloorCalculationKind.slabOnGround,
+        GroundFloorCalculationKind.stripFoundationFloor,
+      ],
+      FloorConstructionType.overBasement => const [
+        GroundFloorCalculationKind.basementSlab,
+      ],
+      _ => const <GroundFloorCalculationKind>[],
+    };
+    if (supportedKinds.isEmpty) {
+      return null;
+    }
+    final room = project.houseModel.rooms
+        .where((item) => item.id == selectedElement.roomId)
+        .toList(growable: false);
+    final linkedCalculation = project.groundFloorCalculations
+        .where((item) => item.houseElementId == selectedElement.id)
+        .toList(growable: false);
+    return _LinkedGroundFloorContext(
+      element: selectedElement,
+      construction: construction.first,
+      room: room.isEmpty ? null : room.first,
+      linkedCalculation: linkedCalculation.isEmpty ? null : linkedCalculation.first,
+      supportedKinds: supportedKinds,
     );
-    final calculation = GroundFloorCalculation(
-      id: 'ground-floor-${DateTime.now().microsecondsSinceEpoch}',
-      title: 'Новый пол по грунту',
-      kind: GroundFloorCalculationKind.slabOnGround,
-      constructionId: floorConstruction.id,
-      areaSquareMeters: 36,
-      perimeterMeters: 24,
-      slabWidthMeters: 6,
-      slabLengthMeters: 6,
-      edgeInsulationWidthMeters: 0.6,
-      edgeInsulationResistance: 1.5,
-    );
+  }
+
+  Future<void> _handleAdd(
+    Project project, {
+    _LinkedGroundFloorContext? linkedContext,
+  }) async {
+    final calculation = linkedContext == null
+        ? _buildStandaloneCalculation(project)
+        : _buildLinkedCalculation(project, linkedContext);
 
     try {
       await ref
@@ -208,6 +282,63 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('$error')));
     }
+  }
+
+  GroundFloorCalculation _buildStandaloneCalculation(Project project) {
+    final floorConstruction = project.constructions.firstWhere(
+      (item) =>
+          item.elementKind == ConstructionElementKind.floor &&
+          (item.floorConstructionType == FloorConstructionType.onGround ||
+              item.floorConstructionType == FloorConstructionType.overBasement),
+      orElse: () => throw StateError(
+        'Для нового расчета нужна хотя бы одна поддержанная конструкция пола.',
+      ),
+    );
+    final isBasement =
+        floorConstruction.floorConstructionType == FloorConstructionType.overBasement;
+    return GroundFloorCalculation(
+      id: 'ground-floor-${DateTime.now().microsecondsSinceEpoch}',
+      title: isBasement ? 'Новая плита над подвалом' : 'Новый пол по грунту',
+      kind: isBasement
+          ? GroundFloorCalculationKind.basementSlab
+          : GroundFloorCalculationKind.slabOnGround,
+      constructionId: floorConstruction.id,
+      areaSquareMeters: 36,
+      perimeterMeters: 24,
+      slabWidthMeters: 6,
+      slabLengthMeters: 6,
+      edgeInsulationWidthMeters: isBasement ? 0 : 0.6,
+      edgeInsulationResistance: isBasement ? 0 : 1.5,
+    );
+  }
+
+  GroundFloorCalculation _buildLinkedCalculation(
+    Project project,
+    _LinkedGroundFloorContext linkedContext,
+  ) {
+    final room = linkedContext.room;
+    final widthMeters = room?.layout.widthMeters ?? 6.0;
+    final lengthMeters = room?.layout.heightMeters ?? 6.0;
+    final perimeterMeters = room == null
+        ? 2 * (widthMeters + lengthMeters)
+        : 2 * (room.layout.widthMeters + room.layout.heightMeters);
+    final isBasement =
+        linkedContext.supportedKinds.length == 1 &&
+        linkedContext.supportedKinds.first ==
+            GroundFloorCalculationKind.basementSlab;
+    return GroundFloorCalculation(
+      id: 'ground-floor-${DateTime.now().microsecondsSinceEpoch}',
+      title: linkedContext.element.title,
+      kind: linkedContext.supportedKinds.first,
+      constructionId: linkedContext.element.constructionId,
+      areaSquareMeters: linkedContext.element.areaSquareMeters,
+      perimeterMeters: perimeterMeters,
+      slabWidthMeters: widthMeters,
+      slabLengthMeters: lengthMeters,
+      edgeInsulationWidthMeters: isBasement ? 0 : 0.6,
+      edgeInsulationResistance: isBasement ? 0 : 1.5,
+      houseElementId: linkedContext.element.id,
+    );
   }
 
   Future<void> _handleSave(GroundFloorCalculation current) async {
@@ -270,7 +401,7 @@ class _StatusBanner extends StatelessWidget {
       child: const Padding(
         padding: EdgeInsets.all(16),
         child: Text(
-          'Ground floor v1 поддерживает один точный сценарий: плита по грунту. Другие типы уже заведены в модель, но пока отображаются как запланированные.',
+          'Ground floor v2 поддерживает плиту по грунту, пол по грунту на ленте и плиту над подвалом. Для floor-элементов дома можно вести связанный расчет прямо из схемы.',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
@@ -282,10 +413,12 @@ class _ProjectSummary extends StatelessWidget {
   const _ProjectSummary({
     required this.project,
     required this.selectedConstructionId,
+    required this.linkedContext,
   });
 
   final Project project;
   final String? selectedConstructionId;
+  final _LinkedGroundFloorContext? linkedContext;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +446,11 @@ class _ProjectSummary extends StatelessWidget {
             ),
             if (selectedConstruction.isNotEmpty)
               Text('Конструкция: ${selectedConstruction.first.title}'),
+            if (linkedContext != null)
+              Text(
+                'Связанный floor-элемент: ${linkedContext!.element.title}'
+                '${linkedContext!.room == null ? '' : ' • ${linkedContext!.room!.title}'}',
+              ),
           ],
         ),
       ),
@@ -338,7 +476,8 @@ class _CalculationListCard extends StatelessWidget {
     final hasFloorConstruction = project.constructions.any(
       (item) =>
           item.elementKind == ConstructionElementKind.floor &&
-          item.floorConstructionType == FloorConstructionType.onGround,
+          (item.floorConstructionType == FloorConstructionType.onGround ||
+              item.floorConstructionType == FloorConstructionType.overBasement),
     );
     return Card(
       child: Padding(
@@ -367,7 +506,7 @@ class _CalculationListCard extends StatelessWidget {
             if (!hasFloorConstruction) ...[
               const SizedBox(height: 12),
               const Text(
-                'Сначала добавьте в проект хотя бы одну конструкцию типа "Пол по грунту".',
+                'Сначала добавьте в проект хотя бы одну поддержанную конструкцию пола.',
               ),
             ],
             if (project.groundFloorCalculations.isNotEmpty) ...[
@@ -388,7 +527,8 @@ class _CalculationListCard extends StatelessWidget {
                     ),
                     title: Text(item.title),
                     subtitle: Text(
-                      '${item.kind.label} • ${item.areaSquareMeters.toStringAsFixed(1)} м²',
+                      '${item.kind.label} • ${item.areaSquareMeters.toStringAsFixed(1)} м²'
+                      '${item.houseElementId == null ? '' : ' • linked'}',
                     ),
                     trailing: Icon(
                       isSelected
@@ -407,9 +547,58 @@ class _CalculationListCard extends StatelessWidget {
   }
 }
 
+class _LinkedCalculationPromptCard extends StatelessWidget {
+  const _LinkedCalculationPromptCard({
+    required this.linkedContext,
+    required this.onCreate,
+  });
+
+  final _LinkedGroundFloorContext linkedContext;
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Связанный расчет еще не создан',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Для элемента "${linkedContext.element.title}" '
+              'доступен сценарий: ${linkedContext.supportedKinds.map((item) => item.label).join(', ')}.',
+            ),
+            if (linkedContext.room != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Комната: ${linkedContext.room!.title} • площадь пола ${linkedContext.element.areaSquareMeters.toStringAsFixed(1)} м²',
+                ),
+              ),
+            const SizedBox(height: 16),
+            FilledButton(
+              key: const ValueKey('ground-floor-create-linked'),
+              onPressed: onCreate,
+              child: const Text('Создать связанный расчет'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EditorCard extends StatelessWidget {
   const _EditorCard({
     required this.project,
+    required this.linkedContext,
     required this.selectedKind,
     required this.selectedConstructionId,
     required this.titleController,
@@ -427,6 +616,7 @@ class _EditorCard extends StatelessWidget {
   });
 
   final Project project;
+  final _LinkedGroundFloorContext? linkedContext;
   final GroundFloorCalculationKind selectedKind;
   final String? selectedConstructionId;
   final TextEditingController titleController;
@@ -448,9 +638,15 @@ class _EditorCard extends StatelessWidget {
         .where(
           (item) =>
               item.elementKind == ConstructionElementKind.floor &&
-              item.floorConstructionType == FloorConstructionType.onGround,
+              (item.floorConstructionType == FloorConstructionType.onGround ||
+                  item.floorConstructionType ==
+                      FloorConstructionType.overBasement),
         )
         .toList(growable: false);
+    final availableKinds =
+        linkedContext?.supportedKinds ?? GroundFloorCalculationKind.values;
+    final showEdgeFields =
+        selectedKind != GroundFloorCalculationKind.basementSlab;
 
     return Card(
       child: Padding(
@@ -470,12 +666,18 @@ class _EditorCard extends StatelessWidget {
               controller: titleController,
               decoration: const InputDecoration(labelText: 'Название расчета'),
             ),
+            if (linkedContext != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Связка с houseModel активна: площадь и конструкция берутся из floor-элемента.',
+              ),
+            ],
             const SizedBox(height: 12),
             DropdownButtonFormField<GroundFloorCalculationKind>(
               key: const ValueKey('ground-floor-kind'),
               initialValue: selectedKind,
               decoration: const InputDecoration(labelText: 'Сценарий'),
-              items: GroundFloorCalculationKind.values
+              items: availableKinds
                   .map((item) {
                     return DropdownMenuItem(
                       value: item,
@@ -502,12 +704,13 @@ class _EditorCard extends StatelessWidget {
                     );
                   })
                   .toList(growable: false),
-              onChanged: onConstructionChanged,
+              onChanged: linkedContext == null ? onConstructionChanged : null,
             ),
             const SizedBox(height: 12),
             _NumericFieldRow(
               firstLabel: 'Площадь, м²',
               firstController: areaController,
+              firstReadOnly: linkedContext != null,
               secondLabel: 'Периметр, м',
               secondController: perimeterController,
             ),
@@ -518,13 +721,15 @@ class _EditorCard extends StatelessWidget {
               secondLabel: 'Длина плиты, м',
               secondController: lengthController,
             ),
-            const SizedBox(height: 12),
-            _NumericFieldRow(
-              firstLabel: 'Ширина утепления кромки, м',
-              firstController: edgeWidthController,
-              secondLabel: 'R утепления кромки',
-              secondController: edgeResistanceController,
-            ),
+            if (showEdgeFields) ...[
+              const SizedBox(height: 12),
+              _NumericFieldRow(
+                firstLabel: 'Ширина утепления кромки, м',
+                firstController: edgeWidthController,
+                secondLabel: 'R утепления кромки',
+                secondController: edgeResistanceController,
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: notesController,
@@ -561,12 +766,14 @@ class _NumericFieldRow extends StatelessWidget {
     required this.firstController,
     required this.secondLabel,
     required this.secondController,
+    this.firstReadOnly = false,
   });
 
   final String firstLabel;
   final TextEditingController firstController;
   final String secondLabel;
   final TextEditingController secondController;
+  final bool firstReadOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -575,6 +782,7 @@ class _NumericFieldRow extends StatelessWidget {
         Expanded(
           child: TextField(
             controller: firstController,
+            readOnly: firstReadOnly,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(labelText: firstLabel),
           ),
@@ -590,6 +798,22 @@ class _NumericFieldRow extends StatelessWidget {
       ],
     );
   }
+}
+
+class _LinkedGroundFloorContext {
+  const _LinkedGroundFloorContext({
+    required this.element,
+    required this.construction,
+    required this.room,
+    required this.linkedCalculation,
+    required this.supportedKinds,
+  });
+
+  final HouseEnvelopeElement element;
+  final Construction construction;
+  final Room? room;
+  final GroundFloorCalculation? linkedCalculation;
+  final List<GroundFloorCalculationKind> supportedKinds;
 }
 
 class _ResultCard extends StatelessWidget {

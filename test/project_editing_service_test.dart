@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/services/project_editing_service.dart';
 
@@ -328,6 +329,77 @@ void main() {
     );
     expect(autoFloor.areaSquareMeters, 30);
     expect(autoTop.areaSquareMeters, 30);
+  });
+
+  test('linked ground floor calculation syncs from auto floor element', () {
+    final wall = buildWallConstruction();
+    final floor = Construction(
+      id: 'floor-main',
+      title: 'Пол по грунту',
+      elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
+      layers: wall.layers,
+    );
+    final project = service.configureRoomEnvelope(
+      buildTestProject(constructions: [wall, floor]),
+      roomId: defaultRoomId,
+      floorConstructionId: floor.id,
+    );
+
+    final updated = service.addGroundFloorCalculation(
+      project,
+      const GroundFloorCalculation(
+        id: 'gf-main',
+        title: 'Связанный пол',
+        kind: GroundFloorCalculationKind.slabOnGround,
+        constructionId: 'wall',
+        areaSquareMeters: 1,
+        perimeterMeters: 16,
+        slabWidthMeters: 4,
+        slabLengthMeters: 4,
+        edgeInsulationWidthMeters: 0.6,
+        edgeInsulationResistance: 1.5,
+        houseElementId: 'auto-floor-room-main',
+      ),
+    );
+
+    expect(updated.groundFloorCalculations.single.constructionId, floor.id);
+    expect(updated.groundFloorCalculations.single.areaSquareMeters, 16);
+  });
+
+  test('linked ground floor calculation clears link when floor element removed', () {
+    final wall = buildWallConstruction();
+    final floor = Construction(
+      id: 'floor-main',
+      title: 'Пол по грунту',
+      elementKind: ConstructionElementKind.floor,
+      floorConstructionType: FloorConstructionType.onGround,
+      layers: wall.layers,
+    );
+    final project = service.addGroundFloorCalculation(
+      service.configureRoomEnvelope(
+        buildTestProject(constructions: [wall, floor]),
+        roomId: defaultRoomId,
+        floorConstructionId: floor.id,
+      ),
+      const GroundFloorCalculation(
+        id: 'gf-main',
+        title: 'Связанный пол',
+        kind: GroundFloorCalculationKind.slabOnGround,
+        constructionId: 'floor-main',
+        areaSquareMeters: 16,
+        perimeterMeters: 16,
+        slabWidthMeters: 4,
+        slabLengthMeters: 4,
+        edgeInsulationWidthMeters: 0.6,
+        edgeInsulationResistance: 1.5,
+        houseElementId: 'auto-floor-room-main',
+      ),
+    );
+
+    final updated = service.deleteEnvelopeElement(project, 'auto-floor-room-main');
+
+    expect(updated.groundFloorCalculations.single.houseElementId, isNull);
   });
 
   test('updateEnvelopeWallPlacement updates derived area', () {

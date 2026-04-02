@@ -1,0 +1,105 @@
+[
+  {
+    "id": "shape-rectangle",
+    "title": "Прямоугольник",
+    "description": "Базовое прямоугольное помещение.",
+    "defaultWidthMeters": 4.0,
+    "defaultHeightMeters": 4.0,
+    "tags": ["basic", "rect"],
+    "normalizedGeometry": {
+      "vertices": [
+        {"xMeters": 0.0, "yMeters": 0.0},
+        {"xMeters": 1.0, "yMeters": 0.0},
+        {"xMeters": 1.0, "yMeters": 1.0},
+        {"xMeters": 0.0, "yMeters": 1.0}
+      ]
+    }
+  },
+  {
+    "id": "shape-triangle",
+    "title": "Треугольник",
+    "description": "Простая треугольная комната.",
+    "defaultWidthMeters": 4.0,
+    "defaultHeightMeters": 4.0,
+    "tags": ["triangle"],
+    "normalizedGeometry": {
+      "vertices": [
+        {"xMeters": 0.0, "yMeters": 1.0},
+        {"xMeters": 0.5, "yMeters": 0.0},
+        {"xMeters": 1.0, "yMeters": 1.0}
+      ]
+    }
+  },
+  {
+    "id": "shape-trapezoid",
+    "title": "Трапеция",
+    "description": "Помещение с одной скошенной стороной.",
+    "defaultWidthMeters": 5.0,
+    "defaultHeightMeters": 4.0,
+    "tags": ["trapezoid"],
+    "normalizedGeometry": {
+      "vertices": [
+        {"xMeters": 0.15, "yMeters": 0.0},
+        {"xMeters": 0.85, "yMeters": 0.0},
+        {"xMeters": 1.0, "yMeters": 1.0},
+        {"xMeters": 0.0, "yMeters": 1.0}
+      ]
+    }
+  },
+  {
+    "id": "shape-l-room",
+    "title": "Г-образная",
+    "description": "Комната с внутренним углом.",
+    "defaultWidthMeters": 5.0,
+    "defaultHeightMeters": 5.0,
+    "tags": ["l-shape"],
+    "normalizedGeometry": {
+      "vertices": [
+        {"xMeters": 0.0, "yMeters": 0.0},
+        {"xMeters": 1.0, "yMeters": 0.0},
+        {"xMeters": 1.0, "yMeters": 0.4},
+        {"xMeters": 0.55, "yMeters": 0.4},
+        {"xMeters": 0.55, "yMeters": 1.0},
+        {"xMeters": 0.0, "yMeters": 1.0}
+      ]
+    }
+  },
+  {
+    "id": "shape-bay-window",
+    "title": "Эркер",
+    "description": "Помещение с выступающим эркером.",
+    "defaultWidthMeters": 5.0,
+    "defaultHeightMeters": 4.0,
+    "tags": ["bay"],
+    "normalizedGeometry": {
+      "vertices": [
+        {"xMeters": 0.0, "yMeters": 0.0},
+        {"xMeters": 0.7, "yMeters": 0.0},
+        {"xMeters": 0.85, "yMeters": 0.2},
+        {"xMeters": 1.0, "yMeters": 0.5},
+        {"xMeters": 0.85, "yMeters": 0.8},
+        {"xMeters": 0.7, "yMeters": 1.0},
+        {"xMeters": 0.0, "yMeters": 1.0}
+      ]
+    }
+  },
+  {
+    "id": "shape-rounded-corner",
+    "title": "Скруглённый угол",
+    "description": "Прямоугольная комната со скруглением одного угла.",
+    "defaultWidthMeters": 4.0,
+    "defaultHeightMeters": 4.0,
+    "tags": ["rounded"],
+    "normalizedGeometry": {
+      "vertices": [
+        {"xMeters": 0.0, "yMeters": 0.0},
+        {"xMeters": 0.8, "yMeters": 0.0},
+        {"xMeters": 0.92, "yMeters": 0.04},
+        {"xMeters": 0.98, "yMeters": 0.12},
+        {"xMeters": 1.0, "yMeters": 0.2},
+        {"xMeters": 1.0, "yMeters": 1.0},
+        {"xMeters": 0.0, "yMeters": 1.0}
+      ]
+    }
+  }
+]

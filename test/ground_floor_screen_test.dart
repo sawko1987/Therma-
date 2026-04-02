@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:smartcalc_mobile/src/features/ground_floor/presentation/ground_floor_screen.dart';
 import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
+import 'package:smartcalc_mobile/src/features/ground_floor/presentation/ground_floor_screen.dart';
 
 import 'support/fakes.dart';
 
@@ -113,5 +113,70 @@ void main() {
 
     final stored = (await repository.listProjects()).single;
     expect(stored.groundFloorCalculations.single.title, 'Пол гостиной');
+  });
+
+  testWidgets('ground floor screen creates linked calculation from selected floor element', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final floor = buildFloorConstruction();
+    final project = buildTestProject(
+      constructions: [buildWallConstruction(), floor],
+      houseModel: HouseModel(
+        id: 'house-model',
+        title: 'Дом',
+        rooms: [Room.defaultRoom()],
+        elements: [
+          HouseEnvelopeElement(
+            id: 'element-floor',
+            roomId: defaultRoomId,
+            title: 'Пол комнаты',
+            elementKind: ConstructionElementKind.floor,
+            areaSquareMeters: 16,
+            constructionId: floor.id,
+          ),
+        ],
+        openings: const [],
+      ),
+    );
+    final repository = FakeProjectRepository(projects: [project]);
+    final container = ProviderContainer(
+      overrides: [
+        catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+        projectRepositoryProvider.overrideWithValue(repository),
+        thermalCalculationEngineProvider.overrideWithValue(
+          const NormativeThermalCalculationEngine(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(selectedEnvelopeElementIdProvider.notifier)
+        .select('element-floor');
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: GroundFloorScreen(forceLinkedToSelectedElement: true),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('Связанный расчет еще не создан'), findsOneWidget);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('ground-floor-create-linked')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ground-floor-create-linked')));
+    await tester.pumpAndSettle();
+
+    final stored = (await repository.listProjects()).single;
+    expect(stored.groundFloorCalculations.single.houseElementId, 'element-floor');
+    expect(stored.groundFloorCalculations.single.constructionId, floor.id);
   });
 }

@@ -1,8 +1,10 @@
 import '../models/building_heat_loss.dart';
 import '../models/calculation.dart';
 import '../models/catalog.dart';
+import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
 import 'interfaces.dart';
+import 'ground_floor_calculation_service.dart';
 import 'room_adjacency_geometry.dart';
 
 class NormativeBuildingHeatLossService implements BuildingHeatLossService {
@@ -17,6 +19,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
     required CatalogSnapshot catalog,
     required Project project,
   }) async {
+    final groundFloorService = NormativeGroundFloorCalculationService(_engine);
     final climate = catalog.climatePoints.firstWhere(
       (point) => point.id == project.climatePointId,
       orElse: () => throw StateError(
@@ -35,6 +38,11 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
     for (final opening in project.houseModel.openings) {
       openingsByElementId.putIfAbsent(opening.elementId, () => []).add(opening);
     }
+    final groundFloorCalculationByElementId = <String, GroundFloorCalculation>{
+      for (final calculation in project.groundFloorCalculations)
+        if (calculation.houseElementId != null)
+          calculation.houseElementId!: calculation,
+    };
 
     final roomCalculationData = <String, _RoomCalculationData>{};
     final unresolvedElements = <HouseEnvelopeElement>[];
@@ -73,15 +81,33 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           continue;
         }
 
-        final result = await _engine.calculate(
-          catalog: catalog,
-          project: project,
-          construction: construction,
-        );
-        if (!result.scenarioStatus.isDirectlySupported) {
-          roomUnresolvedElements.add(element);
-          unresolvedElements.add(element);
-          continue;
+        CalculationResult? result;
+        GroundFloorCalculationResult? linkedGroundFloorResult;
+        final linkedGroundFloorCalculation =
+            groundFloorCalculationByElementId[element.id];
+        if (element.elementKind == ConstructionElementKind.floor &&
+            linkedGroundFloorCalculation != null) {
+          linkedGroundFloorResult = await groundFloorService.calculate(
+            catalog: catalog,
+            project: project,
+            calculation: linkedGroundFloorCalculation,
+          );
+          if (!linkedGroundFloorResult.isSupported) {
+            roomUnresolvedElements.add(element);
+            unresolvedElements.add(element);
+            continue;
+          }
+        } else {
+          result = await _engine.calculate(
+            catalog: catalog,
+            project: project,
+            construction: construction,
+          );
+          if (!result.scenarioStatus.isDirectlySupported) {
+            roomUnresolvedElements.add(element);
+            unresolvedElements.add(element);
+            continue;
+          }
         }
         final elementOpenings =
             openingsByElementId[element.id] ?? const <EnvelopeOpening>[];
@@ -93,8 +119,10 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           0.0,
           element.areaSquareMeters,
         );
+        final totalResistance =
+            linkedGroundFloorResult?.totalResistance ?? result!.totalResistance;
         final opaqueHeatLoss =
-            deltaTemperature / result.totalResistance * opaqueArea;
+            deltaTemperature / totalResistance * opaqueArea;
         final openingHeatLoss = elementOpenings.fold<double>(
           0,
           (sum, item) =>
@@ -116,7 +144,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
             insideAirTemperature: insideAirTemperature,
             outsideAirTemperature: outsideAirTemperature,
             deltaTemperature: deltaTemperature,
-            totalResistance: result.totalResistance,
+            totalResistance: totalResistance,
             opaqueHeatLossWatts: opaqueHeatLoss,
             openingHeatLossWatts: openingHeatLoss,
           ),

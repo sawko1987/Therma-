@@ -21,6 +21,9 @@ class AssetCatalogRepository implements CatalogRepository {
     final constructionTemplatesRaw = await bundle.loadString(
       'assets/data/construction_templates.seed.json',
     );
+    final roomShapeTemplatesRaw = await bundle.loadString(
+      'assets/data/room_shape_templates.seed.json',
+    );
     final normsRaw = await bundle.loadString('assets/data/norms.seed.json');
     final moistureRulesRaw = await bundle.loadString(
       'assets/data/moisture_rules.seed.json',
@@ -45,6 +48,11 @@ class AssetCatalogRepository implements CatalogRepository {
             .cast<Map<String, dynamic>>()
             .map(Construction.fromJson)
             .toList();
+    final roomShapeTemplates =
+        (jsonDecode(roomShapeTemplatesRaw) as List<dynamic>)
+            .cast<Map<String, dynamic>>()
+            .map(RoomShapeTemplate.fromJson)
+            .toList();
     final norms = (jsonDecode(normsRaw) as List<dynamic>)
         .cast<Map<String, dynamic>>()
         .map(NormReference.fromJson)
@@ -66,6 +74,7 @@ class AssetCatalogRepository implements CatalogRepository {
       climatePoints: climate,
       materials: materials,
       constructionTemplates: constructionTemplates,
+      roomShapeTemplates: roomShapeTemplates,
       norms: norms,
       moistureRules: moistureRules,
       roomKindConditions: roomKindConditions,

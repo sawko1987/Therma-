@@ -78,6 +78,7 @@ const testCatalogSnapshot = CatalogSnapshot(
       ],
     ),
   ],
+  roomShapeTemplates: [],
   materials: [
     MaterialEntry(
       id: 'gypsum_plaster',

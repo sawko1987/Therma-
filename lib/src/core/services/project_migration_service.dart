@@ -47,7 +47,12 @@ class ProjectMigrationService {
     Project project,
   ) {
     if (project.sourceProjectFormatVersion >= 8) {
-      return project.groundFloorCalculations;
+      if (project.sourceProjectFormatVersion >= 16) {
+        return project.groundFloorCalculations;
+      }
+      return project.groundFloorCalculations
+          .map((item) => item.copyWith(clearHouseElementId: true))
+          .toList(growable: false);
     }
     return const [];
   }

@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 15;
+const int currentProjectFormatVersion = 17;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -476,6 +476,194 @@ class Construction {
   };
 }
 
+class RoomGeometryBounds {
+  const RoomGeometryBounds({
+    required this.leftMeters,
+    required this.topMeters,
+    required this.rightMeters,
+    required this.bottomMeters,
+  });
+
+  final double leftMeters;
+  final double topMeters;
+  final double rightMeters;
+  final double bottomMeters;
+
+  double get widthMeters => rightMeters - leftMeters;
+  double get heightMeters => bottomMeters - topMeters;
+}
+
+class RoomGeometryPoint {
+  const RoomGeometryPoint({required this.xMeters, required this.yMeters});
+
+  factory RoomGeometryPoint.fromJson(Map<String, dynamic> json) =>
+      RoomGeometryPoint(
+        xMeters: (json['xMeters'] as num).toDouble(),
+        yMeters: (json['yMeters'] as num).toDouble(),
+      );
+
+  final double xMeters;
+  final double yMeters;
+
+  RoomGeometryPoint copyWith({double? xMeters, double? yMeters}) {
+    return RoomGeometryPoint(
+      xMeters: xMeters ?? this.xMeters,
+      yMeters: yMeters ?? this.yMeters,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'xMeters': xMeters, 'yMeters': yMeters};
+}
+
+class RoomGeometry {
+  const RoomGeometry({required this.vertices});
+
+  factory RoomGeometry.fromJson(Map<String, dynamic> json) => RoomGeometry(
+    vertices: (json['vertices'] as List<dynamic>)
+        .map((item) => RoomGeometryPoint.fromJson(_asJsonMap(item)))
+        .toList(growable: false),
+  );
+
+  final List<RoomGeometryPoint> vertices;
+
+  RoomGeometryBounds get bounds {
+    if (vertices.isEmpty) {
+      return const RoomGeometryBounds(
+        leftMeters: 0,
+        topMeters: 0,
+        rightMeters: defaultRoomLayoutWidthMeters,
+        bottomMeters: defaultRoomLayoutHeightMeters,
+      );
+    }
+    final left = vertices.map((item) => item.xMeters).reduce(math.min);
+    final top = vertices.map((item) => item.yMeters).reduce(math.min);
+    final right = vertices.map((item) => item.xMeters).reduce(math.max);
+    final bottom = vertices.map((item) => item.yMeters).reduce(math.max);
+    return RoomGeometryBounds(
+      leftMeters: left,
+      topMeters: top,
+      rightMeters: right,
+      bottomMeters: bottom,
+    );
+  }
+
+  RoomLayoutRect toLayoutRect() {
+    final geometryBounds = bounds;
+    return RoomLayoutRect(
+      xMeters: geometryBounds.leftMeters,
+      yMeters: geometryBounds.topMeters,
+      widthMeters: geometryBounds.widthMeters,
+      heightMeters: geometryBounds.heightMeters,
+    );
+  }
+
+  RoomGeometry normalized() {
+    final geometryBounds = bounds;
+    final safeWidth = geometryBounds.widthMeters <= 0
+        ? 1.0
+        : geometryBounds.widthMeters;
+    final safeHeight = geometryBounds.heightMeters <= 0
+        ? 1.0
+        : geometryBounds.heightMeters;
+    return RoomGeometry(
+      vertices: vertices
+          .map(
+            (item) => RoomGeometryPoint(
+              xMeters: (item.xMeters - geometryBounds.leftMeters) / safeWidth,
+              yMeters: (item.yMeters - geometryBounds.topMeters) / safeHeight,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  RoomGeometry scaleToBounds({
+    required double xMeters,
+    required double yMeters,
+    required double widthMeters,
+    required double heightMeters,
+  }) {
+    final normalizedGeometry = normalized();
+    return RoomGeometry(
+      vertices: normalizedGeometry.vertices
+          .map(
+            (item) => RoomGeometryPoint(
+              xMeters: xMeters + item.xMeters * widthMeters,
+              yMeters: yMeters + item.yMeters * heightMeters,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'vertices': vertices.map((item) => item.toJson()).toList(growable: false),
+  };
+}
+
+class RoomShapeTemplate {
+  const RoomShapeTemplate({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.normalizedGeometry,
+    required this.defaultWidthMeters,
+    required this.defaultHeightMeters,
+    this.tags = const [],
+  });
+
+  factory RoomShapeTemplate.fromJson(Map<String, dynamic> json) =>
+      RoomShapeTemplate(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        description: json['description'] as String? ?? '',
+        normalizedGeometry: RoomGeometry.fromJson(
+          _asJsonMap(json['normalizedGeometry']),
+        ).normalized(),
+        defaultWidthMeters:
+            (json['defaultWidthMeters'] as num?)?.toDouble() ??
+            defaultRoomLayoutWidthMeters,
+        defaultHeightMeters:
+            (json['defaultHeightMeters'] as num?)?.toDouble() ??
+            defaultRoomLayoutHeightMeters,
+        tags: ((json['tags'] as List<dynamic>?) ?? const [])
+            .map((item) => item as String)
+            .toList(growable: false),
+      );
+
+  final String id;
+  final String title;
+  final String description;
+  final RoomGeometry normalizedGeometry;
+  final double defaultWidthMeters;
+  final double defaultHeightMeters;
+  final List<String> tags;
+
+  RoomGeometry instantiate({
+    required double xMeters,
+    required double yMeters,
+    required double widthMeters,
+    required double heightMeters,
+  }) {
+    return normalizedGeometry.scaleToBounds(
+      xMeters: xMeters,
+      yMeters: yMeters,
+      widthMeters: widthMeters,
+      heightMeters: heightMeters,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'description': description,
+    'normalizedGeometry': normalizedGeometry.toJson(),
+    'defaultWidthMeters': defaultWidthMeters,
+    'defaultHeightMeters': defaultHeightMeters,
+    'tags': tags,
+  };
+}
+
 class RoomLayoutRect {
   const RoomLayoutRect({
     required this.xMeters,
@@ -684,6 +872,8 @@ class Room {
     required this.heightMeters,
     required this.layout,
     this.cells = const [],
+    this.geometry,
+    this.shapeTemplateId,
   });
 
   factory Room.fromJson(Map<String, dynamic> json) {
@@ -702,6 +892,11 @@ class Room {
     final parsedCells = cellsJson
         .map((item) => RoomLayoutRect.fromJson(_asJsonMap(item)))
         .toList(growable: false);
+    final geometryJson = json['geometry'];
+    final geometry = geometryJson == null
+        ? null
+        : RoomGeometry.fromJson(_asJsonMap(geometryJson));
+    final layoutFromGeometry = geometry?.toLayoutRect();
     return Room(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -710,10 +905,16 @@ class Room {
       ),
       heightMeters:
           (json['heightMeters'] as num?)?.toDouble() ?? defaultRoomHeightMeters,
-      layout: parsedCells.isEmpty
-          ? effectiveLayout
-          : RoomLayoutRect.boundingBox(parsedCells),
-      cells: parsedCells.isEmpty ? [effectiveLayout] : parsedCells,
+      layout:
+          layoutFromGeometry ??
+          (parsedCells.isEmpty
+              ? effectiveLayout
+              : RoomLayoutRect.boundingBox(parsedCells)),
+      cells: parsedCells.isEmpty && geometry == null
+          ? [effectiveLayout]
+          : parsedCells,
+      geometry: geometry,
+      shapeTemplateId: json['shapeTemplateId'] as String?,
     );
   }
 
@@ -744,6 +945,8 @@ class Room {
   final double heightMeters;
   final RoomLayoutRect layout;
   final List<RoomLayoutRect> cells;
+  final RoomGeometry? geometry;
+  final String? shapeTemplateId;
 
   List<RoomLayoutRect> get effectiveCells =>
       cells.isEmpty ? [layout] : List.unmodifiable(cells);
@@ -758,15 +961,27 @@ class Room {
     double? heightMeters,
     RoomLayoutRect? layout,
     List<RoomLayoutRect>? cells,
+    RoomGeometry? geometry,
+    String? shapeTemplateId,
+    bool clearGeometry = false,
+    bool clearShapeTemplateId = false,
   }) {
     final effectiveCells = cells ?? this.effectiveCells;
+    final nextGeometry = clearGeometry ? null : geometry ?? this.geometry;
     return Room(
       id: id ?? this.id,
       title: title ?? this.title,
       kind: kind ?? this.kind,
       heightMeters: heightMeters ?? this.heightMeters,
-      layout: layout ?? RoomLayoutRect.boundingBox(effectiveCells),
+      layout:
+          layout ??
+          nextGeometry?.toLayoutRect() ??
+          RoomLayoutRect.boundingBox(effectiveCells),
       cells: List.unmodifiable(effectiveCells),
+      geometry: nextGeometry,
+      shapeTemplateId: clearShapeTemplateId
+          ? null
+          : shapeTemplateId ?? this.shapeTemplateId,
     );
   }
 
@@ -780,6 +995,8 @@ class Room {
     'cells': effectiveCells
         .map((item) => item.toJson())
         .toList(growable: false),
+    'geometry': geometry?.toJson(),
+    'shapeTemplateId': shapeTemplateId,
   };
 }
 
@@ -1372,6 +1589,7 @@ class Project {
     required this.roomPreset,
     required this.constructions,
     this.customMaterials = const [],
+    this.customRoomShapeTemplates = const [],
     required this.houseModel,
     this.selectedConstructionIds = const [],
     this.groundFloorCalculations = const [],
@@ -1406,6 +1624,10 @@ class Project {
       customMaterials: ((json['customMaterials'] as List<dynamic>?) ?? const [])
           .map((item) => MaterialEntry.fromJson(_asJsonMap(item)))
           .toList(growable: false),
+      customRoomShapeTemplates:
+          ((json['customRoomShapeTemplates'] as List<dynamic>?) ?? const [])
+              .map((item) => RoomShapeTemplate.fromJson(_asJsonMap(item)))
+              .toList(growable: false),
       houseModel: houseModelJson == null
           ? HouseModel.bootstrapFromConstructions(constructions)
           : HouseModel.fromJson(_asJsonMap(houseModelJson)),
@@ -1431,6 +1653,7 @@ class Project {
   final RoomPreset roomPreset;
   final List<Construction> constructions;
   final List<MaterialEntry> customMaterials;
+  final List<RoomShapeTemplate> customRoomShapeTemplates;
   final HouseModel houseModel;
   final List<String> selectedConstructionIds;
   final List<GroundFloorCalculation> groundFloorCalculations;
@@ -1462,6 +1685,7 @@ class Project {
     RoomPreset? roomPreset,
     List<Construction>? constructions,
     List<MaterialEntry>? customMaterials,
+    List<RoomShapeTemplate>? customRoomShapeTemplates,
     HouseModel? houseModel,
     List<String>? selectedConstructionIds,
     List<GroundFloorCalculation>? groundFloorCalculations,
@@ -1478,6 +1702,8 @@ class Project {
       roomPreset: roomPreset ?? this.roomPreset,
       constructions: constructions ?? this.constructions,
       customMaterials: customMaterials ?? this.customMaterials,
+      customRoomShapeTemplates:
+          customRoomShapeTemplates ?? this.customRoomShapeTemplates,
       houseModel: houseModel ?? this.houseModel,
       selectedConstructionIds:
           selectedConstructionIds ?? this.selectedConstructionIds,
@@ -1504,6 +1730,9 @@ class Project {
         .map((item) => item.toJson())
         .toList(growable: false),
     'customMaterials': customMaterials
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'customRoomShapeTemplates': customRoomShapeTemplates
         .map((item) => item.toJson())
         .toList(growable: false),
     'houseModel': houseModel.toJson(),

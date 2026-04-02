@@ -70,3 +70,11 @@
 - В модель проекта добавлен persisted `leakagePreset` у `EnvelopeOpening`; legacy-проекты мигрируют к формату `v15` с default `standard`.
 - `Heating economics` использует обновленный `totalHeatLossWatts`, поэтому инфильтрация сразу попадает в сезонный спрос и стоимость отопления без отдельного параллельного расчета.
 - Следующим инженерным приоритетом после инфильтрации зафиксирован `ground floor v2`, затем базовые мостики холода.
+
+## Update 2026-04-01
+
+- `Ground floor v2` включен в текущий baseline: модуль поддерживает `плиту по грунту`, `пол по грунту на ленте` и `плиту над подвалом`.
+- В модель проекта добавлен persisted link `GroundFloorCalculation.houseElementId`; формат проекта поднят до `v16`.
+- Для floor-элементов дома сценарии `onGround` и `overBasement` открывают linked `ground floor` flow из `house scheme`, а не только общий `thermocalc`.
+- `Building heat loss v1` использует linked-result модуля `ground floor` для room-level пола там, где такой расчет уже сохранен в проекте.
+- Следующим инженерным приоритетом после `ground floor v2` зафиксирован `bridge loss v1`, затем возврат к sync-инфраструктуре.

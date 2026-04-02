@@ -1,4 +1,5 @@
 import '../models/catalog.dart';
+import '../models/calculation.dart';
 import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
 import 'interfaces.dart';
@@ -27,82 +28,38 @@ class NormativeGroundFloorCalculationService
       construction: construction,
     );
 
-    if (!calculation.kind.isSupportedInV1) {
-      return GroundFloorCalculationResult(
-        calculation: calculation,
-        isSupported: false,
-        statusMessage:
-            'Сценарий ${calculation.kind.label} запланирован, но в v1 пока не реализован.',
-        insideAirTemperature: baseCalculation.insideAirTemperature,
-        outsideAirTemperature: baseCalculation.outsideAirTemperature,
-        deltaTemperature:
-            baseCalculation.insideAirTemperature -
-            baseCalculation.outsideAirTemperature,
-        requiredResistance: baseCalculation.requiredResistance,
-        constructionResistance: baseCalculation.totalResistance,
-        equivalentGroundResistance: 0,
-        totalResistance: baseCalculation.totalResistance,
-        heatTransferCoefficient: 1 / baseCalculation.totalResistance,
-        heatLossWatts: 0,
-        specificHeatLossWattsPerSquareMeter: 0,
-        shapeFactor: calculation.shapeFactor,
-        appliedNormReferenceIds: baseCalculation.appliedNormReferenceIds,
-      );
-    }
-
     if (construction.elementKind != ConstructionElementKind.floor) {
-      return GroundFloorCalculationResult(
+      return _unsupportedResult(
         calculation: calculation,
-        isSupported: false,
+        baseCalculation: baseCalculation,
         statusMessage:
-            'Для расчета пола по грунту v1 нужно выбрать конструкцию типа "Пол".',
-        insideAirTemperature: baseCalculation.insideAirTemperature,
-        outsideAirTemperature: baseCalculation.outsideAirTemperature,
-        deltaTemperature:
-            baseCalculation.insideAirTemperature -
-            baseCalculation.outsideAirTemperature,
-        requiredResistance: baseCalculation.requiredResistance,
-        constructionResistance: baseCalculation.totalResistance,
-        equivalentGroundResistance: 0,
-        totalResistance: baseCalculation.totalResistance,
-        heatTransferCoefficient: 1 / baseCalculation.totalResistance,
-        heatLossWatts: 0,
-        specificHeatLossWattsPerSquareMeter: 0,
-        shapeFactor: calculation.shapeFactor,
-        appliedNormReferenceIds: baseCalculation.appliedNormReferenceIds,
-      );
-    }
-
-    if (construction.floorConstructionType != FloorConstructionType.onGround) {
-      return GroundFloorCalculationResult(
-        calculation: calculation,
-        isSupported: false,
-        statusMessage:
-            'Для модуля пола по грунту нужна конструкция с типом "Пол по грунту".',
-        insideAirTemperature: baseCalculation.insideAirTemperature,
-        outsideAirTemperature: baseCalculation.outsideAirTemperature,
-        deltaTemperature:
-            baseCalculation.insideAirTemperature -
-            baseCalculation.outsideAirTemperature,
-        requiredResistance: baseCalculation.requiredResistance,
-        constructionResistance: baseCalculation.totalResistance,
-        equivalentGroundResistance: 0,
-        totalResistance: baseCalculation.totalResistance,
-        heatTransferCoefficient: 1 / baseCalculation.totalResistance,
-        heatLossWatts: 0,
-        specificHeatLossWattsPerSquareMeter: 0,
-        shapeFactor: calculation.shapeFactor,
-        appliedNormReferenceIds: baseCalculation.appliedNormReferenceIds,
+            'Для модуля полов нужен выбор конструкции типа "Пол".',
       );
     }
 
     _validateInput(calculation);
 
-    final equivalentGroundResistance = _calculateEquivalentGroundResistance(
-      calculation,
-    );
-    final totalResistance =
-        baseCalculation.totalResistance + equivalentGroundResistance;
+    final floorType = construction.floorConstructionType;
+    if (!_supportsKindForFloorType(calculation.kind, floorType)) {
+      return _unsupportedResult(
+        calculation: calculation,
+        baseCalculation: baseCalculation,
+        statusMessage: _unsupportedCombinationMessage(
+          kind: calculation.kind,
+          floorType: floorType,
+        ),
+      );
+    }
+
+    final equivalentGroundResistance = switch (calculation.kind) {
+      GroundFloorCalculationKind.slabOnGround =>
+        _calculateSlabOnGroundResistance(calculation),
+      GroundFloorCalculationKind.stripFoundationFloor =>
+        _calculateStripFoundationResistance(calculation),
+      GroundFloorCalculationKind.basementSlab => 0.0,
+    };
+    final totalResistance = baseCalculation.totalResistance +
+        equivalentGroundResistance;
     final deltaTemperature =
         baseCalculation.insideAirTemperature -
         baseCalculation.outsideAirTemperature;
@@ -112,8 +69,7 @@ class NormativeGroundFloorCalculationService
     return GroundFloorCalculationResult(
       calculation: calculation,
       isSupported: true,
-      statusMessage:
-          'v1 считает плиту по грунту как слоистую конструкцию с добавочным эквивалентным сопротивлением грунта и утепленной кромки.',
+      statusMessage: _supportedScenarioMessage(calculation.kind),
       insideAirTemperature: baseCalculation.insideAirTemperature,
       outsideAirTemperature: baseCalculation.outsideAirTemperature,
       deltaTemperature: deltaTemperature,
@@ -125,6 +81,32 @@ class NormativeGroundFloorCalculationService
       heatLossWatts: heatLossWatts,
       specificHeatLossWattsPerSquareMeter:
           heatLossWatts / calculation.areaSquareMeters,
+      shapeFactor: calculation.shapeFactor,
+      appliedNormReferenceIds: baseCalculation.appliedNormReferenceIds,
+    );
+  }
+
+  GroundFloorCalculationResult _unsupportedResult({
+    required GroundFloorCalculation calculation,
+    required CalculationResult baseCalculation,
+    required String statusMessage,
+  }) {
+    return GroundFloorCalculationResult(
+      calculation: calculation,
+      isSupported: false,
+      statusMessage: statusMessage,
+      insideAirTemperature: baseCalculation.insideAirTemperature,
+      outsideAirTemperature: baseCalculation.outsideAirTemperature,
+      deltaTemperature:
+          baseCalculation.insideAirTemperature -
+          baseCalculation.outsideAirTemperature,
+      requiredResistance: baseCalculation.requiredResistance,
+      constructionResistance: baseCalculation.totalResistance,
+      equivalentGroundResistance: 0,
+      totalResistance: baseCalculation.totalResistance,
+      heatTransferCoefficient: 1 / baseCalculation.totalResistance,
+      heatLossWatts: 0,
+      specificHeatLossWattsPerSquareMeter: 0,
       shapeFactor: calculation.shapeFactor,
       appliedNormReferenceIds: baseCalculation.appliedNormReferenceIds,
     );
@@ -148,7 +130,44 @@ class NormativeGroundFloorCalculationService
     }
   }
 
-  double _calculateEquivalentGroundResistance(
+  bool _supportsKindForFloorType(
+    GroundFloorCalculationKind kind,
+    FloorConstructionType? floorType,
+  ) {
+    return switch (kind) {
+      GroundFloorCalculationKind.slabOnGround ||
+      GroundFloorCalculationKind.stripFoundationFloor =>
+        floorType == FloorConstructionType.onGround,
+      GroundFloorCalculationKind.basementSlab =>
+        floorType == FloorConstructionType.overBasement,
+    };
+  }
+
+  String _unsupportedCombinationMessage({
+    required GroundFloorCalculationKind kind,
+    required FloorConstructionType? floorType,
+  }) {
+    return switch (kind) {
+      GroundFloorCalculationKind.slabOnGround ||
+      GroundFloorCalculationKind.stripFoundationFloor =>
+        'Для сценария "${kind.label}" нужна конструкция с типом "Пол по грунту".',
+      GroundFloorCalculationKind.basementSlab =>
+        'Для сценария "${kind.label}" нужна конструкция с типом "Пол над подвалом".',
+    };
+  }
+
+  String _supportedScenarioMessage(GroundFloorCalculationKind kind) {
+    return switch (kind) {
+      GroundFloorCalculationKind.slabOnGround =>
+        'Сценарий считает плиту по грунту как слоистую конструкцию с добавочным эквивалентным сопротивлением грунта и утепленной кромки.',
+      GroundFloorCalculationKind.stripFoundationFloor =>
+        'Сценарий считает пол по грунту на ленте как слоистую конструкцию с поправкой на периметр, утепленную кромку и более выраженную краевую зону.',
+      GroundFloorCalculationKind.basementSlab =>
+        'Сценарий считает плиту над подвалом через нормативный floor-расчет перекрытия над неотапливаемым подвалом без добавочного сопротивления грунта.',
+    };
+  }
+
+  double _calculateSlabOnGroundResistance(
     GroundFloorCalculation calculation,
   ) {
     final characteristicSize =
@@ -156,6 +175,17 @@ class NormativeGroundFloorCalculationService
     final geometryTerm = 1.15 + characteristicSize * 0.18;
     final edgeWidthBonus = calculation.edgeInsulationWidthMeters * 0.35;
     final edgeResistanceBonus = calculation.edgeInsulationResistance * 0.25;
+    return geometryTerm + edgeWidthBonus + edgeResistanceBonus;
+  }
+
+  double _calculateStripFoundationResistance(
+    GroundFloorCalculation calculation,
+  ) {
+    final characteristicSize =
+        calculation.areaSquareMeters / calculation.perimeterMeters;
+    final geometryTerm = 0.95 + characteristicSize * 0.12;
+    final edgeWidthBonus = calculation.edgeInsulationWidthMeters * 0.28;
+    final edgeResistanceBonus = calculation.edgeInsulationResistance * 0.20;
     return geometryTerm + edgeWidthBonus + edgeResistanceBonus;
   }
 }

@@ -332,6 +332,7 @@ class CatalogSnapshot {
     required this.climatePoints,
     required this.materials,
     required this.constructionTemplates,
+    required this.roomShapeTemplates,
     required this.norms,
     required this.moistureRules,
     required this.roomKindConditions,
@@ -342,6 +343,7 @@ class CatalogSnapshot {
   final List<ClimatePoint> climatePoints;
   final List<MaterialEntry> materials;
   final List<Construction> constructionTemplates;
+  final List<RoomShapeTemplate> roomShapeTemplates;
   final List<NormReference> norms;
   final MoistureRuleSet moistureRules;
   final List<RoomKindCondition> roomKindConditions;

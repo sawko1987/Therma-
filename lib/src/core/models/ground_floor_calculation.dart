@@ -10,6 +10,7 @@ class GroundFloorCalculation {
     required this.slabLengthMeters,
     required this.edgeInsulationWidthMeters,
     required this.edgeInsulationResistance,
+    this.houseElementId,
     this.notes,
   });
 
@@ -27,6 +28,7 @@ class GroundFloorCalculation {
           (json['edgeInsulationWidthMeters'] as num?)?.toDouble() ?? 0.6,
       edgeInsulationResistance:
           (json['edgeInsulationResistance'] as num?)?.toDouble() ?? 1.5,
+      houseElementId: json['houseElementId'] as String?,
       notes: json['notes'] as String?,
     );
   }
@@ -41,9 +43,11 @@ class GroundFloorCalculation {
   final double slabLengthMeters;
   final double edgeInsulationWidthMeters;
   final double edgeInsulationResistance;
+  final String? houseElementId;
   final String? notes;
 
   double get shapeFactor => perimeterMeters / areaSquareMeters;
+  bool get isLinkedToHouseElement => houseElementId != null;
 
   GroundFloorCalculation copyWith({
     String? id,
@@ -56,7 +60,9 @@ class GroundFloorCalculation {
     double? slabLengthMeters,
     double? edgeInsulationWidthMeters,
     double? edgeInsulationResistance,
+    String? houseElementId,
     String? notes,
+    bool clearHouseElementId = false,
     bool clearNotes = false,
   }) {
     return GroundFloorCalculation(
@@ -72,6 +78,9 @@ class GroundFloorCalculation {
           edgeInsulationWidthMeters ?? this.edgeInsulationWidthMeters,
       edgeInsulationResistance:
           edgeInsulationResistance ?? this.edgeInsulationResistance,
+      houseElementId: clearHouseElementId
+          ? null
+          : houseElementId ?? this.houseElementId,
       notes: clearNotes ? null : notes ?? this.notes,
     );
   }
@@ -87,6 +96,7 @@ class GroundFloorCalculation {
     'slabLengthMeters': slabLengthMeters,
     'edgeInsulationWidthMeters': edgeInsulationWidthMeters,
     'edgeInsulationResistance': edgeInsulationResistance,
+    'houseElementId': houseElementId,
     'notes': notes,
   };
 }
@@ -110,7 +120,9 @@ extension GroundFloorCalculationKindX on GroundFloorCalculationKind {
     GroundFloorCalculationKind.basementSlab => 'basementSlab',
   };
 
-  bool get isSupportedInV1 => this == GroundFloorCalculationKind.slabOnGround;
+  bool get isGroundContactScenario =>
+      this == GroundFloorCalculationKind.slabOnGround ||
+      this == GroundFloorCalculationKind.stripFoundationFloor;
 }
 
 GroundFloorCalculationKind parseGroundFloorCalculationKind(String value) {

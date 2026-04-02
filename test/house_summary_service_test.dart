@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartcalc_mobile/src/core/models/catalog.dart';
+import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/services/building_heat_loss_service.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
@@ -130,6 +131,7 @@ void main() {
         climatePoints: testCatalogSnapshot.climatePoints,
         materials: testCatalogSnapshot.materials,
         constructionTemplates: testCatalogSnapshot.constructionTemplates,
+        roomShapeTemplates: testCatalogSnapshot.roomShapeTemplates,
         norms: testCatalogSnapshot.norms,
         moistureRules: testCatalogSnapshot.moistureRules,
         roomKindConditions: const [
@@ -218,6 +220,64 @@ void main() {
 
       expect(summary.roomResults.single.unresolvedElements, isEmpty);
       expect(summary.totalEnvelopeAreaSquareMeters, 26);
+      expect(summary.totalHeatLossWatts, greaterThan(0));
+    },
+  );
+
+  test(
+    'building heat loss resolves on-ground floor through linked ground floor calculation',
+    () async {
+      final floor = Construction(
+        id: 'floor-on-ground',
+        title: 'Пол по грунту',
+        elementKind: ConstructionElementKind.floor,
+        floorConstructionType: FloorConstructionType.onGround,
+        layers: buildWallConstruction().layers,
+      );
+      final project = buildTestProject(
+        constructions: [buildWallConstruction(), floor],
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Конструктор дома',
+          rooms: [Room.defaultRoom()],
+          elements: [
+            HouseEnvelopeElement(
+              id: 'element-floor',
+              roomId: defaultRoomId,
+              title: 'Пол комнаты',
+              elementKind: ConstructionElementKind.floor,
+              areaSquareMeters: 16,
+              constructionId: floor.id,
+            ),
+          ],
+          openings: const [],
+        ),
+        groundFloorCalculations: const [
+          GroundFloorCalculation(
+            id: 'gf-linked',
+            title: 'Связанный пол',
+            kind: GroundFloorCalculationKind.slabOnGround,
+            constructionId: 'floor-on-ground',
+            areaSquareMeters: 16,
+            perimeterMeters: 16,
+            slabWidthMeters: 4,
+            slabLengthMeters: 4,
+            edgeInsulationWidthMeters: 0.6,
+            edgeInsulationResistance: 1.5,
+            houseElementId: 'element-floor',
+          ),
+        ],
+      );
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
+
+      final summary = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+      );
+
+      expect(summary.roomResults.single.unresolvedElements, isEmpty);
       expect(summary.totalHeatLossWatts, greaterThan(0));
     },
   );

@@ -366,7 +366,7 @@ class _RoadmapCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Открываются экран thermocalc, отдельный модуль полов по грунту v1 и конструктор дома из Phase 2: помещения, ограждения, конструкции и запуск расчёта из выбранного элемента.',
+              'Открываются экран thermocalc, модуль полов по грунту v2 и конструктор дома из Phase 2: помещения, ограждения, конструкции и запуск расчёта из выбранного элемента.',
             ),
             const SizedBox(height: 16),
             FilledButton.icon(

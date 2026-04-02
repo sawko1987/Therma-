@@ -183,6 +183,22 @@ class ProjectEditor {
     await saveProject(updated);
   }
 
+  Future<void> saveRoomShapeTemplate(RoomShapeTemplate template) async {
+    final project = await _requireProject();
+    final existingIndex = project.customRoomShapeTemplates.indexWhere(
+      (item) => item.id == template.id,
+    );
+    final nextTemplates = [...project.customRoomShapeTemplates];
+    if (existingIndex == -1) {
+      nextTemplates.add(template);
+    } else {
+      nextTemplates[existingIndex] = template;
+    }
+    await saveProject(
+      project.copyWith(customRoomShapeTemplates: nextTemplates),
+    );
+  }
+
   Future<Project> configureRoomEnvelope(
     String roomId, {
     String? floorConstructionId,
@@ -531,12 +547,9 @@ class ProjectEditor {
     GroundFloorCalculation calculation,
   ) async {
     final project = await _requireProject();
-    final updated = project.copyWith(
-      groundFloorCalculations: [
-        ...project.groundFloorCalculations,
-        calculation,
-      ],
-    );
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addGroundFloorCalculation(project, calculation);
     await saveProject(updated);
     _ref
         .read(selectedGroundFloorCalculationIdProvider.notifier)
@@ -547,12 +560,9 @@ class ProjectEditor {
     GroundFloorCalculation calculation,
   ) async {
     final project = await _requireProject();
-    final updated = project.copyWith(
-      groundFloorCalculations: [
-        for (final item in project.groundFloorCalculations)
-          if (item.id == calculation.id) calculation else item,
-      ],
-    );
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateGroundFloorCalculation(project, calculation);
     await saveProject(updated);
     _ref
         .read(selectedGroundFloorCalculationIdProvider.notifier)
@@ -561,12 +571,9 @@ class ProjectEditor {
 
   Future<void> deleteGroundFloorCalculation(String calculationId) async {
     final project = await _requireProject();
-    final updated = project.copyWith(
-      groundFloorCalculations: [
-        for (final item in project.groundFloorCalculations)
-          if (item.id != calculationId) item,
-      ],
-    );
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .deleteGroundFloorCalculation(project, calculationId);
     await saveProject(updated);
     _ref.read(selectedGroundFloorCalculationIdProvider.notifier).select(null);
   }
@@ -722,6 +729,10 @@ final catalogSnapshotProvider = FutureProvider<CatalogSnapshot>((ref) async {
     climatePoints: baseCatalog.climatePoints,
     materials: materials,
     constructionTemplates: baseCatalog.constructionTemplates,
+    roomShapeTemplates: [
+      ...baseCatalog.roomShapeTemplates,
+      ...?project?.customRoomShapeTemplates,
+    ],
     norms: baseCatalog.norms,
     moistureRules: baseCatalog.moistureRules,
     roomKindConditions: baseCatalog.roomKindConditions,
@@ -1084,6 +1095,20 @@ final selectedGroundFloorCalculationProvider =
       for (final calculation in project.groundFloorCalculations) {
         if (calculation.id == selectedCalculationId) {
           return calculation;
+        }
+      }
+
+      final selectedElement = await ref.watch(
+        selectedEnvelopeElementProvider.future,
+      );
+      if (selectedElement != null) {
+        for (final calculation in project.groundFloorCalculations) {
+          if (calculation.houseElementId == selectedElement.id) {
+            ref
+                .read(selectedGroundFloorCalculationIdProvider.notifier)
+                .select(calculation.id);
+            return calculation;
+          }
         }
       }
 
