@@ -3,9 +3,12 @@ import 'dart:math' as math;
 import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
 import '../models/ventilation_settings.dart';
+import 'wall_plan_sync_service.dart';
 
 class ProjectEditingService {
-  const ProjectEditingService();
+  const ProjectEditingService({this.wallPlanSyncService = const WallPlanSyncService()});
+
+  final WallPlanSyncService wallPlanSyncService;
 
   String? validateRoomPlacement(
     Project project,
@@ -116,6 +119,79 @@ class ProjectEditingService {
       ),
     );
     return _syncProjectGeometry(updatedProject);
+  }
+
+  Project syncWallPlan(
+    Project project, {
+    required List<PlanNode> nodes,
+    required List<PlanWall> walls,
+    required List<PlanWallOpening> openings,
+  }) {
+    return wallPlanSyncService.syncProject(
+      project,
+      nodes: nodes,
+      walls: walls,
+      openings: openings,
+    );
+  }
+
+  Project assignConstructionToPlanWalls(
+    Project project,
+    Set<String> wallIds,
+    String constructionId,
+  ) {
+    _ensureConstructionExists(project, constructionId);
+    final construction = project.constructions.firstWhere(
+      (item) => item.id == constructionId,
+    );
+    if (construction.elementKind != ConstructionElementKind.wall) {
+      throw StateError('Для стен можно выбрать только стеновую конструкцию.');
+    }
+    final updatedWalls = [
+      for (final wall in project.houseModel.planWalls)
+        wallIds.contains(wall.id)
+            ? wall.copyWith(constructionId: constructionId)
+            : wall,
+    ];
+    return syncWallPlan(
+      project,
+      nodes: project.houseModel.planNodes,
+      walls: updatedWalls,
+      openings: project.houseModel.planWallOpenings,
+    );
+  }
+
+  Project addPlanWallOpening(Project project, PlanWallOpening opening) {
+    return syncWallPlan(
+      project,
+      nodes: project.houseModel.planNodes,
+      walls: project.houseModel.planWalls,
+      openings: [...project.houseModel.planWallOpenings, opening],
+    );
+  }
+
+  Project updatePlanWallOpening(Project project, PlanWallOpening opening) {
+    return syncWallPlan(
+      project,
+      nodes: project.houseModel.planNodes,
+      walls: project.houseModel.planWalls,
+      openings: [
+        for (final item in project.houseModel.planWallOpenings)
+          if (item.id == opening.id) opening else item,
+      ],
+    );
+  }
+
+  Project deletePlanWallOpening(Project project, String openingId) {
+    return syncWallPlan(
+      project,
+      nodes: project.houseModel.planNodes,
+      walls: project.houseModel.planWalls,
+      openings: [
+        for (final item in project.houseModel.planWallOpenings)
+          if (item.id != openingId) item,
+      ],
+    );
   }
 
   Project updateRoomLayout(

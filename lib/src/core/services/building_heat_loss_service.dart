@@ -299,21 +299,15 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         <String, List<BuildingInternalHeatTransferResult>>{
           for (final room in project.houseModel.rooms) room.id: [],
         };
-    final internalPartitionConstruction =
-        switch (project.houseModel.internalPartitionConstructionId) {
-          final String constructionId => constructionMap[constructionId],
-          null => null,
-        };
-    if (internalPartitionConstruction != null &&
-        internalPartitionConstruction.elementKind ==
-            ConstructionElementKind.wall) {
-      final totalResistance = _calculateInternalPartitionResistance(
-        catalog,
-        internalPartitionConstruction,
-      );
-      for (final boundary in buildSharedRoomBoundaries(
-        project.houseModel.rooms,
+    if (project.houseModel.planModelKind == HousePlanModelKind.wallGraph) {
+      for (final boundary in _buildWallGraphSharedBoundaries(
+        project: project,
+        constructionMap: constructionMap,
       )) {
+        final totalResistance = _calculateInternalPartitionResistance(
+          catalog,
+          boundary.construction,
+        );
         final primaryRoom = roomCalculationData[boundary.primaryRoomId];
         final secondaryRoom = roomCalculationData[boundary.secondaryRoomId];
         if (primaryRoom == null || secondaryRoom == null) {
@@ -343,7 +337,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         final result = BuildingInternalHeatTransferResult(
           fromRoom: warmerRoom.room,
           toRoom: coolerRoom.room,
-          construction: internalPartitionConstruction,
+          construction: boundary.construction,
           segment: boundary.segment,
           partitionAreaSquareMeters: partitionAreaSquareMeters,
           fromRoomTemperature: warmerRoom.insideAirTemperature,
@@ -361,6 +355,72 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
             heatTransferWatts;
         internalResultsByRoomId[warmerRoom.room.id]!.add(result);
         internalResultsByRoomId[coolerRoom.room.id]!.add(result);
+      }
+    } else {
+      final internalPartitionConstruction =
+          switch (project.houseModel.internalPartitionConstructionId) {
+            final String constructionId => constructionMap[constructionId],
+            null => null,
+          };
+      if (internalPartitionConstruction != null &&
+          internalPartitionConstruction.elementKind ==
+              ConstructionElementKind.wall) {
+        final totalResistance = _calculateInternalPartitionResistance(
+          catalog,
+          internalPartitionConstruction,
+        );
+        for (final boundary in buildSharedRoomBoundaries(
+          project.houseModel.rooms,
+        )) {
+          final primaryRoom = roomCalculationData[boundary.primaryRoomId];
+          final secondaryRoom = roomCalculationData[boundary.secondaryRoomId];
+          if (primaryRoom == null || secondaryRoom == null) {
+            continue;
+          }
+          final warmerRoom =
+              primaryRoom.insideAirTemperature >=
+                  secondaryRoom.insideAirTemperature
+              ? primaryRoom
+              : secondaryRoom;
+          final coolerRoom = identical(warmerRoom, primaryRoom)
+              ? secondaryRoom
+              : primaryRoom;
+          final deltaTemperature =
+              warmerRoom.insideAirTemperature -
+              coolerRoom.insideAirTemperature;
+          if (deltaTemperature <= 0) {
+            continue;
+          }
+          final partitionAreaSquareMeters =
+              boundary.segment.lengthMeters *
+              _sharedPartitionHeightMeters(warmerRoom.room, coolerRoom.room);
+          if (partitionAreaSquareMeters <= 0) {
+            continue;
+          }
+          final heatTransferWatts =
+              deltaTemperature / totalResistance * partitionAreaSquareMeters;
+          final result = BuildingInternalHeatTransferResult(
+            fromRoom: warmerRoom.room,
+            toRoom: coolerRoom.room,
+            construction: internalPartitionConstruction,
+            segment: boundary.segment,
+            partitionAreaSquareMeters: partitionAreaSquareMeters,
+            fromRoomTemperature: warmerRoom.insideAirTemperature,
+            toRoomTemperature: coolerRoom.insideAirTemperature,
+            deltaTemperature: deltaTemperature,
+            totalResistance: totalResistance,
+            heatTransferWatts: heatTransferWatts,
+          );
+          internalHeatTransferResults.add(result);
+          adjacentRoomHeatGainByRoomId[warmerRoom.room.id] =
+              (adjacentRoomHeatGainByRoomId[warmerRoom.room.id] ?? 0) -
+              heatTransferWatts;
+          adjacentRoomHeatGainByRoomId[coolerRoom.room.id] =
+              (adjacentRoomHeatGainByRoomId[coolerRoom.room.id] ?? 0) +
+              heatTransferWatts;
+          internalResultsByRoomId[warmerRoom.room.id]!.add(result);
+          internalResultsByRoomId[coolerRoom.room.id]!.add(result);
+        }
       }
     }
 
@@ -490,6 +550,102 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         ? first.heightMeters
         : second.heightMeters;
   }
+
+  List<_WallGraphSharedBoundary> _buildWallGraphSharedBoundaries({
+    required Project project,
+    required Map<String, Construction> constructionMap,
+  }) {
+    final nodeMap = {
+      for (final node in project.houseModel.planNodes) node.id: node,
+    };
+    final roomByCell = <String, Room>{};
+    for (final room in project.houseModel.rooms) {
+      for (final cell in room.effectiveCells) {
+        roomByCell[_roomCellKey(cell)] = room;
+      }
+    }
+    final boundaries = <_WallGraphSharedBoundary>[];
+    for (final wall in project.houseModel.planWalls) {
+      final construction = constructionMap[wall.constructionId];
+      if (construction == null ||
+          construction.elementKind != ConstructionElementKind.wall) {
+        continue;
+      }
+      final start = nodeMap[wall.startNodeId];
+      final end = nodeMap[wall.endNodeId];
+      if (start == null || end == null) {
+        continue;
+      }
+      final segment = HouseLineSegment(
+        startXMeters: start.xMeters,
+        startYMeters: start.yMeters,
+        endXMeters: end.xMeters,
+        endYMeters: end.yMeters,
+      ).normalized();
+      final adjacentRooms = _adjacentRoomsForSegment(segment, roomByCell);
+      if (adjacentRooms.length != 2) {
+        continue;
+      }
+      boundaries.add(
+        _WallGraphSharedBoundary(
+          primaryRoomId: adjacentRooms.first.id,
+          secondaryRoomId: adjacentRooms.last.id,
+          segment: segment,
+          construction: construction,
+        ),
+      );
+    }
+    return boundaries;
+  }
+
+  List<Room> _adjacentRoomsForSegment(
+    HouseLineSegment segment,
+    Map<String, Room> roomByCell,
+  ) {
+    final adjacent = <String, Room>{};
+    if (segment.isHorizontal) {
+      final y = _gridIndex(segment.startYMeters);
+      for (
+        var x = _gridIndex(segment.startXMeters);
+        x < _gridIndex(segment.endXMeters);
+        x++
+      ) {
+        final above = roomByCell['$x:$y'];
+        final below = roomByCell['$x:${y - 1}'];
+        if (above != null) {
+          adjacent[above.id] = above;
+        }
+        if (below != null) {
+          adjacent[below.id] = below;
+        }
+      }
+      return adjacent.values.toList(growable: false);
+    }
+    final x = _gridIndex(segment.startXMeters);
+    for (
+      var y = _gridIndex(segment.startYMeters);
+      y < _gridIndex(segment.endYMeters);
+      y++
+    ) {
+      final right = roomByCell['$x:$y'];
+      final left = roomByCell['${x - 1}:$y'];
+      if (right != null) {
+        adjacent[right.id] = right;
+      }
+      if (left != null) {
+        adjacent[left.id] = left;
+      }
+    }
+    return adjacent.values.toList(growable: false);
+  }
+
+  int _gridIndex(double meters) {
+    return (meters / roomLayoutSnapStepMeters).round();
+  }
+
+  String _roomCellKey(RoomLayoutRect cell) {
+    return '${_gridIndex(cell.xMeters)}:${_gridIndex(cell.yMeters)}';
+  }
 }
 
 class _RoomCalculationData {
@@ -536,4 +692,18 @@ class _RoomCalculationData {
   final double ventilationHeatLossWatts;
   final double infiltrationHeatLossWatts;
   final double installedHeatingPowerWatts;
+}
+
+class _WallGraphSharedBoundary {
+  const _WallGraphSharedBoundary({
+    required this.primaryRoomId,
+    required this.secondaryRoomId,
+    required this.segment,
+    required this.construction,
+  });
+
+  final String primaryRoomId;
+  final String secondaryRoomId;
+  final HouseLineSegment segment;
+  final Construction construction;
 }

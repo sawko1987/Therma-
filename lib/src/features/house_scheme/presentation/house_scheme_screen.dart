@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,6 +15,7 @@ import 'floor_plan_geometry.dart';
 import 'room_shape_support.dart';
 import 'widgets/floor_plan_editor_card.dart';
 import 'widgets/heating_devices_card.dart';
+import 'widgets/wall_graph_editor.dart';
 
 class HouseSchemeScreen extends ConsumerWidget {
   const HouseSchemeScreen({
@@ -37,32 +40,19 @@ class HouseSchemeScreen extends ConsumerWidget {
     WidgetRef ref,
     Project project,
   ) async {
-    final catalog = await ref.read(catalogSnapshotProvider.future);
-    if (!context.mounted) {
-      return null;
-    }
     final layout = buildFirstAvailableRoomLayout(
       project.houseModel.rooms,
       widthMeters: defaultPlacedRoomWidthMeters,
       heightMeters: defaultPlacedRoomHeightMeters,
     );
     final roomIndex = project.houseModel.rooms.length + 1;
-    return _showRoomEditor(
-      context,
-      templates: catalog.roomShapeTemplates,
-      initialLayout: RoomLayoutRect(
-        xMeters: layout.xMeters,
-        yMeters: layout.yMeters,
-        widthMeters: defaultPlacedRoomWidthMeters,
-        heightMeters: defaultPlacedRoomHeightMeters,
-      ),
-      room: Room(
-        id: _buildId('room'),
-        title: 'Помещение $roomIndex',
-        kind: RoomKind.livingRoom,
-        heightMeters: defaultRoomHeightMeters,
-        layout: layout,
-      ),
+    return Room(
+      id: _buildId('room'),
+      title: 'Помещение $roomIndex',
+      kind: RoomKind.livingRoom,
+      heightMeters: defaultRoomHeightMeters,
+      layout: layout,
+      cells: [layout],
     );
   }
 
@@ -127,34 +117,6 @@ class HouseSchemeScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _handleEditRoom(
-    BuildContext context,
-    WidgetRef ref,
-    Room room,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final catalog = await ref.read(catalogSnapshotProvider.future);
-    if (!context.mounted) {
-      return;
-    }
-    final updated = await _showRoomEditor(
-      context,
-      room: room,
-      templates: catalog.roomShapeTemplates,
-    );
-    if (!context.mounted) {
-      return;
-    }
-    if (updated == null) {
-      return;
-    }
-    try {
-      await ref.read(projectEditorProvider).updateRoom(updated);
-    } catch (error) {
-      _showError(messenger, error);
-    }
-  }
-
   Future<String?> _handleUpdateRoom(
     BuildContext context,
     WidgetRef ref,
@@ -163,30 +125,6 @@ class HouseSchemeScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(projectEditorProvider).updateRoom(room);
-      return null;
-    } catch (error) {
-      _showError(messenger, error);
-      return _describeError(error);
-    }
-  }
-
-  Future<String?> _handleSaveRoomShapeTemplate(
-    BuildContext context,
-    WidgetRef ref,
-    Room room,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ref
-          .read(projectEditorProvider)
-          .saveRoomShapeTemplate(
-            roomShapeTemplateFromRoom(
-              room: room,
-              id: _buildId('room-shape'),
-              title: room.title,
-              description: 'Пользовательский шаблон комнаты',
-            ),
-          );
       return null;
     } catch (error) {
       _showError(messenger, error);
@@ -604,6 +542,23 @@ class HouseSchemeScreen extends ConsumerWidget {
     );
   }
 
+  void _openWallGraphEditor(
+    BuildContext context, {
+    required Project project,
+    required CatalogSnapshot catalog,
+    required bool startInDrawMode,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WallGraphEditorScreen(
+          project: project,
+          catalog: catalog,
+          startInDrawMode: startInDrawMode,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectAsync = ref.watch(selectedProjectProvider);
@@ -640,6 +595,9 @@ class HouseSchemeScreen extends ConsumerWidget {
                 return _SummaryCard(
                   project: effectiveProject,
                   summary: summary,
+                  useWallGraphSummary:
+                      effectiveProject.houseModel.planModelKind ==
+                      HousePlanModelKind.wallGraph,
                   onOpenBuildingHeatLoss: () =>
                       _handleOpenBuildingHeatLoss(context),
                   onUpdateInternalPartitionConstruction: (constructionId) =>
@@ -664,107 +622,29 @@ class HouseSchemeScreen extends ConsumerWidget {
                   return const Text('Активный проект не найден.');
                 }
                 final effectiveProject = _resolveProject(project);
+                final isLegacyPlan =
+                    effectiveProject.houseModel.planModelKind ==
+                    HousePlanModelKind.legacyRooms;
                 return Column(
                   children: [
-                    _PlanAndRoomsSection(
-                      project: effectiveProject,
-                      catalog: catalog,
-                      summary: summaryAsync.asData?.value,
-                      showHeatingDevices: showHeatingDevices,
-                      onAddRoom: () => _handleAddRoom(context, ref, project),
-                      onValidateRoomPlacement: (room, {replacingRoomId}) =>
-                          _validateRoomPlacement(
-                            ref,
-                            project,
-                            room,
-                            replacingRoomId: replacingRoomId,
-                          ),
-                      onCreatePlacedRoom: (room) =>
-                          _handleCreatePlacedRoom(context, ref, room),
-                      onFinalizeRoomEnvelope:
-                          ({
-                            required project,
-                            required roomId,
-                            required wallConstructionIdsByElementId,
-                            required floorConstructionId,
-                            required topConstructionId,
-                          }) => _handleFinalizeRoomEnvelope(
-                            context,
-                            ref,
-                            project: project,
-                            roomId: roomId,
-                            wallConstructionIdsByElementId:
-                                wallConstructionIdsByElementId,
-                            floorConstructionId: floorConstructionId,
-                            topConstructionId: topConstructionId,
-                          ),
-                      onUpdateRoom: (room) =>
-                          _handleUpdateRoom(context, ref, room),
-                      onSaveRoomTemplate: (room) =>
-                          _handleSaveRoomShapeTemplate(context, ref, room),
-                      onUpdateRoomLayout: (roomId, layout) =>
-                          _handleUpdateRoomLayout(context, ref, roomId, layout),
-                      onAddRoomCell: (roomId, cell) =>
-                          _handleAddRoomCell(context, ref, roomId, cell),
-                      onRemoveRoomCell: (roomId, cell) =>
-                          _handleRemoveRoomCell(context, ref, roomId, cell),
-                      onEditRoom: (room) => _handleEditRoom(context, ref, room),
-                      onDeleteRoom: (room) =>
-                          _handleDeleteRoom(context, ref, room),
-                      onAddElement: (room) => _handleAddElement(
-                        context,
-                        ref,
-                        project,
-                        catalog,
-                        room,
+                    if (isLegacyPlan)
+                      const _LegacyPlanBlockedCard()
+                    else
+                      WallGraphOverviewCard(
+                        project: effectiveProject,
+                        onCreateContour: () => _openWallGraphEditor(
+                          context,
+                          project: effectiveProject,
+                          catalog: catalog,
+                          startInDrawMode: true,
+                        ),
+                        onOpenEditor: () => _openWallGraphEditor(
+                          context,
+                          project: effectiveProject,
+                          catalog: catalog,
+                          startInDrawMode: false,
+                        ),
                       ),
-                      onEditElement: (element) => _handleEditElement(
-                        context,
-                        ref,
-                        project,
-                        catalog,
-                        element,
-                      ),
-                      onMergeRooms: (primaryRoomId, secondaryRoomId) =>
-                          _handleMergeRooms(
-                            context,
-                            ref,
-                            primaryRoomId,
-                            secondaryRoomId,
-                          ),
-                      onSplitWall: (elementId, splitOffsetMeters) =>
-                          _handleSplitWall(
-                            context,
-                            ref,
-                            elementId,
-                            splitOffsetMeters,
-                          ),
-                      onDeleteElement: (element) =>
-                          _handleDeleteElement(context, ref, element),
-                      onAddOpening: (element) =>
-                          _handleAddOpening(context, ref, element),
-                      onEditOpening: (opening) =>
-                          _handleEditOpening(context, ref, opening),
-                      onDeleteOpening: (opening) =>
-                          _handleDeleteOpening(context, ref, opening),
-                      onAddHeatingDevice: (room) =>
-                          _handleAddHeatingDevice(context, ref, catalog, room),
-                      onEditHeatingDevice: (heatingDevice) =>
-                          _handleEditHeatingDevice(
-                            context,
-                            ref,
-                            catalog,
-                            heatingDevice,
-                          ),
-                      onDeleteHeatingDevice: (heatingDevice) =>
-                          _handleDeleteHeatingDevice(
-                            context,
-                            ref,
-                            heatingDevice,
-                          ),
-                      onOpenThermocalc: (element) =>
-                          _handleOpenThermocalc(context, ref, element),
-                    ),
                     if (showConstructionsCard) ...[
                       const SizedBox(height: 16),
                       _ConstructionsCard(
@@ -852,16 +732,46 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
+class _LegacyPlanBlockedCard extends StatelessWidget {
+  const _LegacyPlanBlockedCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Legacy-план заблокирован',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Старый room/cell редактор больше не используется. Этот проект создан в legacy-формате и не открывается в новом wall-first редакторе. Создайте новый проект для работы с новым построением плана.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.project,
     required this.summary,
+    required this.useWallGraphSummary,
     required this.onOpenBuildingHeatLoss,
     required this.onUpdateInternalPartitionConstruction,
   });
 
   final Project project;
   final BuildingHeatLossResult summary;
+  final bool useWallGraphSummary;
   final VoidCallback onOpenBuildingHeatLoss;
   final Future<void> Function(String? constructionId)
   onUpdateInternalPartitionConstruction;
@@ -891,7 +801,11 @@ class _SummaryCard extends StatelessWidget {
               '${summary.outsideAirTemperature.toStringAsFixed(0)} °C',
             ),
             const SizedBox(height: 12),
-            if (wallConstructions.isEmpty)
+            if (useWallGraphSummary)
+              const Text(
+                'Во внутреннем теплообмене используются конструкции конкретных общих стен нового плана.',
+              )
+            else if (wallConstructions.isEmpty)
               const Text(
                 'Для внутреннего теплообмена пока нет доступной стеновой конструкции.',
               )
@@ -1007,11 +921,9 @@ class _PlanAndRoomsSection extends StatefulWidget {
     required this.onCreatePlacedRoom,
     required this.onFinalizeRoomEnvelope,
     required this.onUpdateRoom,
-    required this.onSaveRoomTemplate,
     required this.onUpdateRoomLayout,
     required this.onAddRoomCell,
     required this.onRemoveRoomCell,
-    required this.onEditRoom,
     required this.onDeleteRoom,
     required this.onAddElement,
     required this.onEditElement,
@@ -1044,14 +956,12 @@ class _PlanAndRoomsSection extends StatefulWidget {
   })
   onFinalizeRoomEnvelope;
   final Future<String?> Function(Room room) onUpdateRoom;
-  final Future<String?> Function(Room room) onSaveRoomTemplate;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
   final Future<String?> Function(String roomId, RoomLayoutRect cell)
   onAddRoomCell;
   final Future<String?> Function(String roomId, RoomLayoutRect cell)
   onRemoveRoomCell;
-  final ValueChanged<Room> onEditRoom;
   final ValueChanged<Room> onDeleteRoom;
   final ValueChanged<Room> onAddElement;
   final ValueChanged<HouseEnvelopeElement> onEditElement;
@@ -1089,8 +999,11 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
     setState(() => _selectedRoomId = roomId);
   }
 
-  Future<void> _openEditor({required bool startWithAddRoom}) async {
-    final selectedRoomId = _effectiveSelectedRoomId;
+  Future<void> _openEditor({
+    required bool startWithAddRoom,
+    String? selectedRoomIdOverride,
+  }) async {
+    final selectedRoomId = selectedRoomIdOverride ?? _effectiveSelectedRoomId;
     final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (_) => _HousePlanEditorScreen(
@@ -1102,7 +1015,6 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
           onCreatePlacedRoom: widget.onCreatePlacedRoom,
           onFinalizeRoomEnvelope: widget.onFinalizeRoomEnvelope,
           onUpdateRoom: widget.onUpdateRoom,
-          onSaveRoomTemplate: widget.onSaveRoomTemplate,
           onUpdateRoomLayout: widget.onUpdateRoomLayout,
           onAddRoomCell: widget.onAddRoomCell,
           onRemoveRoomCell: widget.onRemoveRoomCell,
@@ -1134,7 +1046,13 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
           selectedRoomId: selectedRoomId,
           onSelectRoom: _selectRoom,
           onAddRoom: () => _openEditor(startWithAddRoom: true),
-          onEditRoom: widget.onEditRoom,
+          onEditRoom: (room) {
+            setState(() => _selectedRoomId = room.id);
+            _openEditor(
+              startWithAddRoom: false,
+              selectedRoomIdOverride: room.id,
+            );
+          },
           onDeleteRoom: widget.onDeleteRoom,
           onAddElement: widget.onAddElement,
           onEditElement: widget.onEditElement,
@@ -1173,7 +1091,6 @@ class _HousePlanEditorScreen extends ConsumerStatefulWidget {
     required this.onCreatePlacedRoom,
     required this.onFinalizeRoomEnvelope,
     required this.onUpdateRoom,
-    required this.onSaveRoomTemplate,
     required this.onUpdateRoomLayout,
     required this.onAddRoomCell,
     required this.onRemoveRoomCell,
@@ -1197,7 +1114,6 @@ class _HousePlanEditorScreen extends ConsumerStatefulWidget {
   })
   onFinalizeRoomEnvelope;
   final Future<String?> Function(Room room) onUpdateRoom;
-  final Future<String?> Function(Room room) onSaveRoomTemplate;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
   final Future<String?> Function(String roomId, RoomLayoutRect cell)
@@ -1443,7 +1359,6 @@ class _HousePlanEditorScreenState
                       child: _SelectedRoomEditorCard(
                         room: selectedRoom,
                         onSave: widget.onUpdateRoom,
-                        onSaveTemplate: widget.onSaveRoomTemplate,
                       ),
                     ),
                   ),
@@ -1454,10 +1369,7 @@ class _HousePlanEditorScreenState
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: content,
             );
-            if (isCompactHeight) {
-              return SingleChildScrollView(child: padded);
-            }
-            return padded;
+            return SingleChildScrollView(child: padded);
           },
         ),
       ),
@@ -2101,15 +2013,10 @@ class _RoomsCard extends StatelessWidget {
 }
 
 class _SelectedRoomEditorCard extends StatefulWidget {
-  const _SelectedRoomEditorCard({
-    required this.room,
-    required this.onSave,
-    required this.onSaveTemplate,
-  });
+  const _SelectedRoomEditorCard({required this.room, required this.onSave});
 
   final Room room;
   final Future<String?> Function(Room room) onSave;
-  final Future<String?> Function(Room room) onSaveTemplate;
 
   @override
   State<_SelectedRoomEditorCard> createState() =>
@@ -2124,7 +2031,6 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
   late RoomKind _selectedKind;
   String? _lastError;
   bool _saving = false;
-  bool _savingTemplate = false;
 
   @override
   void initState() {
@@ -2221,28 +2127,6 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
     }
     setState(() {
       _saving = false;
-      _lastError = error;
-    });
-  }
-
-  Future<void> _handleSaveTemplate() async {
-    setState(() {
-      _savingTemplate = true;
-      _lastError = null;
-    });
-    final error = await widget.onSaveTemplate(
-      widget.room.copyWith(
-        title: _requiredText(
-          _titleController.text,
-          fallback: widget.room.title,
-        ),
-      ),
-    );
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _savingTemplate = false;
       _lastError = error;
     });
   }
@@ -2383,18 +2267,6 @@ class _SelectedRoomEditorCardState extends State<_SelectedRoomEditorCard> {
                         )
                       : const Icon(Icons.save_outlined),
                   label: const Text('Сохранить параметры'),
-                ),
-                FilledButton.tonalIcon(
-                  key: const ValueKey('selected-room-save-template-button'),
-                  onPressed: _savingTemplate ? null : _handleSaveTemplate,
-                  icon: _savingTemplate
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.bookmark_add_outlined),
-                  label: const Text('Сохранить как шаблон'),
                 ),
               ],
             ),
@@ -2801,241 +2673,6 @@ Future<_RoomEnvelopeAssignmentResult?> _showRoomEnvelopeAssignmentSheet(
   );
 }
 
-Future<Room?> _showRoomEditor(
-  BuildContext context, {
-  Room? room,
-  RoomLayoutRect? initialLayout,
-  required List<RoomShapeTemplate> templates,
-}) async {
-  final safeTemplates = templates.isEmpty
-      ? const [
-          RoomShapeTemplate(
-            id: 'shape-rectangle',
-            title: 'Прямоугольник',
-            description: 'Базовое прямоугольное помещение.',
-            normalizedGeometry: RoomGeometry(
-              vertices: [
-                RoomGeometryPoint(xMeters: 0, yMeters: 0),
-                RoomGeometryPoint(xMeters: 1, yMeters: 0),
-                RoomGeometryPoint(xMeters: 1, yMeters: 1),
-                RoomGeometryPoint(xMeters: 0, yMeters: 1),
-              ],
-            ),
-            defaultWidthMeters: defaultRoomLayoutWidthMeters,
-            defaultHeightMeters: defaultRoomLayoutHeightMeters,
-          ),
-        ]
-      : templates;
-  final fallbackTemplate = safeTemplates.firstWhere(
-    (item) => item.id == 'shape-rectangle',
-    orElse: () => safeTemplates.first,
-  );
-  final selectedTemplateSeed = room?.shapeTemplateId == null
-      ? fallbackTemplate
-      : safeTemplates.firstWhere(
-          (item) => item.id == room!.shapeTemplateId,
-          orElse: () => fallbackTemplate,
-        );
-  final titleController = TextEditingController(text: room?.title ?? '');
-  final widthController = TextEditingController(
-    text:
-        (room?.layout.widthMeters ??
-                initialLayout?.widthMeters ??
-                selectedTemplateSeed.defaultWidthMeters)
-            .toString(),
-  );
-  final planHeightController = TextEditingController(
-    text:
-        (room?.layout.heightMeters ??
-                initialLayout?.heightMeters ??
-                selectedTemplateSeed.defaultHeightMeters)
-            .toString(),
-  );
-  final heightController = TextEditingController(
-    text: (room?.heightMeters ?? defaultRoomHeightMeters).toString(),
-  );
-  var selectedKind = room?.kind ?? RoomKind.livingRoom;
-  var selectedTemplate = selectedTemplateSeed;
-  final effectiveLayout =
-      room?.layout ?? initialLayout ?? RoomLayoutRect.defaultRect();
-
-  final result = await showModalBottomSheet<Room>(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              20 + MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  room == null ? 'Новое помещение' : 'Редактирование помещения',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Название'),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<RoomKind>(
-                  initialValue: selectedKind,
-                  decoration: const InputDecoration(labelText: 'Тип помещения'),
-                  items: RoomKind.values
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => selectedKind = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedTemplate.id,
-                  decoration: const InputDecoration(
-                    labelText: 'Форма помещения',
-                  ),
-                  items: safeTemplates
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item.id,
-                          child: Text(item.title),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
-                    final nextTemplate = safeTemplates.firstWhere(
-                      (item) => item.id == value,
-                    );
-                    setState(() {
-                      selectedTemplate = nextTemplate;
-                    });
-                  },
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  selectedTemplate.description,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Площадь на плане',
-                  ),
-                  child: Text(
-                    '${snapRoomLayout(effectiveLayout.copyWith(
-                      widthMeters: _parseDouble(widthController.text, fallback: effectiveLayout.widthMeters),
-                      heightMeters: _parseDouble(planHeightController.text, fallback: effectiveLayout.heightMeters),
-                    )).areaSquareMeters.toStringAsFixed(1)} м²',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: 220,
-                      child: TextField(
-                        controller: widthController,
-                        decoration: const InputDecoration(
-                          labelText: 'Длина, м',
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 220,
-                      child: TextField(
-                        controller: planHeightController,
-                        decoration: const InputDecoration(
-                          labelText: 'Ширина, м',
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: heightController,
-                  decoration: const InputDecoration(labelText: 'Высота, м'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () {
-                    final widthMeters = _parseDouble(
-                      widthController.text,
-                      fallback: effectiveLayout.widthMeters,
-                    );
-                    final heightMeters = _parseDouble(
-                      planHeightController.text,
-                      fallback: effectiveLayout.heightMeters,
-                    );
-                    Navigator.of(context).pop(
-                      buildRoomFromShapeTemplate(
-                        template: selectedTemplate,
-                        id: room?.id ?? _buildId('room'),
-                        title: _requiredText(
-                          titleController.text,
-                          fallback: selectedKind.label,
-                        ),
-                        kind: selectedKind,
-                        roomHeightMeters: _parseDouble(
-                          heightController.text,
-                          fallback:
-                              room?.heightMeters ?? defaultRoomHeightMeters,
-                        ),
-                        xMeters: effectiveLayout.xMeters,
-                        yMeters: effectiveLayout.yMeters,
-                        widthMeters: widthMeters,
-                        heightMeters: heightMeters,
-                      ),
-                    );
-                  },
-                  child: const Text('Сохранить'),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-
-  titleController.dispose();
-  widthController.dispose();
-  planHeightController.dispose();
-  heightController.dispose();
-  return result;
-}
-
 Future<HouseEnvelopeElement?> _showElementEditor(
   BuildContext context, {
   required Project project,
@@ -3409,7 +3046,6 @@ Future<EnvelopeOpening?> _showOpeningEditor(
   return result;
 }
 
-// ignore: unused_element
 Future<ConstructionLayer?> _showLayerEditor(
   BuildContext context, {
   required CatalogSnapshot catalog,

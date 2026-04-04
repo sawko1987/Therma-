@@ -4,7 +4,7 @@ import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 import 'ventilation_settings.dart';
 
-const int currentProjectFormatVersion = 18;
+const int currentProjectFormatVersion = 19;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -39,6 +39,8 @@ enum RoomSide { top, right, bottom, left }
 
 enum EnvelopeElementSource { manual, autoExteriorWall }
 
+enum HousePlanModelKind { legacyRooms, wallGraph }
+
 enum LayerKind { solid, frame, crossFrame, masonry, ventilatedGap }
 
 enum RoomPreset { livingRoom, attic, basement }
@@ -69,6 +71,20 @@ extension ConstructionElementKindX on ConstructionElementKind {
     ConstructionElementKind.floor => 'floor',
     ConstructionElementKind.ceiling => 'ceiling',
   };
+}
+
+extension HousePlanModelKindX on HousePlanModelKind {
+  String get storageKey => switch (this) {
+    HousePlanModelKind.legacyRooms => 'legacyRooms',
+    HousePlanModelKind.wallGraph => 'wallGraph',
+  };
+}
+
+HousePlanModelKind parseHousePlanModelKind(String raw) {
+  return HousePlanModelKind.values.firstWhere(
+    (item) => item.storageKey == raw,
+    orElse: () => HousePlanModelKind.legacyRooms,
+  );
 }
 
 extension FloorConstructionTypeX on FloorConstructionType {
@@ -865,6 +881,147 @@ class HouseLineSegment {
   };
 }
 
+class PlanNode {
+  const PlanNode({
+    required this.id,
+    required this.xMeters,
+    required this.yMeters,
+  });
+
+  factory PlanNode.fromJson(Map<String, dynamic> json) => PlanNode(
+    id: json['id'] as String,
+    xMeters: (json['xMeters'] as num).toDouble(),
+    yMeters: (json['yMeters'] as num).toDouble(),
+  );
+
+  final String id;
+  final double xMeters;
+  final double yMeters;
+
+  PlanNode copyWith({String? id, double? xMeters, double? yMeters}) {
+    return PlanNode(
+      id: id ?? this.id,
+      xMeters: xMeters ?? this.xMeters,
+      yMeters: yMeters ?? this.yMeters,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'xMeters': xMeters,
+    'yMeters': yMeters,
+  };
+}
+
+class PlanWall {
+  const PlanWall({
+    required this.id,
+    required this.startNodeId,
+    required this.endNodeId,
+    required this.constructionId,
+  });
+
+  factory PlanWall.fromJson(Map<String, dynamic> json) => PlanWall(
+    id: json['id'] as String,
+    startNodeId: json['startNodeId'] as String,
+    endNodeId: json['endNodeId'] as String,
+    constructionId: json['constructionId'] as String,
+  );
+
+  final String id;
+  final String startNodeId;
+  final String endNodeId;
+  final String constructionId;
+
+  PlanWall copyWith({
+    String? id,
+    String? startNodeId,
+    String? endNodeId,
+    String? constructionId,
+  }) {
+    return PlanWall(
+      id: id ?? this.id,
+      startNodeId: startNodeId ?? this.startNodeId,
+      endNodeId: endNodeId ?? this.endNodeId,
+      constructionId: constructionId ?? this.constructionId,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'startNodeId': startNodeId,
+    'endNodeId': endNodeId,
+    'constructionId': constructionId,
+  };
+}
+
+class PlanWallOpening {
+  const PlanWallOpening({
+    required this.id,
+    required this.wallId,
+    required this.title,
+    required this.kind,
+    required this.areaSquareMeters,
+    required this.heatTransferCoefficient,
+    this.leakagePreset = OpeningLeakagePreset.standard,
+  });
+
+  factory PlanWallOpening.fromJson(Map<String, dynamic> json) => PlanWallOpening(
+    id: json['id'] as String,
+    wallId: json['wallId'] as String,
+    title: json['title'] as String,
+    kind: parseOpeningKind(json['kind'] as String),
+    areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
+    heatTransferCoefficient:
+        (json['heatTransferCoefficient'] as num?)?.toDouble() ??
+        parseOpeningKind(
+          json['kind'] as String,
+        ).defaultHeatTransferCoefficient,
+    leakagePreset: (json['leakagePreset'] as String?) == null
+        ? OpeningLeakagePreset.standard
+        : parseOpeningLeakagePreset(json['leakagePreset'] as String),
+  );
+
+  final String id;
+  final String wallId;
+  final String title;
+  final OpeningKind kind;
+  final double areaSquareMeters;
+  final double heatTransferCoefficient;
+  final OpeningLeakagePreset leakagePreset;
+
+  PlanWallOpening copyWith({
+    String? id,
+    String? wallId,
+    String? title,
+    OpeningKind? kind,
+    double? areaSquareMeters,
+    double? heatTransferCoefficient,
+    OpeningLeakagePreset? leakagePreset,
+  }) {
+    return PlanWallOpening(
+      id: id ?? this.id,
+      wallId: wallId ?? this.wallId,
+      title: title ?? this.title,
+      kind: kind ?? this.kind,
+      areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
+      heatTransferCoefficient:
+          heatTransferCoefficient ?? this.heatTransferCoefficient,
+      leakagePreset: leakagePreset ?? this.leakagePreset,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'wallId': wallId,
+    'title': title,
+    'kind': kind.storageKey,
+    'areaSquareMeters': areaSquareMeters,
+    'heatTransferCoefficient': heatTransferCoefficient,
+    'leakagePreset': leakagePreset.storageKey,
+  };
+}
+
 class Room {
   const Room({
     required this.id,
@@ -1272,6 +1429,10 @@ class HouseModel {
   const HouseModel({
     required this.id,
     required this.title,
+    this.planModelKind = HousePlanModelKind.legacyRooms,
+    this.planNodes = const [],
+    this.planWalls = const [],
+    this.planWallOpenings = const [],
     required this.rooms,
     required this.elements,
     required this.openings,
@@ -1284,6 +1445,19 @@ class HouseModel {
     final rooms = roomsJson
         .map((item) => Room.fromJson(_asJsonMap(item)))
         .toList(growable: false);
+    final planModelKind = json['planModelKind'] == null
+        ? HousePlanModelKind.legacyRooms
+        : parseHousePlanModelKind(json['planModelKind'] as String);
+    final planNodes = ((json['planNodes'] as List<dynamic>?) ?? const [])
+        .map((item) => PlanNode.fromJson(_asJsonMap(item)))
+        .toList(growable: false);
+    final planWalls = ((json['planWalls'] as List<dynamic>?) ?? const [])
+        .map((item) => PlanWall.fromJson(_asJsonMap(item)))
+        .toList(growable: false);
+    final planWallOpenings =
+        ((json['planWallOpenings'] as List<dynamic>?) ?? const [])
+            .map((item) => PlanWallOpening.fromJson(_asJsonMap(item)))
+            .toList(growable: false);
     final elements = (json['elements'] as List<dynamic>)
         .map((item) => HouseEnvelopeElement.fromJson(_asJsonMap(item)))
         .toList(growable: false);
@@ -1299,7 +1473,13 @@ class HouseModel {
     return HouseModel(
       id: json['id'] as String,
       title: json['title'] as String,
-      rooms: rooms.isEmpty ? [Room.defaultRoom()] : rooms,
+      planModelKind: planModelKind,
+      planNodes: planNodes,
+      planWalls: planWalls,
+      planWallOpenings: planWallOpenings,
+      rooms: rooms.isEmpty && planModelKind == HousePlanModelKind.legacyRooms
+          ? [Room.defaultRoom()]
+          : rooms,
       elements: elements.isEmpty && rooms.isEmpty
           ? const []
           : elements
@@ -1419,8 +1599,24 @@ class HouseModel {
     );
   }
 
+  factory HouseModel.emptyWallGraph() {
+    return const HouseModel(
+      id: 'house-model',
+      title: 'Конструктор дома',
+      planModelKind: HousePlanModelKind.wallGraph,
+      rooms: [],
+      elements: [],
+      openings: [],
+      heatingDevices: [],
+    );
+  }
+
   final String id;
   final String title;
+  final HousePlanModelKind planModelKind;
+  final List<PlanNode> planNodes;
+  final List<PlanWall> planWalls;
+  final List<PlanWallOpening> planWallOpenings;
   final List<Room> rooms;
   final List<HouseEnvelopeElement> elements;
   final List<EnvelopeOpening> openings;
@@ -1439,6 +1635,10 @@ class HouseModel {
   HouseModel copyWith({
     String? id,
     String? title,
+    HousePlanModelKind? planModelKind,
+    List<PlanNode>? planNodes,
+    List<PlanWall>? planWalls,
+    List<PlanWallOpening>? planWallOpenings,
     List<Room>? rooms,
     List<HouseEnvelopeElement>? elements,
     List<EnvelopeOpening>? openings,
@@ -1449,6 +1649,10 @@ class HouseModel {
     return HouseModel(
       id: id ?? this.id,
       title: title ?? this.title,
+      planModelKind: planModelKind ?? this.planModelKind,
+      planNodes: planNodes ?? this.planNodes,
+      planWalls: planWalls ?? this.planWalls,
+      planWallOpenings: planWallOpenings ?? this.planWallOpenings,
       rooms: rooms ?? this.rooms,
       elements: elements ?? this.elements,
       openings: openings ?? this.openings,
@@ -1463,6 +1667,12 @@ class HouseModel {
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
+    'planModelKind': planModelKind.storageKey,
+    'planNodes': planNodes.map((item) => item.toJson()).toList(growable: false),
+    'planWalls': planWalls.map((item) => item.toJson()).toList(growable: false),
+    'planWallOpenings': planWallOpenings
+        .map((item) => item.toJson())
+        .toList(growable: false),
     'rooms': rooms.map((item) => item.toJson()).toList(growable: false),
     'elements': elements.map((item) => item.toJson()).toList(growable: false),
     'openings': openings.map((item) => item.toJson()).toList(growable: false),

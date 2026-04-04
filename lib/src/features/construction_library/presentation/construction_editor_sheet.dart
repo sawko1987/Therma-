@@ -340,7 +340,7 @@ Future<Construction?> showConstructionEditor(
     },
   );
 
-  titleController.dispose();
+  _disposeTextControllersAfterSheetClose([titleController]);
   return result;
 }
 
@@ -523,7 +523,7 @@ Future<LayerEditorResult?> showLayerEditor(
     },
   );
 
-  thicknessController.dispose();
+  _disposeTextControllersAfterSheetClose([thicknessController]);
   return result;
 }
 
@@ -699,16 +699,18 @@ Future<MaterialEntry?> showMaterialEditor(
     },
   );
 
-  nameController.dispose();
-  categoryController.dispose();
-  thermalController.dispose();
-  vaporController.dispose();
-  aliasesController.dispose();
-  tagsController.dispose();
-  manufacturerController.dispose();
-  subcategoryController.dispose();
-  densityController.dispose();
-  notesController.dispose();
+  _disposeTextControllersAfterSheetClose([
+    nameController,
+    categoryController,
+    thermalController,
+    vaporController,
+    aliasesController,
+    tagsController,
+    manufacturerController,
+    subcategoryController,
+    densityController,
+    notesController,
+  ]);
   return result;
 }
 
@@ -1116,11 +1118,23 @@ Future<MaterialFilterState?> showMaterialAdvancedFilters(
     },
   );
 
-  lambdaMinController.dispose();
-  lambdaMaxController.dispose();
-  vaporMinController.dispose();
-  vaporMaxController.dispose();
+  _disposeTextControllersAfterSheetClose([
+    lambdaMinController,
+    lambdaMaxController,
+    vaporMinController,
+    vaporMaxController,
+  ]);
   return result;
+}
+
+void _disposeTextControllersAfterSheetClose(
+  Iterable<TextEditingController> controllers,
+) {
+  Future<void>.delayed(const Duration(milliseconds: 300), () {
+    for (final controller in controllers) {
+      controller.dispose();
+    }
+  });
 }
 
 void _upsertMaterialEntry(

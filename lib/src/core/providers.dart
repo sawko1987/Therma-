@@ -10,6 +10,7 @@ import 'models/heating_economics.dart';
 import 'models/project.dart';
 import 'models/report.dart';
 import 'models/ventilation_settings.dart';
+import 'models/versioning.dart';
 import 'services/asset_catalog_repository.dart';
 import 'services/building_heat_loss_service.dart';
 import 'services/drift_project_repository.dart';
@@ -116,7 +117,8 @@ class ProjectEditor {
       climatePointId: climatePointId,
       roomPreset: RoomPreset.livingRoom,
       constructions: const [],
-      houseModel: HouseModel.bootstrapFromConstructions(const []),
+      houseModel: HouseModel.emptyWallGraph(),
+      datasetVersion: currentDatasetVersion,
     );
     final object = DesignObject(
       id: 'object-$now',
@@ -210,6 +212,61 @@ class ProjectEditor {
     await saveProject(
       project.copyWith(customRoomShapeTemplates: nextTemplates),
     );
+  }
+
+  Future<Project> syncWallPlan({
+    required List<PlanNode> nodes,
+    required List<PlanWall> walls,
+    required List<PlanWallOpening> openings,
+  }) async {
+    final project = await _requireProject();
+    final updated = _ref.read(projectEditingServiceProvider).syncWallPlan(
+          project,
+          nodes: nodes,
+          walls: walls,
+          openings: openings,
+        );
+    await saveProject(updated);
+    return updated;
+  }
+
+  Future<Project> assignConstructionToPlanWalls(
+    Set<String> wallIds,
+    String constructionId,
+  ) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .assignConstructionToPlanWalls(project, wallIds, constructionId);
+    await saveProject(updated);
+    return updated;
+  }
+
+  Future<Project> addPlanWallOpening(PlanWallOpening opening) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addPlanWallOpening(project, opening);
+    await saveProject(updated);
+    return updated;
+  }
+
+  Future<Project> updatePlanWallOpening(PlanWallOpening opening) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updatePlanWallOpening(project, opening);
+    await saveProject(updated);
+    return updated;
+  }
+
+  Future<Project> deletePlanWallOpening(String openingId) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .deletePlanWallOpening(project, openingId);
+    await saveProject(updated);
+    return updated;
   }
 
   Future<Project> configureRoomEnvelope(

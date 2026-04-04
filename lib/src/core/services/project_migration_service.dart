@@ -95,6 +95,9 @@ class ProjectMigrationService {
 
   HouseModel _migrateHouseModel(Project project) {
     final houseModel = project.houseModel;
+    if (houseModel.planModelKind == HousePlanModelKind.wallGraph) {
+      return houseModel;
+    }
     if (houseModel.elements.isEmpty) {
       return HouseModel.bootstrapFromConstructions(project.constructions);
     }

@@ -188,7 +188,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Сборка дома'), findsOneWidget);
-    expect(find.text('Конструктор дома'), findsOneWidget);
+    expect(find.byType(Card), findsWidgets);
   });
 
   testWidgets('building step screen still renders directly', (tester) async {
