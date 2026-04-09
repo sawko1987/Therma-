@@ -30,19 +30,21 @@ void main() {
     expect(find.text('Legacy-план заблокирован'), findsNothing);
   });
 
-  testWidgets('legacy room cell projects are blocked in planner', (
-    tester,
-  ) async {
-    await _pumpHouseScheme(
-      tester,
-      projectRepository: FakeProjectRepository(projects: [buildTestProject()]),
-    );
+  testWidgets(
+    'legacy room cell projects open wall editor overview after migration',
+    (tester) async {
+      await _pumpHouseScheme(
+        tester,
+        projectRepository: FakeProjectRepository(
+          projects: [buildTestProject()],
+        ),
+      );
 
-    await _scrollToLegacyBlock(tester);
-
-    expect(find.text('Legacy-план заблокирован'), findsOneWidget);
-    expect(find.text('Новый контур'), findsNothing);
-  });
+      await _scrollToPlanner(tester);
+      expect(find.text('Legacy-план заблокирован'), findsNothing);
+      expect(find.text('Новый контур'), findsOneWidget);
+    },
+  );
 
   testWidgets('drawing a closed contour creates a room and walls', (
     tester,
@@ -312,15 +314,6 @@ Future<void> _pumpEditorScreen(
     ),
   );
 
-  await tester.pumpAndSettle();
-}
-
-Future<void> _scrollToLegacyBlock(WidgetTester tester) async {
-  await tester.scrollUntilVisible(
-    find.text('Legacy-план заблокирован'),
-    200,
-    scrollable: find.byType(Scrollable).first,
-  );
   await tester.pumpAndSettle();
 }
 

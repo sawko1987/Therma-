@@ -156,6 +156,7 @@ class WallGraphPreview extends StatelessWidget {
       project: project,
       selectedRoomId: null,
       selectedWallIds: const {},
+      selectedNodeId: null,
       draftPoints: const [],
       canvasKey: const ValueKey('wall-graph-preview-canvas'),
       onCanvasTapDown: null,
@@ -163,6 +164,9 @@ class WallGraphPreview extends StatelessWidget {
       onWallTap: null,
       onWallLongPress: null,
       onWallDrag: null,
+      onNodeTap: null,
+      onNodeDrag: null,
+      gridStepMeters: 0.2,
     );
 
     return ClipRRect(
@@ -222,12 +226,16 @@ class WallGraphEditor extends ConsumerStatefulWidget {
 class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
   final TextEditingController _roomTitleController = TextEditingController();
   final TextEditingController _roomHeightController = TextEditingController();
+  static const List<double> _availableGridStepsMeters = [0.1, 0.2, 0.5];
 
   late bool _drawMode = widget.startInDrawMode;
   List<Offset> _draftPoints = const [];
   String? _selectedRoomId;
   String? _selectedWallId;
+  String? _selectedNodeId;
   bool _multiSelectMode = false;
+  bool _orthogonalConstraint = true;
+  double _gridStepMeters = 0.2;
   final Set<String> _selectedWallIds = {};
   RoomKind _selectedRoomKind = RoomKind.livingRoom;
   String? _selectedFloorConstructionId;
@@ -294,6 +302,12 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
           (wallId) =>
               !updated.houseModel.planWalls.any((item) => item.id == wallId),
         );
+        _selectedNodeId =
+            updated.houseModel.planNodes.any(
+              (item) => item.id == _selectedNodeId,
+            )
+            ? _selectedNodeId
+            : null;
       });
     } catch (error) {
       if (!mounted) {
@@ -313,6 +327,7 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
       }
       _selectedRoomId = null;
       _selectedWallId = null;
+      _selectedNodeId = null;
       _selectedWallIds.clear();
       _multiSelectMode = false;
     });
@@ -337,15 +352,17 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
       }
       final last = _draftPoints.last;
       var next = snapped;
-      final dx = (snapped.dx - last.dx).abs();
-      final dy = (snapped.dy - last.dy).abs();
-      if (dx >= dy) {
-        next = Offset(snapped.dx, last.dy);
-      } else {
-        next = Offset(last.dx, snapped.dy);
+      if (_orthogonalConstraint) {
+        final dx = (snapped.dx - last.dx).abs();
+        final dy = (snapped.dy - last.dy).abs();
+        if (dx >= dy) {
+          next = Offset(snapped.dx, last.dy);
+        } else {
+          next = Offset(last.dx, snapped.dy);
+        }
       }
       if (_draftPoints.length >= 3 &&
-          (next - _draftPoints.first).distance <= roomLayoutSnapStepMeters) {
+          (next - _draftPoints.first).distance <= _gridStepMeters * 1.5) {
         next = _draftPoints.first;
       }
       if (next == last) {
@@ -359,9 +376,13 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
     const xPadding = _WallGraphCanvas.canvasPadding;
     const yPadding = _WallGraphCanvas.canvasPadding;
     const ppm = _WallGraphCanvas.pixelsPerMeter;
-    final xMeters = snapToStep((localPosition.dx - xPadding) / ppm);
-    final yMeters = snapToStep((localPosition.dy - yPadding) / ppm);
+    final xMeters = _snapToGrid((localPosition.dx - xPadding) / ppm);
+    final yMeters = _snapToGrid((localPosition.dy - yPadding) / ppm);
     return Offset(math.max(0, xMeters), math.max(0, yMeters));
+  }
+
+  double _snapToGrid(double value) {
+    return (value / _gridStepMeters).round() * _gridStepMeters;
   }
 
   Future<void> _commitContour() async {
@@ -433,8 +454,10 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
       endYMeters: end.yMeters,
     ).normalized();
     final deltaMeters = segment.isHorizontal
-        ? snapToStep(details.delta.dy / _WallGraphCanvas.pixelsPerMeter)
-        : snapToStep(details.delta.dx / _WallGraphCanvas.pixelsPerMeter);
+        ? _snapToGrid(details.delta.dy / _WallGraphCanvas.pixelsPerMeter)
+        : segment.isVertical
+        ? _snapToGrid(details.delta.dx / _WallGraphCanvas.pixelsPerMeter)
+        : 0.0;
     if (deltaMeters == 0) {
       return;
     }
@@ -654,6 +677,7 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
     setState(() {
       _selectedRoomId = room.id;
       _selectedWallId = null;
+      _selectedNodeId = null;
       if (!_multiSelectMode) {
         _selectedWallIds.clear();
       }
@@ -675,6 +699,7 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
     setState(() {
       _selectedWallId = wallId;
       _selectedRoomId = null;
+      _selectedNodeId = null;
       if (_multiSelectMode) {
         if (_selectedWallIds.contains(wallId)) {
           _selectedWallIds.remove(wallId);
@@ -687,6 +712,106 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
           ..add(wallId);
       }
     });
+  }
+
+  void _selectNode(String nodeId) {
+    setState(() {
+      _selectedNodeId = nodeId;
+      _selectedRoomId = null;
+      _selectedWallId = null;
+      if (!_multiSelectMode) {
+        _selectedWallIds.clear();
+      }
+    });
+  }
+
+  Future<void> _moveNode(String nodeId, DragUpdateDetails details) async {
+    final dx = _snapToGrid(details.delta.dx / _WallGraphCanvas.pixelsPerMeter);
+    final dy = _snapToGrid(details.delta.dy / _WallGraphCanvas.pixelsPerMeter);
+    if (dx == 0 && dy == 0) {
+      return;
+    }
+    final nextNodes = [
+      for (final node in _nodes)
+        if (node.id == nodeId)
+          node.copyWith(
+            xMeters: math.max(0, node.xMeters + dx),
+            yMeters: math.max(0, node.yMeters + dy),
+          )
+        else
+          node,
+    ];
+    await _saveWallPlan(nodes: nextNodes, walls: _walls, openings: _openings);
+  }
+
+  Future<void> _splitSelectedWall() async {
+    final wall = _selectedWall;
+    if (wall == null) {
+      return;
+    }
+    if (_openings.any((item) => item.wallId == wall.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Нельзя разрезать стену с проёмами. Сначала удалите проёмы.',
+          ),
+        ),
+      );
+      return;
+    }
+    final start = _nodeMap[wall.startNodeId];
+    final end = _nodeMap[wall.endNodeId];
+    if (start == null || end == null) {
+      return;
+    }
+    final midpoint = Offset(
+      _snapToGrid((start.xMeters + end.xMeters) / 2),
+      _snapToGrid((start.yMeters + end.yMeters) / 2),
+    );
+    final midpointKey = '${midpoint.dx}:${midpoint.dy}';
+    final nodeIdByKey = {
+      for (final node in _nodes) '${node.xMeters}:${node.yMeters}': node.id,
+    };
+    var midpointId = nodeIdByKey[midpointKey];
+    final nextNodes = [..._nodes];
+    if (midpointId == null) {
+      midpointId = 'plan-node-${DateTime.now().microsecondsSinceEpoch}-split';
+      nextNodes.add(
+        PlanNode(id: midpointId, xMeters: midpoint.dx, yMeters: midpoint.dy),
+      );
+    }
+    if (midpointId == wall.startNodeId || midpointId == wall.endNodeId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Слишком короткая стена для разреза на текущем шаге сетки.',
+          ),
+        ),
+      );
+      return;
+    }
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final nextWalls = <PlanWall>[
+      for (final item in _walls)
+        if (item.id != wall.id) item,
+      PlanWall(
+        id: '${wall.id}-a-$timestamp',
+        startNodeId: wall.startNodeId,
+        endNodeId: midpointId,
+        constructionId: wall.constructionId,
+      ),
+      PlanWall(
+        id: '${wall.id}-b-$timestamp',
+        startNodeId: midpointId,
+        endNodeId: wall.endNodeId,
+        constructionId: wall.constructionId,
+      ),
+    ];
+    await _saveWallPlan(
+      nodes: nextNodes,
+      walls: nextWalls,
+      openings: _openings,
+    );
   }
 
   @override
@@ -740,8 +865,56 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
           ],
         ),
         const SizedBox(height: 8),
-        const Text(
-          'План строится стенами. Замкнутый ортогональный контур образует помещение. Тап по помещению редактирует его параметры, тап по стене выбирает стену, долгий тап включает мультивыбор.',
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ChoiceChip(
+              key: const ValueKey('wall-graph-orthogonal-mode-chip'),
+              label: const Text('90°'),
+              selected: _orthogonalConstraint,
+              onSelected: (value) {
+                if (!value) {
+                  return;
+                }
+                setState(() => _orthogonalConstraint = true);
+              },
+            ),
+            ChoiceChip(
+              key: const ValueKey('wall-graph-free-angle-mode-chip'),
+              label: const Text('Свободный угол'),
+              selected: !_orthogonalConstraint,
+              onSelected: (value) {
+                if (!value) {
+                  return;
+                }
+                setState(() => _orthogonalConstraint = false);
+              },
+            ),
+            DropdownButton<double>(
+              key: const ValueKey('wall-graph-grid-step-dropdown'),
+              value: _gridStepMeters,
+              items: [
+                for (final step in _availableGridStepsMeters)
+                  DropdownMenuItem(
+                    value: step,
+                    child: Text('Сетка ${step.toStringAsFixed(1)} м'),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _gridStepMeters = value);
+                }
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'План строится стенами. Замкнутый контур образует помещение. '
+          'Тап по помещению редактирует параметры, тап по стене выбирает стену, '
+          'долгий тап включает мультивыбор, узлы можно перетаскивать.',
         ),
         const SizedBox(height: 16),
         ClipRRect(
@@ -768,16 +941,31 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
                     _multiSelectMode = true;
                     _selectedWallId = wallId;
                     _selectedWallIds.add(wallId);
+                    _selectedNodeId = null;
                     _selectedRoomId = null;
                   });
                 },
                 onWallDrag: (wall) => !_multiSelectMode
                     ? (details) => _moveWall(wall, details)
                     : null,
+                onNodeTap: _selectNode,
+                onNodeDrag: (nodeId) =>
+                    (details) => _moveNode(nodeId, details),
+                selectedNodeId: _selectedNodeId,
+                gridStepMeters: _gridStepMeters,
               ),
             ),
           ),
         ),
+        if (_selectedNodeId != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Выбран узел: $_selectedNodeId',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
         if (_selectedWallIds.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text(
@@ -821,6 +1009,11 @@ class _WallGraphEditorState extends ConsumerState<WallGraphEditor> {
                   key: const ValueKey('wall-graph-add-door-button'),
                   onPressed: () => _addOpeningToSelectedWall(OpeningKind.door),
                   child: const Text('Добавить дверь'),
+                ),
+                OutlinedButton(
+                  key: const ValueKey('wall-graph-split-wall-button'),
+                  onPressed: _splitSelectedWall,
+                  child: const Text('Разрезать стену'),
                 ),
                 OutlinedButton(
                   key: const ValueKey('wall-graph-delete-wall-button'),
@@ -936,12 +1129,16 @@ class _WallGraphCanvas extends StatelessWidget {
     required this.project,
     required this.selectedRoomId,
     required this.selectedWallIds,
+    required this.selectedNodeId,
     required this.draftPoints,
     required this.onCanvasTapDown,
     required this.onRoomTap,
     required this.onWallTap,
     required this.onWallLongPress,
     required this.onWallDrag,
+    required this.onNodeTap,
+    required this.onNodeDrag,
+    required this.gridStepMeters,
     this.canvasKey = const ValueKey('wall-graph-canvas'),
   });
 
@@ -954,12 +1151,16 @@ class _WallGraphCanvas extends StatelessWidget {
   final Project project;
   final String? selectedRoomId;
   final Set<String> selectedWallIds;
+  final String? selectedNodeId;
   final List<Offset> draftPoints;
   final GestureTapDownCallback? onCanvasTapDown;
   final ValueChanged<Room>? onRoomTap;
   final ValueChanged<String>? onWallTap;
   final ValueChanged<String>? onWallLongPress;
   final GestureDragUpdateCallback? Function(PlanWall wall)? onWallDrag;
+  final ValueChanged<String>? onNodeTap;
+  final GestureDragUpdateCallback? Function(String nodeId)? onNodeDrag;
+  final double gridStepMeters;
   final Key canvasKey;
 
   Map<String, PlanNode> get _nodeMap => {
@@ -1020,9 +1221,10 @@ class _WallGraphCanvas extends StatelessWidget {
             children: [
               CustomPaint(
                 size: Size(canvasWidth, canvasHeight),
-                painter: const _WallGridPainter(
+                painter: _WallGridPainter(
                   pixelsPerMeter: pixelsPerMeter,
                   canvasPadding: canvasPadding,
+                  gridStepMeters: gridStepMeters,
                 ),
               ),
               for (final room in project.houseModel.rooms)
@@ -1064,6 +1266,15 @@ class _WallGraphCanvas extends StatelessWidget {
                       ? null
                       : () => onWallLongPress!(wall.id),
                   onDrag: onWallDrag?.call(wall),
+                ),
+              for (final node in project.houseModel.planNodes)
+                _WallNodeWidget(
+                  node: node,
+                  selected: selectedNodeId == node.id,
+                  pixelsPerMeter: pixelsPerMeter,
+                  canvasPadding: canvasPadding,
+                  onTap: onNodeTap == null ? null : () => onNodeTap!(node.id),
+                  onDrag: onNodeDrag?.call(node.id),
                 ),
               if (draftPoints.isNotEmpty)
                 CustomPaint(
@@ -1119,34 +1330,39 @@ class _WallGridPainter extends CustomPainter {
   const _WallGridPainter({
     required this.pixelsPerMeter,
     required this.canvasPadding,
+    required this.gridStepMeters,
   });
 
   final double pixelsPerMeter;
   final double canvasPadding;
+  final double gridStepMeters;
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = const Color(0xFFD8D0C0)
       ..strokeWidth = 1;
+    final stepPx = pixelsPerMeter * gridStepMeters;
     for (
       double x = canvasPadding;
       x <= size.width - canvasPadding;
-      x += pixelsPerMeter / 2
+      x += stepPx
     ) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
     for (
       double y = canvasPadding;
       y <= size.height - canvasPadding;
-      y += pixelsPerMeter / 2
+      y += stepPx
     ) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _WallGridPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _WallGridPainter oldDelegate) {
+    return oldDelegate.gridStepMeters != gridStepMeters;
+  }
 }
 
 class _DraftContourPainter extends CustomPainter {
@@ -1239,6 +1455,54 @@ class _WallSegmentWidget extends StatelessWidget {
                   ? const Color(0xFFFFE7C2)
                   : const Color(0xFF5A3116),
               width: selected ? 2 : 1.2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WallNodeWidget extends StatelessWidget {
+  const _WallNodeWidget({
+    required this.node,
+    required this.selected,
+    required this.pixelsPerMeter,
+    required this.canvasPadding,
+    required this.onTap,
+    required this.onDrag,
+  });
+
+  final PlanNode node;
+  final bool selected;
+  final double pixelsPerMeter;
+  final double canvasPadding;
+  final VoidCallback? onTap;
+  final GestureDragUpdateCallback? onDrag;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 14.0;
+    final centerX = canvasPadding + node.xMeters * pixelsPerMeter;
+    final centerY = canvasPadding + node.yMeters * pixelsPerMeter;
+    return Positioned(
+      left: centerX - size / 2,
+      top: centerY - size / 2,
+      width: size,
+      height: size,
+      child: GestureDetector(
+        key: ValueKey('wall-graph-node-${node.id}'),
+        onTap: onTap,
+        onPanUpdate: onDrag,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: selected ? const Color(0xFF245B8E) : const Color(0xFFF5F1E7),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFFEFF5FF)
+                  : const Color(0xFF36506A),
+              width: selected ? 2 : 1.5,
             ),
           ),
         ),

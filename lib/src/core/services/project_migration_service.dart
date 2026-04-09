@@ -94,7 +94,23 @@ class ProjectMigrationService {
   }
 
   HouseModel _migrateHouseModel(Project project) {
+    // Плановый rewrite редактора контуров:
+    // при переходе на новый dataset все существующие планы очищаются,
+    // чтобы проект гарантированно открывался в новом контурном режиме.
     final houseModel = project.houseModel;
+    if (project.datasetVersion != currentDatasetVersion) {
+      return houseModel.copyWith(
+        planModelKind: HousePlanModelKind.wallGraph,
+        planNodes: const [],
+        planWalls: const [],
+        planWallOpenings: const [],
+        rooms: const [],
+        elements: const [],
+        openings: const [],
+        heatingDevices: const [],
+        clearInternalPartitionConstructionId: true,
+      );
+    }
     if (houseModel.planModelKind == HousePlanModelKind.wallGraph) {
       return houseModel;
     }

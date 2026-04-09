@@ -622,29 +622,23 @@ class HouseSchemeScreen extends ConsumerWidget {
                   return const Text('Активный проект не найден.');
                 }
                 final effectiveProject = _resolveProject(project);
-                final isLegacyPlan =
-                    effectiveProject.houseModel.planModelKind ==
-                    HousePlanModelKind.legacyRooms;
                 return Column(
                   children: [
-                    if (isLegacyPlan)
-                      const _LegacyPlanBlockedCard()
-                    else
-                      WallGraphOverviewCard(
+                    WallGraphOverviewCard(
+                      project: effectiveProject,
+                      onCreateContour: () => _openWallGraphEditor(
+                        context,
                         project: effectiveProject,
-                        onCreateContour: () => _openWallGraphEditor(
-                          context,
-                          project: effectiveProject,
-                          catalog: catalog,
-                          startInDrawMode: true,
-                        ),
-                        onOpenEditor: () => _openWallGraphEditor(
-                          context,
-                          project: effectiveProject,
-                          catalog: catalog,
-                          startInDrawMode: false,
-                        ),
+                        catalog: catalog,
+                        startInDrawMode: true,
                       ),
+                      onOpenEditor: () => _openWallGraphEditor(
+                        context,
+                        project: effectiveProject,
+                        catalog: catalog,
+                        startInDrawMode: false,
+                      ),
+                    ),
                     if (showConstructionsCard) ...[
                       const SizedBox(height: 16),
                       _ConstructionsCard(
@@ -727,34 +721,6 @@ class _StatusCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
-      ),
-    );
-  }
-}
-
-class _LegacyPlanBlockedCard extends StatelessWidget {
-  const _LegacyPlanBlockedCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Legacy-план заблокирован',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Старый room/cell редактор больше не используется. Этот проект создан в legacy-формате и не открывается в новом wall-first редакторе. Создайте новый проект для работы с новым построением плана.',
-            ),
-          ],
-        ),
       ),
     );
   }

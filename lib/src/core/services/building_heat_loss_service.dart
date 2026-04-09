@@ -74,7 +74,8 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         roomVentilationAirFlowById.update(
           room.id,
           (value) =>
-              value + setting.airExchangeRate * ventilationResult.volumeCubicMeters,
+              value +
+              setting.airExchangeRate * ventilationResult.volumeCubicMeters,
         );
         continue;
       }
@@ -125,7 +126,8 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       final roomVolumeCubicMeters = room.areaSquareMeters * room.heightMeters;
       final airChangesPerHour = roomVolumeCubicMeters <= 0
           ? 0.0
-          : (roomVentilationAirFlowById[room.id] ?? 0.0) / roomVolumeCubicMeters;
+          : (roomVentilationAirFlowById[room.id] ?? 0.0) /
+                roomVolumeCubicMeters;
 
       for (final element in roomElements) {
         final construction = constructionMap[element.constructionId];
@@ -175,8 +177,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         );
         final totalResistance =
             linkedGroundFloorResult?.totalResistance ?? result!.totalResistance;
-        final opaqueHeatLoss =
-            deltaTemperature / totalResistance * opaqueArea;
+        final opaqueHeatLoss = deltaTemperature / totalResistance * opaqueArea;
         final openingHeatLoss = elementOpenings.fold<double>(
           0,
           (sum, item) =>
@@ -186,7 +187,8 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
                   item.areaSquareMeters,
         );
         final thermalBridgeLengthMeters = switch (element.elementKind) {
-          ConstructionElementKind.wall => element.lineSegment?.lengthMeters ?? 0,
+          ConstructionElementKind.wall =>
+            element.lineSegment?.lengthMeters ?? 0,
           ConstructionElementKind.floor ||
           ConstructionElementKind.roof ||
           ConstructionElementKind.ceiling =>
@@ -386,8 +388,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
               ? secondaryRoom
               : primaryRoom;
           final deltaTemperature =
-              warmerRoom.insideAirTemperature -
-              coolerRoom.insideAirTemperature;
+              warmerRoom.insideAirTemperature - coolerRoom.insideAirTemperature;
           if (deltaTemperature <= 0) {
             continue;
           }
@@ -603,44 +604,58 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
     Map<String, Room> roomByCell,
   ) {
     final adjacent = <String, Room>{};
-    if (segment.isHorizontal) {
-      final y = _gridIndex(segment.startYMeters);
-      for (
-        var x = _gridIndex(segment.startXMeters);
-        x < _gridIndex(segment.endXMeters);
-        x++
-      ) {
-        final above = roomByCell['$x:$y'];
-        final below = roomByCell['$x:${y - 1}'];
-        if (above != null) {
-          adjacent[above.id] = above;
-        }
-        if (below != null) {
-          adjacent[below.id] = below;
-        }
-      }
-      return adjacent.values.toList(growable: false);
+    final length = segment.lengthMeters;
+    if (length <= 0.0001) {
+      return const [];
     }
-    final x = _gridIndex(segment.startXMeters);
-    for (
-      var y = _gridIndex(segment.startYMeters);
-      y < _gridIndex(segment.endYMeters);
-      y++
-    ) {
-      final right = roomByCell['$x:$y'];
-      final left = roomByCell['${x - 1}:$y'];
-      if (right != null) {
-        adjacent[right.id] = right;
+    final dx = (segment.endXMeters - segment.startXMeters) / length;
+    final dy = (segment.endYMeters - segment.startYMeters) / length;
+    final nx = -dy;
+    final ny = dx;
+    const offset = 0.05;
+    final samples = math.max(2, (length / 0.4).ceil());
+
+    for (var index = 0; index < samples; index++) {
+      final t = (index + 0.5) / samples;
+      final px =
+          segment.startXMeters +
+          (segment.endXMeters - segment.startXMeters) * t;
+      final py =
+          segment.startYMeters +
+          (segment.endYMeters - segment.startYMeters) * t;
+      final leftRoom = _roomForPoint(
+        roomByCell: roomByCell,
+        xMeters: px + nx * offset,
+        yMeters: py + ny * offset,
+      );
+      if (leftRoom != null) {
+        adjacent[leftRoom.id] = leftRoom;
       }
-      if (left != null) {
-        adjacent[left.id] = left;
+      final rightRoom = _roomForPoint(
+        roomByCell: roomByCell,
+        xMeters: px - nx * offset,
+        yMeters: py - ny * offset,
+      );
+      if (rightRoom != null) {
+        adjacent[rightRoom.id] = rightRoom;
       }
     }
     return adjacent.values.toList(growable: false);
   }
 
+  Room? _roomForPoint({
+    required Map<String, Room> roomByCell,
+    required double xMeters,
+    required double yMeters,
+  }) {
+    if (xMeters < 0 || yMeters < 0) {
+      return null;
+    }
+    return roomByCell['${_gridIndex(xMeters)}:${_gridIndex(yMeters)}'];
+  }
+
   int _gridIndex(double meters) {
-    return (meters / roomLayoutSnapStepMeters).round();
+    return (meters / roomLayoutSnapStepMeters).floor();
   }
 
   String _roomCellKey(RoomLayoutRect cell) {

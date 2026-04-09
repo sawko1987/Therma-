@@ -390,14 +390,10 @@ void main() {
 
       expect(migrated?.datasetVersion, currentDatasetVersion);
       expect(migrated?.migratedFromDatasetVersion, 'seed-2025-12-01');
-      expect(migrated?.houseModel.elements, hasLength(4));
-      expect(
-        migrated?.houseModel.elements.every(
-          (element) => element.lineSegment != null,
-        ),
-        isTrue,
-      );
-      expect(migrated?.houseModel.rooms.single.layout.widthMeters, 4);
+      expect(migrated?.houseModel.planModelKind, HousePlanModelKind.wallGraph);
+      expect(migrated?.houseModel.rooms, isEmpty);
+      expect(migrated?.houseModel.elements, isEmpty);
+      expect(migrated?.houseModel.planWalls, isEmpty);
       expect(storedRow.datasetVersion, currentDatasetVersion);
       expect(storedRow.migratedFromDatasetVersion, 'seed-2025-12-01');
       expect(storedRow.updatedAtEpochMs, 123);
@@ -436,18 +432,17 @@ void main() {
         projects.single.migratedFromDatasetVersion,
         legacyUnversionedDatasetVersion,
       );
-      expect(projects.single.houseModel.elements, hasLength(4));
       expect(
-        projects.single.houseModel.elements.every(
-          (element) => element.lineSegment != null,
-        ),
-        isTrue,
+        projects.single.houseModel.planModelKind,
+        HousePlanModelKind.wallGraph,
       );
+      expect(projects.single.houseModel.rooms, isEmpty);
+      expect(projects.single.houseModel.elements, isEmpty);
+      expect(projects.single.houseModel.planWalls, isEmpty);
       expect(
         projects.single.sourceProjectFormatVersion,
         currentProjectFormatVersion,
       );
-      expect(projects.single.houseModel.rooms.single.layout.widthMeters, 4);
     },
   );
 
@@ -583,7 +578,13 @@ void main() {
       projects.single.migratedFromDatasetVersion,
       legacyUnversionedDatasetVersion,
     );
-    expect(projects.single.houseModel.elements, hasLength(4));
+    expect(
+      projects.single.houseModel.planModelKind,
+      HousePlanModelKind.wallGraph,
+    );
+    expect(projects.single.houseModel.rooms, isEmpty);
+    expect(projects.single.houseModel.elements, isEmpty);
+    expect(projects.single.houseModel.planWalls, isEmpty);
     expect(storedRow.datasetVersion, currentDatasetVersion);
     expect(
       storedRow.migratedFromDatasetVersion,

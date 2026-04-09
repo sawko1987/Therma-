@@ -5,6 +5,8 @@ import '../models/project.dart';
 class WallPlanSyncService {
   const WallPlanSyncService();
 
+  static const double _samplingOffsetMeters = 0.05;
+
   Project syncProject(
     Project project, {
     required List<PlanNode> nodes,
@@ -14,14 +16,15 @@ class WallPlanSyncService {
     final normalizedNodes = _normalizeNodes(nodes);
     final normalizedWalls = _normalizeWalls(project, normalizedNodes, walls);
     final normalizedOpenings = _normalizeOpenings(normalizedWalls, openings);
+
     _validateGraph(normalizedNodes, normalizedWalls);
+
     final derivedRooms = _deriveRooms(
       previousRooms: project.houseModel.rooms,
       nodes: normalizedNodes,
       walls: normalizedWalls,
     );
     final derivedElements = _deriveExteriorWalls(
-      project: project,
       rooms: derivedRooms,
       nodes: normalizedNodes,
       walls: normalizedWalls,
@@ -32,7 +35,7 @@ class WallPlanSyncService {
     );
     final syncedElements = _syncRoomSurfaceElements(
       project: project,
-      rooms: derivedRooms,
+      rooms: derivedRooms.map((item) => item.room).toList(growable: false),
       derivedElements: derivedElements,
     );
 
@@ -42,7 +45,7 @@ class WallPlanSyncService {
         planNodes: normalizedNodes,
         planWalls: normalizedWalls,
         planWallOpenings: normalizedOpenings,
-        rooms: derivedRooms,
+        rooms: derivedRooms.map((item) => item.room).toList(growable: false),
         elements: syncedElements,
         openings: derivedOpenings,
         clearInternalPartitionConstructionId: true,
@@ -54,8 +57,8 @@ class WallPlanSyncService {
     return [
       for (final node in nodes)
         node.copyWith(
-          xMeters: _snap(math.max(0, node.xMeters)),
-          yMeters: _snap(math.max(0, node.yMeters)),
+          xMeters: _roundToPrecision(math.max(0, node.xMeters)),
+          yMeters: _roundToPrecision(math.max(0, node.yMeters)),
         ),
     ];
   }
@@ -70,11 +73,13 @@ class WallPlanSyncService {
         .where((item) => item.elementKind == ConstructionElementKind.wall)
         .map((item) => item.id)
         .toSet();
+
     return [
       for (final wall in walls)
         if (nodeIds.contains(wall.startNodeId) &&
             nodeIds.contains(wall.endNodeId) &&
-            wallConstructionIds.contains(wall.constructionId))
+            wallConstructionIds.contains(wall.constructionId) &&
+            wall.startNodeId != wall.endNodeId)
           wall,
     ];
   }
@@ -91,91 +96,81 @@ class WallPlanSyncService {
   }
 
   void _validateGraph(List<PlanNode> nodes, List<PlanWall> walls) {
+    if (walls.isEmpty) {
+      return;
+    }
+
     final nodeMap = {for (final node in nodes) node.id: node};
-    final seenWalls = <String>{};
-    final segments = <String, HouseLineSegment>{};
+    final seenWallIds = <String>{};
+    final seenSegments = <String>{};
+    final segmentByWallId = <String, HouseLineSegment>{};
+    final degreeByNodeId = <String, int>{};
+
     for (final wall in walls) {
-      if (!seenWalls.add(wall.id)) {
+      if (!seenWallIds.add(wall.id)) {
         throw StateError('Стена ${wall.id} дублируется в плане.');
       }
+
       final start = nodeMap[wall.startNodeId];
       final end = nodeMap[wall.endNodeId];
       if (start == null || end == null) {
         throw StateError('Стена ${wall.id} ссылается на несуществующий узел.');
       }
+
       final segment = HouseLineSegment(
         startXMeters: start.xMeters,
         startYMeters: start.yMeters,
         endXMeters: end.xMeters,
         endYMeters: end.yMeters,
-      ).normalized();
-      if ((!segment.isHorizontal && !segment.isVertical) ||
-          segment.lengthMeters <= 0) {
-        throw StateError('Поддерживаются только горизонтальные и вертикальные стены.');
+      );
+      if (segment.lengthMeters <= 0.0001) {
+        throw StateError('Стена ${wall.id} имеет нулевую длину.');
       }
-      final segmentKey = _segmentKey(segment);
-      if (segments.containsKey(segmentKey)) {
+
+      final key = _segmentKey(segment);
+      if (!seenSegments.add(key)) {
         throw StateError('Две стены не могут лежать на одном сегменте.');
       }
-      segments[segmentKey] = segment;
+      segmentByWallId[wall.id] = segment;
+
+      degreeByNodeId.update(
+        wall.startNodeId,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
+      degreeByNodeId.update(
+        wall.endNodeId,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
     }
 
-    final segmentList = segments.values.toList(growable: false);
-    for (var i = 0; i < segmentList.length; i++) {
-      for (var j = i + 1; j < segmentList.length; j++) {
-        if (_segmentsConflict(segmentList[i], segmentList[j])) {
-          throw StateError('Стены не должны пересекаться вне общих узлов.');
+    final segments = segmentByWallId.entries.toList(growable: false);
+    for (var i = 0; i < segments.length; i++) {
+      for (var j = i + 1; j < segments.length; j++) {
+        final a = segments[i].value;
+        final b = segments[j].value;
+        if (!_segmentsIntersect(a, b)) {
+          continue;
         }
+        if (_segmentsShareEndpoint(a, b)) {
+          continue;
+        }
+        throw StateError('Стены не должны пересекаться вне общих узлов.');
+      }
+    }
+
+    for (final entry in degreeByNodeId.entries) {
+      if (entry.value != 2) {
+        throw StateError(
+          'В узле ${entry.key} сходится ${entry.value} стен(ы). '
+          'Новый контурный режим поддерживает только замкнутые контуры.',
+        );
       }
     }
   }
 
-  bool _segmentsConflict(HouseLineSegment left, HouseLineSegment right) {
-    final a = left.normalized();
-    final b = right.normalized();
-    if (a.isHorizontal && b.isHorizontal && a.startYMeters == b.startYMeters) {
-      final overlapStart = math.max(a.startXMeters, b.startXMeters);
-      final overlapEnd = math.min(a.endXMeters, b.endXMeters);
-      return overlapEnd - overlapStart > 0.0001 &&
-          !_segmentsShareOnlyEndpoint(a, b);
-    }
-    if (a.isVertical && b.isVertical && a.startXMeters == b.startXMeters) {
-      final overlapStart = math.max(a.startYMeters, b.startYMeters);
-      final overlapEnd = math.min(a.endYMeters, b.endYMeters);
-      return overlapEnd - overlapStart > 0.0001 &&
-          !_segmentsShareOnlyEndpoint(a, b);
-    }
-    if (a.isHorizontal && b.isVertical) {
-      final intersects = b.startXMeters > a.startXMeters &&
-          b.startXMeters < a.endXMeters &&
-          a.startYMeters > b.startYMeters &&
-          a.startYMeters < b.endYMeters;
-      return intersects;
-    }
-    if (a.isVertical && b.isHorizontal) {
-      return _segmentsConflict(b, a);
-    }
-    return false;
-  }
-
-  bool _segmentsShareOnlyEndpoint(HouseLineSegment left, HouseLineSegment right) {
-    final points = {
-      '${left.startXMeters}:${left.startYMeters}',
-      '${left.endXMeters}:${left.endYMeters}',
-    };
-    var shared = 0;
-    for (final point in [
-      '${right.startXMeters}:${right.startYMeters}',
-      '${right.endXMeters}:${right.endYMeters}',
-    ]) {
-      if (points.contains(point)) {
-        shared++;
-      }
-    }
-    return shared == 1;
-  }
-
-  List<Room> _deriveRooms({
+  List<_DerivedRoom> _deriveRooms({
     required List<Room> previousRooms,
     required List<PlanNode> nodes,
     required List<PlanWall> walls,
@@ -183,90 +178,83 @@ class WallPlanSyncService {
     if (nodes.isEmpty || walls.isEmpty) {
       return const [];
     }
+
     final nodeMap = {for (final node in nodes) node.id: node};
-    final intSegments = [
-      for (final wall in walls)
-        _segmentToGrid(
-          HouseLineSegment(
-            startXMeters: nodeMap[wall.startNodeId]!.xMeters,
-            startYMeters: nodeMap[wall.startNodeId]!.yMeters,
-            endXMeters: nodeMap[wall.endNodeId]!.xMeters,
-            endYMeters: nodeMap[wall.endNodeId]!.yMeters,
-          ).normalized(),
-        ),
-    ];
-    final maxX = intSegments.fold<int>(0, (sum, item) => math.max(sum, item.maxX));
-    final maxY = intSegments.fold<int>(0, (sum, item) => math.max(sum, item.maxY));
-    final blocked = <String>{};
-    for (final segment in intSegments) {
-      if (segment.isHorizontal) {
-        for (var x = segment.minX; x < segment.maxX; x++) {
-          blocked.add('h:$x:${segment.minY}');
-        }
-      } else {
-        for (var y = segment.minY; y < segment.maxY; y++) {
-          blocked.add('v:${segment.minX}:$y');
-        }
-      }
+    final wallsByNodeId = <String, List<PlanWall>>{};
+    for (final wall in walls) {
+      wallsByNodeId.putIfAbsent(wall.startNodeId, () => []).add(wall);
+      wallsByNodeId.putIfAbsent(wall.endNodeId, () => []).add(wall);
     }
 
-    final visited = <String>{};
-    final outsideQueue = <_GridCell>[_GridCell(-1, -1)];
-    while (outsideQueue.isNotEmpty) {
-      final current = outsideQueue.removeLast();
-      final key = current.key;
-      if (!visited.add(key)) {
+    final loops = <List<RoomGeometryPoint>>[];
+    final visitedWallIds = <String>{};
+
+    for (final seed in walls) {
+      if (visitedWallIds.contains(seed.id)) {
         continue;
       }
-      for (final neighbor in current.neighbors) {
-        if (neighbor.x < -1 ||
-            neighbor.y < -1 ||
-            neighbor.x > maxX ||
-            neighbor.y > maxY) {
-          continue;
-        }
-        if (_isBlocked(current, neighbor, blocked)) {
-          continue;
-        }
-        if (!visited.contains(neighbor.key)) {
-          outsideQueue.add(neighbor);
-        }
-      }
-    }
 
-    final roomRegions = <List<_GridCell>>[];
-    final interiorVisited = <String>{};
-    for (var x = 0; x < maxX; x++) {
-      for (var y = 0; y < maxY; y++) {
-        final cell = _GridCell(x, y);
-        if (visited.contains(cell.key) || !interiorVisited.add(cell.key)) {
-          continue;
+      final loopPoints = <RoomGeometryPoint>[];
+      var currentWall = seed;
+      var currentNodeId = seed.startNodeId;
+      final startNodeId = seed.startNodeId;
+      var guard = 0;
+
+      while (guard < walls.length * 4) {
+        guard++;
+        visitedWallIds.add(currentWall.id);
+
+        final currentNode = nodeMap[currentNodeId]!;
+        if (loopPoints.isEmpty ||
+            loopPoints.last.xMeters != currentNode.xMeters ||
+            loopPoints.last.yMeters != currentNode.yMeters) {
+          loopPoints.add(
+            RoomGeometryPoint(
+              xMeters: currentNode.xMeters,
+              yMeters: currentNode.yMeters,
+            ),
+          );
         }
-        final region = <_GridCell>[];
-        final queue = <_GridCell>[cell];
-        while (queue.isNotEmpty) {
-          final current = queue.removeLast();
-          if (visited.contains(current.key)) {
-            continue;
-          }
-          region.add(current);
-          for (final neighbor in current.neighbors) {
-            if (neighbor.x < 0 ||
-                neighbor.y < 0 ||
-                neighbor.x >= maxX ||
-                neighbor.y >= maxY ||
-                visited.contains(neighbor.key) ||
-                _isBlocked(current, neighbor, blocked) ||
-                !interiorVisited.add(neighbor.key)) {
-              continue;
-            }
-            queue.add(neighbor);
-          }
+
+        final nextNodeId = currentWall.startNodeId == currentNodeId
+            ? currentWall.endNodeId
+            : currentWall.startNodeId;
+        final nextNode = nodeMap[nextNodeId]!;
+        loopPoints.add(
+          RoomGeometryPoint(
+            xMeters: nextNode.xMeters,
+            yMeters: nextNode.yMeters,
+          ),
+        );
+
+        currentNodeId = nextNodeId;
+
+        if (currentNodeId == startNodeId) {
+          break;
         }
-        if (region.isNotEmpty) {
-          roomRegions.add(region);
+
+        final nextWalls = wallsByNodeId[currentNodeId]!
+            .where((item) => item.id != currentWall.id)
+            .toList(growable: false);
+        if (nextWalls.length != 1) {
+          throw StateError(
+            'Контур в узле $currentNodeId не может быть продолжен однозначно.',
+          );
         }
+
+        currentWall = nextWalls.single;
       }
+
+      if (loopPoints.length < 4 || currentNodeId != startNodeId) {
+        throw StateError('Каждый контур должен быть замкнут.');
+      }
+
+      final vertices = loopPoints.sublist(0, loopPoints.length - 1);
+      if (_signedArea(vertices).abs() <= 0.001) {
+        continue;
+      }
+
+      loops.add(vertices);
     }
 
     final previousById = {for (final room in previousRooms) room.id: room};
@@ -275,18 +263,16 @@ class WallPlanSyncService {
         room.id: room.effectiveCells.map(_cellKey).toSet(),
     };
     final usedPreviousIds = <String>{};
-    final rooms = <Room>[];
+
+    final derived = <_DerivedRoom>[];
     var nextIndex = 1;
-    for (final region in roomRegions) {
-      final cells = [
-        for (final cell in region)
-          RoomLayoutRect(
-            xMeters: cell.x * roomLayoutSnapStepMeters,
-            yMeters: cell.y * roomLayoutSnapStepMeters,
-            widthMeters: roomLayoutSnapStepMeters,
-            heightMeters: roomLayoutSnapStepMeters,
-          ),
-      ];
+
+    for (final polygon in loops) {
+      final cells = _rasterizePolygonToCells(polygon);
+      if (cells.isEmpty) {
+        continue;
+      }
+
       String? matchedId;
       var bestOverlap = 0;
       final currentKeys = cells.map(_cellKey).toSet();
@@ -300,67 +286,71 @@ class WallPlanSyncService {
           matchedId = entry.key;
         }
       }
+
       final previous = matchedId == null ? null : previousById[matchedId];
       if (matchedId != null) {
         usedPreviousIds.add(matchedId);
       }
-      rooms.add(
-        (previous ??
-                Room(
-                  id: 'room-${DateTime.now().microsecondsSinceEpoch}-$nextIndex',
-                  title: 'Помещение $nextIndex',
-                  kind: RoomKind.livingRoom,
-                  heightMeters: defaultRoomHeightMeters,
-                  layout: RoomLayoutRect.boundingBox(cells),
-                  cells: cells,
-                ))
-            .copyWith(
-              layout: RoomLayoutRect.boundingBox(cells),
-              cells: cells,
-              clearGeometry: true,
-              clearShapeTemplateId: true,
-            ),
-      );
+
+      final room =
+          (previous ??
+                  Room(
+                    id: 'room-${DateTime.now().microsecondsSinceEpoch}-$nextIndex',
+                    title: 'Помещение $nextIndex',
+                    kind: RoomKind.livingRoom,
+                    heightMeters: defaultRoomHeightMeters,
+                    layout: RoomLayoutRect.boundingBox(cells),
+                    cells: cells,
+                  ))
+              .copyWith(
+                layout: RoomLayoutRect.boundingBox(cells),
+                cells: cells,
+                clearGeometry: true,
+                clearShapeTemplateId: true,
+              );
+
+      derived.add(_DerivedRoom(room: room, polygon: polygon));
       nextIndex++;
     }
-    rooms.sort((left, right) {
-      final yCompare = left.layout.yMeters.compareTo(right.layout.yMeters);
+
+    derived.sort((left, right) {
+      final yCompare = left.room.layout.yMeters.compareTo(
+        right.room.layout.yMeters,
+      );
       if (yCompare != 0) {
         return yCompare;
       }
-      return left.layout.xMeters.compareTo(right.layout.xMeters);
+      return left.room.layout.xMeters.compareTo(right.room.layout.xMeters);
     });
-    return rooms;
+
+    return derived;
   }
 
   List<HouseEnvelopeElement> _deriveExteriorWalls({
-    required Project project,
-    required List<Room> rooms,
+    required List<_DerivedRoom> rooms,
     required List<PlanNode> nodes,
     required List<PlanWall> walls,
   }) {
     final nodeMap = {for (final node in nodes) node.id: node};
-    final roomByCell = <String, Room>{};
-    for (final room in rooms) {
-      for (final cell in room.effectiveCells) {
-        roomByCell[_cellKey(cell)] = room;
-      }
-    }
+    final roomById = {for (final item in rooms) item.room.id: item};
     final result = <HouseEnvelopeElement>[];
+
     for (final wall in walls) {
+      final start = nodeMap[wall.startNodeId]!;
+      final end = nodeMap[wall.endNodeId]!;
       final segment = HouseLineSegment(
-        startXMeters: nodeMap[wall.startNodeId]!.xMeters,
-        startYMeters: nodeMap[wall.startNodeId]!.yMeters,
-        endXMeters: nodeMap[wall.endNodeId]!.xMeters,
-        endYMeters: nodeMap[wall.endNodeId]!.yMeters,
+        startXMeters: start.xMeters,
+        startYMeters: start.yMeters,
+        endXMeters: end.xMeters,
+        endYMeters: end.yMeters,
       ).normalized();
-      final adjacentRooms = _roomsAdjacentToSegment(segment, roomByCell)
-          .toSet()
-          .toList(growable: false);
-      if (adjacentRooms.length != 1) {
+
+      final roomId = _singleAdjacentRoomForSegment(segment, rooms);
+      if (roomId == null) {
         continue;
       }
-      final room = adjacentRooms.single;
+      final room = roomById[roomId]!.room;
+
       result.add(
         HouseEnvelopeElement(
           id: 'wall-${wall.id}',
@@ -374,7 +364,63 @@ class WallPlanSyncService {
         ),
       );
     }
+
     return result;
+  }
+
+  String? _singleAdjacentRoomForSegment(
+    HouseLineSegment segment,
+    List<_DerivedRoom> rooms,
+  ) {
+    final length = segment.lengthMeters;
+    if (length <= 0.0001) {
+      return null;
+    }
+
+    final dx = (segment.endXMeters - segment.startXMeters) / length;
+    final dy = (segment.endYMeters - segment.startYMeters) / length;
+    final nx = -dy;
+    final ny = dx;
+
+    final samples = math.max(2, (length / 0.4).ceil());
+    final leftIds = <String>{};
+    final rightIds = <String>{};
+
+    for (var i = 0; i < samples; i++) {
+      final t = (i + 0.5) / samples;
+      final px =
+          segment.startXMeters +
+          (segment.endXMeters - segment.startXMeters) * t;
+      final py =
+          segment.startYMeters +
+          (segment.endYMeters - segment.startYMeters) * t;
+
+      final leftPoint = RoomGeometryPoint(
+        xMeters: px + nx * _samplingOffsetMeters,
+        yMeters: py + ny * _samplingOffsetMeters,
+      );
+      final rightPoint = RoomGeometryPoint(
+        xMeters: px - nx * _samplingOffsetMeters,
+        yMeters: py - ny * _samplingOffsetMeters,
+      );
+
+      for (final room in rooms) {
+        if (_pointInPolygon(leftPoint, room.polygon)) {
+          leftIds.add(room.room.id);
+        }
+        if (_pointInPolygon(rightPoint, room.polygon)) {
+          rightIds.add(room.room.id);
+        }
+      }
+    }
+
+    if (leftIds.length == 1 && rightIds.isEmpty) {
+      return leftIds.first;
+    }
+    if (rightIds.length == 1 && leftIds.isEmpty) {
+      return rightIds.first;
+    }
+    return null;
   }
 
   List<EnvelopeOpening> _deriveOpenings({
@@ -385,6 +431,7 @@ class WallPlanSyncService {
       for (final element in elements)
         if (element.id.startsWith('wall-')) element.id.substring(5): element,
     };
+
     final result = <EnvelopeOpening>[];
     for (final opening in openings) {
       final element = elementByWallId[opening.wallId];
@@ -403,6 +450,7 @@ class WallPlanSyncService {
         ),
       );
     }
+
     return result;
   }
 
@@ -417,113 +465,193 @@ class WallPlanSyncService {
         if (element.elementKind != ConstructionElementKind.wall &&
             roomById.containsKey(element.roomId))
           element.copyWith(
-            areaSquareMeters: element.id == 'auto-floor-${element.roomId}' ||
+            areaSquareMeters:
+                element.id == 'auto-floor-${element.roomId}' ||
                     element.id == 'auto-top-${element.roomId}'
                 ? roomById[element.roomId]!.areaSquareMeters
                 : element.areaSquareMeters,
           ),
     ];
+
     return [...derivedElements, ...retainedManual];
   }
 
-  List<Room> _roomsAdjacentToSegment(
-    HouseLineSegment segment,
-    Map<String, Room> roomByCell,
+  List<RoomLayoutRect> _rasterizePolygonToCells(
+    List<RoomGeometryPoint> polygon,
   ) {
-    final rooms = <Room>[];
-    if (segment.isHorizontal) {
-      final y = _toGrid(segment.startYMeters);
-      for (var x = _toGrid(segment.startXMeters); x < _toGrid(segment.endXMeters); x++) {
-        final above = roomByCell['$x:$y'];
-        final below = roomByCell['$x:${y - 1}'];
-        if (above != null) {
-          rooms.add(above);
-        }
-        if (below != null) {
-          rooms.add(below);
-        }
-      }
-      return rooms;
+    if (polygon.length < 3) {
+      return const [];
     }
-    final x = _toGrid(segment.startXMeters);
-    for (var y = _toGrid(segment.startYMeters); y < _toGrid(segment.endYMeters); y++) {
-      final right = roomByCell['$x:$y'];
-      final left = roomByCell['${x - 1}:$y'];
-      if (right != null) {
-        rooms.add(right);
-      }
-      if (left != null) {
-        rooms.add(left);
-      }
-    }
-    return rooms;
-  }
 
-  _GridSegment _segmentToGrid(HouseLineSegment segment) {
-    return _GridSegment(
-      minX: _toGrid(math.min(segment.startXMeters, segment.endXMeters)),
-      minY: _toGrid(math.min(segment.startYMeters, segment.endYMeters)),
-      maxX: _toGrid(math.max(segment.startXMeters, segment.endXMeters)),
-      maxY: _toGrid(math.max(segment.startYMeters, segment.endYMeters)),
-      isHorizontal: segment.isHorizontal,
+    final minX = polygon.map((item) => item.xMeters).reduce(math.min);
+    final maxX = polygon.map((item) => item.xMeters).reduce(math.max);
+    final minY = polygon.map((item) => item.yMeters).reduce(math.min);
+    final maxY = polygon.map((item) => item.yMeters).reduce(math.max);
+
+    final cells = <String, RoomLayoutRect>{};
+    for (double y = minY; y < maxY - 0.0001; y += roomLayoutSnapStepMeters) {
+      for (double x = minX; x < maxX - 0.0001; x += roomLayoutSnapStepMeters) {
+        final center = RoomGeometryPoint(
+          xMeters: x + roomLayoutSnapStepMeters / 2,
+          yMeters: y + roomLayoutSnapStepMeters / 2,
+        );
+        if (!_pointInPolygon(center, polygon)) {
+          continue;
+        }
+
+        final cell = RoomLayoutRect(
+          xMeters: _snapToRoomStep(x),
+          yMeters: _snapToRoomStep(y),
+          widthMeters: roomLayoutSnapStepMeters,
+          heightMeters: roomLayoutSnapStepMeters,
+        );
+        cells[_cellKey(cell)] = cell;
+      }
+    }
+
+    if (cells.isNotEmpty) {
+      return cells.values.toList(growable: false);
+    }
+
+    final fallback = RoomLayoutRect(
+      xMeters: _snapToRoomStep(minX),
+      yMeters: _snapToRoomStep(minY),
+      widthMeters: roomLayoutSnapStepMeters,
+      heightMeters: roomLayoutSnapStepMeters,
     );
+    return [fallback];
   }
 
-  bool _isBlocked(_GridCell current, _GridCell neighbor, Set<String> blocked) {
-    if (current.x == neighbor.x) {
-      final x = current.x;
-      final y = math.max(current.y, neighbor.y);
-      return blocked.contains('h:$x:$y');
+  bool _pointInPolygon(
+    RoomGeometryPoint point,
+    List<RoomGeometryPoint> polygon,
+  ) {
+    var inside = false;
+    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      final xi = polygon[i].xMeters;
+      final yi = polygon[i].yMeters;
+      final xj = polygon[j].xMeters;
+      final yj = polygon[j].yMeters;
+
+      final intersects =
+          ((yi > point.yMeters) != (yj > point.yMeters)) &&
+          (point.xMeters <
+              (xj - xi) * (point.yMeters - yi) / ((yj - yi) + 1e-9) + xi);
+      if (intersects) {
+        inside = !inside;
+      }
     }
-    final x = math.max(current.x, neighbor.x);
-    final y = current.y;
-    return blocked.contains('v:$x:$y');
+    return inside;
   }
 
-  int _toGrid(double meters) => (meters / roomLayoutSnapStepMeters).round();
+  bool _segmentsIntersect(HouseLineSegment a, HouseLineSegment b) {
+    final p1 = RoomGeometryPoint(
+      xMeters: a.startXMeters,
+      yMeters: a.startYMeters,
+    );
+    final q1 = RoomGeometryPoint(xMeters: a.endXMeters, yMeters: a.endYMeters);
+    final p2 = RoomGeometryPoint(
+      xMeters: b.startXMeters,
+      yMeters: b.startYMeters,
+    );
+    final q2 = RoomGeometryPoint(xMeters: b.endXMeters, yMeters: b.endYMeters);
+
+    final o1 = _orientation(p1, q1, p2);
+    final o2 = _orientation(p1, q1, q2);
+    final o3 = _orientation(p2, q2, p1);
+    final o4 = _orientation(p2, q2, q1);
+
+    if (o1 != o2 && o3 != o4) {
+      return true;
+    }
+
+    if (o1 == 0 && _onSegment(p1, p2, q1)) return true;
+    if (o2 == 0 && _onSegment(p1, q2, q1)) return true;
+    if (o3 == 0 && _onSegment(p2, p1, q2)) return true;
+    if (o4 == 0 && _onSegment(p2, q1, q2)) return true;
+
+    return false;
+  }
+
+  bool _segmentsShareEndpoint(HouseLineSegment a, HouseLineSegment b) {
+    final pointsA = {
+      '${_round(a.startXMeters)}:${_round(a.startYMeters)}',
+      '${_round(a.endXMeters)}:${_round(a.endYMeters)}',
+    };
+    final pointsB = {
+      '${_round(b.startXMeters)}:${_round(b.startYMeters)}',
+      '${_round(b.endXMeters)}:${_round(b.endYMeters)}',
+    };
+    return pointsA.intersection(pointsB).isNotEmpty;
+  }
+
+  int _orientation(
+    RoomGeometryPoint p,
+    RoomGeometryPoint q,
+    RoomGeometryPoint r,
+  ) {
+    final value =
+        (q.yMeters - p.yMeters) * (r.xMeters - q.xMeters) -
+        (q.xMeters - p.xMeters) * (r.yMeters - q.yMeters);
+    if (value.abs() <= 1e-9) {
+      return 0;
+    }
+    return value > 0 ? 1 : 2;
+  }
+
+  bool _onSegment(
+    RoomGeometryPoint p,
+    RoomGeometryPoint q,
+    RoomGeometryPoint r,
+  ) {
+    return q.xMeters <= math.max(p.xMeters, r.xMeters) + 1e-9 &&
+        q.xMeters >= math.min(p.xMeters, r.xMeters) - 1e-9 &&
+        q.yMeters <= math.max(p.yMeters, r.yMeters) + 1e-9 &&
+        q.yMeters >= math.min(p.yMeters, r.yMeters) - 1e-9;
+  }
+
+  double _signedArea(List<RoomGeometryPoint> polygon) {
+    var sum = 0.0;
+    for (var i = 0; i < polygon.length; i++) {
+      final current = polygon[i];
+      final next = polygon[(i + 1) % polygon.length];
+      sum += current.xMeters * next.yMeters - next.xMeters * current.yMeters;
+    }
+    return sum / 2;
+  }
 
   String _segmentKey(HouseLineSegment segment) {
-    final normalized = segment.normalized();
-    return '${normalized.startXMeters}:${normalized.startYMeters}:${normalized.endXMeters}:${normalized.endYMeters}';
+    final aX = _roundToPrecision(segment.startXMeters);
+    final aY = _roundToPrecision(segment.startYMeters);
+    final bX = _roundToPrecision(segment.endXMeters);
+    final bY = _roundToPrecision(segment.endYMeters);
+
+    if (aX < bX || (aX == bX && aY <= bY)) {
+      return '${_round(aX)}:${_round(aY)}:${_round(bX)}:${_round(bY)}';
+    }
+    return '${_round(bX)}:${_round(bY)}:${_round(aX)}:${_round(aY)}';
   }
 
   String _cellKey(RoomLayoutRect cell) {
-    return '${cell.xMeters}:${cell.yMeters}:${cell.widthMeters}:${cell.heightMeters}';
+    return '${_round(cell.xMeters)}:${_round(cell.yMeters)}:'
+        '${_round(cell.widthMeters)}:${_round(cell.heightMeters)}';
   }
 
-  double _snap(double value) {
-    return (value / roomLayoutSnapStepMeters).round() * roomLayoutSnapStepMeters;
+  double _roundToPrecision(double value) {
+    return (value * 1000).round() / 1000;
   }
+
+  double _snapToRoomStep(double value) {
+    return (value / roomLayoutSnapStepMeters).round() *
+        roomLayoutSnapStepMeters;
+  }
+
+  String _round(double value) => value.toStringAsFixed(4);
 }
 
-class _GridCell {
-  const _GridCell(this.x, this.y);
+class _DerivedRoom {
+  const _DerivedRoom({required this.room, required this.polygon});
 
-  final int x;
-  final int y;
-
-  String get key => '$x:$y';
-
-  List<_GridCell> get neighbors => [
-    _GridCell(x - 1, y),
-    _GridCell(x + 1, y),
-    _GridCell(x, y - 1),
-    _GridCell(x, y + 1),
-  ];
-}
-
-class _GridSegment {
-  const _GridSegment({
-    required this.minX,
-    required this.minY,
-    required this.maxX,
-    required this.maxY,
-    required this.isHorizontal,
-  });
-
-  final int minX;
-  final int minY;
-  final int maxX;
-  final int maxY;
-  final bool isHorizontal;
+  final Room room;
+  final List<RoomGeometryPoint> polygon;
 }
