@@ -13,11 +13,18 @@ Future<Construction?> showConstructionEditor(
   required List<MaterialCatalogEntry> materialEntries,
   Construction? construction,
   CustomMaterialSaver? onSaveCustomMaterial,
+  List<ConstructionElementKind>? allowedElementKinds,
 }) async {
   final titleController = TextEditingController(
     text: construction?.title ?? '',
   );
-  var selectedKind = construction?.elementKind ?? ConstructionElementKind.wall;
+  final availableKinds =
+      (allowedElementKinds == null || allowedElementKinds.isEmpty)
+      ? ConstructionElementKind.values
+      : allowedElementKinds;
+  var selectedKind = availableKinds.contains(construction?.elementKind)
+      ? construction!.elementKind
+      : availableKinds.first;
   var selectedFloorType = construction?.floorConstructionType;
   var selectedCrawlSpaceVentilationMode =
       construction?.crawlSpaceVentilationMode;
@@ -76,7 +83,7 @@ Future<Construction?> showConstructionEditor(
                   decoration: const InputDecoration(
                     labelText: 'Тип конструкции',
                   ),
-                  items: ConstructionElementKind.values
+                  items: availableKinds
                       .map(
                         (item) => DropdownMenuItem(
                           value: item,
@@ -103,9 +110,7 @@ Future<Construction?> showConstructionEditor(
                   DropdownButtonFormField<FloorConstructionType>(
                     initialValue:
                         selectedFloorType ?? FloorConstructionType.onGround,
-                    decoration: const InputDecoration(
-                      labelText: 'Тип пола',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Тип пола'),
                     items: FloorConstructionType.values
                         .map(
                           (item) => DropdownMenuItem(
@@ -125,29 +130,29 @@ Future<Construction?> showConstructionEditor(
                       }
                     },
                   ),
-                  if (selectedFloorType == FloorConstructionType.overCrawlSpace)
-                    ...[
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<CrawlSpaceVentilationMode>(
-                        initialValue: selectedCrawlSpaceVentilationMode,
-                        decoration: const InputDecoration(
-                          labelText: 'Вентиляция техподполья',
-                        ),
-                        items: CrawlSpaceVentilationMode.values
-                            .map(
-                              (item) => DropdownMenuItem(
-                                value: item,
-                                child: Text(item.label),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            selectedCrawlSpaceVentilationMode = value;
-                          });
-                        },
+                  if (selectedFloorType ==
+                      FloorConstructionType.overCrawlSpace) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<CrawlSpaceVentilationMode>(
+                      initialValue: selectedCrawlSpaceVentilationMode,
+                      decoration: const InputDecoration(
+                        labelText: 'Вентиляция техподполья',
                       ),
-                    ],
+                      items: CrawlSpaceVentilationMode.values
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedCrawlSpaceVentilationMode = value;
+                        });
+                      },
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 16),
                 Row(
@@ -316,13 +321,14 @@ Future<Construction?> showConstructionEditor(
                               ),
                               elementKind: selectedKind,
                               layers: List.unmodifiable(layers),
-                              floorConstructionType: selectedKind ==
-                                      ConstructionElementKind.floor
+                              floorConstructionType:
+                                  selectedKind == ConstructionElementKind.floor
                                   ? selectedFloorType ??
                                         FloorConstructionType.onGround
                                   : null,
                               crawlSpaceVentilationMode:
-                                  selectedKind == ConstructionElementKind.floor &&
+                                  selectedKind ==
+                                          ConstructionElementKind.floor &&
                                       selectedFloorType ==
                                           FloorConstructionType.overCrawlSpace
                                   ? selectedCrawlSpaceVentilationMode

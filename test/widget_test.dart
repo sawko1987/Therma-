@@ -126,6 +126,7 @@ void main() {
 
     expect(find.text('Сборка дома'), findsOneWidget);
     expect(find.text('Конструктор дома'), findsOneWidget);
+    expect(find.text('Разделы'), findsOneWidget);
   });
 
   testWidgets('building step screen still renders directly', (tester) async {

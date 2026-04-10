@@ -7,12 +7,19 @@ import '../../../core/models/building_heat_loss.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
-import '../../construction_library/presentation/construction_editor_sheet.dart';
 import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
-import 'floor_plan_geometry.dart';
-import 'widgets/floor_plan_editor_card.dart';
-import 'widgets/heating_devices_card.dart';
+import '../../construction_library/presentation/construction_editor_sheet.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
+import 'widgets/heating_devices_card.dart';
+
+const List<ConstructionElementKind> _allowedExteriorKinds = [
+  ConstructionElementKind.wall,
+  ConstructionElementKind.roof,
+  ConstructionElementKind.floor,
+  ConstructionElementKind.ceiling,
+];
+
+enum _WorkspaceSection { overview, rooms, envelope, heating, constructions }
 
 class HouseSchemeScreen extends ConsumerWidget {
   const HouseSchemeScreen({
@@ -40,12 +47,9 @@ class HouseSchemeScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final room = await _showRoomEditor(
       context,
-      initialLayout: buildNextRoomLayout(project.houseModel.rooms),
+      initialLayout: _buildNextRoomLayout(project.houseModel.rooms),
     );
-    if (!context.mounted) {
-      return;
-    }
-    if (room == null) {
+    if (!context.mounted || room == null) {
       return;
     }
     try {
@@ -62,10 +66,7 @@ class HouseSchemeScreen extends ConsumerWidget {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final updated = await _showRoomEditor(context, room: room);
-    if (!context.mounted) {
-      return;
-    }
-    if (updated == null) {
+    if (!context.mounted || updated == null) {
       return;
     }
     try {
@@ -81,29 +82,10 @@ class HouseSchemeScreen extends ConsumerWidget {
     Room room,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!context.mounted) {
-      return;
-    }
     try {
       await ref.read(projectEditorProvider).deleteRoom(room.id);
     } catch (error) {
       _showError(messenger, error);
-    }
-  }
-
-  Future<String?> _handleUpdateRoomLayout(
-    BuildContext context,
-    WidgetRef ref,
-    String roomId,
-    RoomLayoutRect layout,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ref.read(projectEditorProvider).updateRoomLayout(roomId, layout);
-      return null;
-    } catch (error) {
-      _showError(messenger, error);
-      return _describeError(error);
     }
   }
 
@@ -121,10 +103,7 @@ class HouseSchemeScreen extends ConsumerWidget {
       catalog: catalog,
       roomId: room.id,
     );
-    if (!context.mounted) {
-      return;
-    }
-    if (element == null) {
+    if (!context.mounted || element == null) {
       return;
     }
     try {
@@ -149,10 +128,7 @@ class HouseSchemeScreen extends ConsumerWidget {
       element: element,
       roomId: element.roomId,
     );
-    if (!context.mounted) {
-      return;
-    }
-    if (updated == null) {
+    if (!context.mounted || updated == null) {
       return;
     }
     try {
@@ -168,31 +144,10 @@ class HouseSchemeScreen extends ConsumerWidget {
     HouseEnvelopeElement element,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!context.mounted) {
-      return;
-    }
     try {
       await ref.read(projectEditorProvider).deleteEnvelopeElement(element.id);
     } catch (error) {
       _showError(messenger, error);
-    }
-  }
-
-  Future<String?> _handleUpdateElementWallPlacement(
-    BuildContext context,
-    WidgetRef ref,
-    HouseEnvelopeElement element,
-    EnvelopeWallPlacement wallPlacement,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ref
-          .read(projectEditorProvider)
-          .updateEnvelopeWallPlacement(element.id, wallPlacement);
-      return null;
-    } catch (error) {
-      _showError(messenger, error);
-      return _describeError(error);
     }
   }
 
@@ -203,10 +158,7 @@ class HouseSchemeScreen extends ConsumerWidget {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final opening = await _showOpeningEditor(context, elementId: element.id);
-    if (!context.mounted) {
-      return;
-    }
-    if (opening == null) {
+    if (!context.mounted || opening == null) {
       return;
     }
     try {
@@ -227,10 +179,7 @@ class HouseSchemeScreen extends ConsumerWidget {
       elementId: opening.elementId,
       opening: opening,
     );
-    if (!context.mounted) {
-      return;
-    }
-    if (updated == null) {
+    if (!context.mounted || updated == null) {
       return;
     }
     try {
@@ -246,9 +195,6 @@ class HouseSchemeScreen extends ConsumerWidget {
     EnvelopeOpening opening,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!context.mounted) {
-      return;
-    }
     try {
       await ref.read(projectEditorProvider).deleteOpening(opening.id);
     } catch (error) {
@@ -307,9 +253,6 @@ class HouseSchemeScreen extends ConsumerWidget {
     HeatingDevice heatingDevice,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!context.mounted) {
-      return;
-    }
     try {
       await ref
           .read(projectEditorProvider)
@@ -329,10 +272,7 @@ class HouseSchemeScreen extends ConsumerWidget {
       context,
       catalog: catalog,
     );
-    if (!context.mounted) {
-      return;
-    }
-    if (construction == null) {
+    if (!context.mounted || construction == null) {
       return;
     }
     try {
@@ -354,10 +294,7 @@ class HouseSchemeScreen extends ConsumerWidget {
       catalog: catalog,
       construction: construction,
     );
-    if (!context.mounted) {
-      return;
-    }
-    if (updated == null) {
+    if (!context.mounted || updated == null) {
       return;
     }
     try {
@@ -373,9 +310,6 @@ class HouseSchemeScreen extends ConsumerWidget {
     Construction construction,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!context.mounted) {
-      return;
-    }
     try {
       await ref.read(projectEditorProvider).deleteConstruction(construction.id);
     } catch (error) {
@@ -413,139 +347,75 @@ class HouseSchemeScreen extends ConsumerWidget {
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        children: [
-          _StatusCard(
-            text:
-                statusText ??
-                'Конструктор дома собирает проект сверху вниз: помещения, ограждения, окна/двери и переиспользуемые конструкции. Расчёт конструкции запускается прямо из выбранного ограждения, а сводка дома учитывает чистую площадь и проёмы.',
-          ),
-          if (trailingHeader != null) ...[
-            const SizedBox(height: 16),
-            trailingHeader!,
-          ],
-          const SizedBox(height: 16),
-          summaryAsync.when(
-            data: (summary) => projectAsync.when(
-              data: (project) {
-                if (project == null || summary == null) {
-                  return const Text('Активный проект не найден.');
-                }
-                final effectiveProject = _resolveProject(project);
-                return _SummaryCard(
-                  project: effectiveProject,
-                  summary: summary,
-                  onOpenBuildingHeatLoss: () =>
-                      _handleOpenBuildingHeatLoss(context),
-                );
-              },
-              loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text('Ошибка проекта: $error'),
-            ),
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('Ошибка сводки: $error'),
-          ),
-          const SizedBox(height: 16),
-          catalogAsync.when(
-            data: (catalog) => projectAsync.when(
-              data: (project) {
-                if (project == null) {
-                  return const Text('Активный проект не найден.');
-                }
-                final effectiveProject = _resolveProject(project);
-                return Column(
-                  children: [
-                    _PlanAndRoomsSection(
-                      project: effectiveProject,
-                      catalog: catalog,
-                      summary: summaryAsync.asData?.value,
-                      showHeatingDevices: showHeatingDevices,
-                      onAddRoom: () => _handleAddRoom(context, ref, project),
-                      onUpdateRoomLayout: (roomId, layout) =>
-                          _handleUpdateRoomLayout(context, ref, roomId, layout),
-                      onEditRoom: (room) => _handleEditRoom(context, ref, room),
-                      onDeleteRoom: (room) =>
-                          _handleDeleteRoom(context, ref, room),
-                      onAddElement: (room) => _handleAddElement(
-                        context,
-                        ref,
-                        project,
-                        catalog,
-                        room,
-                      ),
-                      onEditElement: (element) => _handleEditElement(
-                        context,
-                        ref,
-                        project,
-                        catalog,
-                        element,
-                      ),
-                      onUpdateElementWallPlacement: (element, placement) =>
-                          _handleUpdateElementWallPlacement(
-                            context,
-                            ref,
-                            element,
-                            placement,
-                          ),
-                      onDeleteElement: (element) =>
-                          _handleDeleteElement(context, ref, element),
-                      onAddOpening: (element) =>
-                          _handleAddOpening(context, ref, element),
-                      onEditOpening: (opening) =>
-                          _handleEditOpening(context, ref, opening),
-                      onDeleteOpening: (opening) =>
-                          _handleDeleteOpening(context, ref, opening),
-                      onAddHeatingDevice: (room) =>
-                          _handleAddHeatingDevice(context, ref, catalog, room),
-                      onEditHeatingDevice: (heatingDevice) =>
-                          _handleEditHeatingDevice(
-                            context,
-                            ref,
-                            catalog,
-                            heatingDevice,
-                          ),
-                      onDeleteHeatingDevice: (heatingDevice) =>
-                          _handleDeleteHeatingDevice(
-                            context,
-                            ref,
-                            heatingDevice,
-                          ),
-                      onOpenThermocalc: (element) =>
-                          _handleOpenThermocalc(context, ref, element),
+      body: summaryAsync.when(
+        data: (summary) => projectAsync.when(
+          data: (project) {
+            if (project == null || summary == null) {
+              return const Center(child: Text('Активный проект не найден.'));
+            }
+            final effectiveProject = _resolveProject(project);
+            return catalogAsync.when(
+              data: (catalog) => _PlanAndRoomsSection(
+                statusText:
+                    statusText ??
+                    'Конструктор дома собирает проект сверху вниз: помещения, ограждения, окна/двери и переиспользуемые конструкции. Выбор разделов теперь выполняется через левую панель.',
+                trailingHeader: trailingHeader,
+                project: effectiveProject,
+                catalog: catalog,
+                summary: summary,
+                showHeatingDevices: showHeatingDevices,
+                showConstructionsCard: showConstructionsCard,
+                onOpenBuildingHeatLoss: () =>
+                    _handleOpenBuildingHeatLoss(context),
+                onAddRoom: () => _handleAddRoom(context, ref, project),
+                onEditRoom: (room) => _handleEditRoom(context, ref, room),
+                onDeleteRoom: (room) => _handleDeleteRoom(context, ref, room),
+                onAddElement: (room) =>
+                    _handleAddElement(context, ref, project, catalog, room),
+                onEditElement: (element) =>
+                    _handleEditElement(context, ref, project, catalog, element),
+                onDeleteElement: (element) =>
+                    _handleDeleteElement(context, ref, element),
+                onAddOpening: (element) =>
+                    _handleAddOpening(context, ref, element),
+                onEditOpening: (opening) =>
+                    _handleEditOpening(context, ref, opening),
+                onDeleteOpening: (opening) =>
+                    _handleDeleteOpening(context, ref, opening),
+                onAddHeatingDevice: (room) =>
+                    _handleAddHeatingDevice(context, ref, catalog, room),
+                onEditHeatingDevice: (heatingDevice) =>
+                    _handleEditHeatingDevice(
+                      context,
+                      ref,
+                      catalog,
+                      heatingDevice,
                     ),
-                    if (showConstructionsCard) ...[
-                      const SizedBox(height: 16),
-                      _ConstructionsCard(
-                        project: effectiveProject,
-                        catalog: catalog,
-                        onAddConstruction: () =>
-                            _handleAddConstruction(context, ref, catalog),
-                        onEditConstruction: (construction) =>
-                            _handleEditConstruction(
-                              context,
-                              ref,
-                              catalog,
-                              construction,
-                            ),
-                        onDeleteConstruction: (construction) =>
-                            _handleDeleteConstruction(
-                              context,
-                              ref,
-                              construction,
-                            ),
-                      ),
-                    ],
-                  ],
-                );
-              },
-              loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text('Ошибка проекта: $error'),
-            ),
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('Ошибка каталога: $error'),
-          ),
-        ],
+                onDeleteHeatingDevice: (heatingDevice) =>
+                    _handleDeleteHeatingDevice(context, ref, heatingDevice),
+                onAddConstruction: () =>
+                    _handleAddConstruction(context, ref, catalog),
+                onEditConstruction: (construction) => _handleEditConstruction(
+                  context,
+                  ref,
+                  catalog,
+                  construction,
+                ),
+                onDeleteConstruction: (construction) =>
+                    _handleDeleteConstruction(context, ref, construction),
+                onOpenThermocalc: (element) =>
+                    _handleOpenThermocalc(context, ref, element),
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) =>
+                  Center(child: Text('Ошибка каталога: $error')),
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('Ошибка проекта: $error')),
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text('Ошибка сводки: $error')),
       ),
     );
   }
@@ -612,10 +482,6 @@ class _SummaryCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text('Проект: ${project.name}'),
             Text('Режим помещения для норм: ${project.roomPreset.label}'),
-            Text(
-              'Расчетная наружная температура: '
-              '${summary.outsideAirTemperature.toStringAsFixed(0)} °C',
-            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -630,57 +496,21 @@ class _SummaryCard extends StatelessWidget {
                   value: '${summary.totalElementCount}',
                 ),
                 _MetricTile(
-                  label: 'Конструкции',
-                  value: '${project.constructions.length}',
-                ),
-                _MetricTile(
-                  label: 'Площадь помещений',
+                  label: 'Площадь',
                   value:
                       '${summary.totalRoomAreaSquareMeters.toStringAsFixed(1)} м²',
                 ),
                 _MetricTile(
-                  label: 'Площадь ограждений',
-                  value:
-                      '${summary.totalEnvelopeAreaSquareMeters.toStringAsFixed(1)} м²',
-                ),
-                _MetricTile(
-                  label: 'Проёмы',
-                  value:
-                      '${summary.totalOpeningCount} / ${summary.totalOpeningAreaSquareMeters.toStringAsFixed(1)} м²',
-                ),
-                _MetricTile(
-                  label: 'Чистая площадь',
-                  value:
-                      '${summary.totalOpaqueAreaSquareMeters.toStringAsFixed(1)} м²',
-                ),
-                _MetricTile(
-                  label: 'Оценка потерь',
+                  label: 'Потери',
                   value: '${summary.totalHeatLossWatts.toStringAsFixed(0)} Вт',
-                ),
-                _MetricTile(
-                  label: 'Через проёмы',
-                  value:
-                      '${summary.totalOpeningHeatLossWatts.toStringAsFixed(0)} Вт',
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                FilledButton.icon(
-                  onPressed: onOpenBuildingHeatLoss,
-                  icon: const Icon(Icons.home_work_outlined),
-                  label: const Text('Открыть расчет потерь'),
-                ),
-                if (summary.unresolvedElements.isNotEmpty)
-                  Chip(
-                    label: Text(
-                      'Пропущено элементов: ${summary.unresolvedElements.length}',
-                    ),
-                  ),
-              ],
+            FilledButton.icon(
+              onPressed: onOpenBuildingHeatLoss,
+              icon: const Icon(Icons.home_work_outlined),
+              label: const Text('Открыть расчет потерь'),
             ),
           ],
         ),
@@ -691,17 +521,19 @@ class _SummaryCard extends StatelessWidget {
 
 class _PlanAndRoomsSection extends StatefulWidget {
   const _PlanAndRoomsSection({
+    required this.statusText,
+    required this.trailingHeader,
     required this.project,
     required this.catalog,
     required this.summary,
     required this.showHeatingDevices,
+    required this.showConstructionsCard,
+    required this.onOpenBuildingHeatLoss,
     required this.onAddRoom,
-    required this.onUpdateRoomLayout,
     required this.onEditRoom,
     required this.onDeleteRoom,
     required this.onAddElement,
     required this.onEditElement,
-    required this.onUpdateElementWallPlacement,
     required this.onDeleteElement,
     required this.onAddOpening,
     required this.onEditOpening,
@@ -709,25 +541,25 @@ class _PlanAndRoomsSection extends StatefulWidget {
     required this.onAddHeatingDevice,
     required this.onEditHeatingDevice,
     required this.onDeleteHeatingDevice,
+    required this.onAddConstruction,
+    required this.onEditConstruction,
+    required this.onDeleteConstruction,
     required this.onOpenThermocalc,
   });
 
+  final String statusText;
+  final Widget? trailingHeader;
   final Project project;
   final CatalogSnapshot catalog;
-  final BuildingHeatLossResult? summary;
+  final BuildingHeatLossResult summary;
   final bool showHeatingDevices;
+  final bool showConstructionsCard;
+  final VoidCallback onOpenBuildingHeatLoss;
   final VoidCallback onAddRoom;
-  final Future<String?> Function(String roomId, RoomLayoutRect layout)
-  onUpdateRoomLayout;
   final ValueChanged<Room> onEditRoom;
   final ValueChanged<Room> onDeleteRoom;
   final ValueChanged<Room> onAddElement;
   final ValueChanged<HouseEnvelopeElement> onEditElement;
-  final Future<String?> Function(
-    HouseEnvelopeElement element,
-    EnvelopeWallPlacement wallPlacement,
-  )
-  onUpdateElementWallPlacement;
   final ValueChanged<HouseEnvelopeElement> onDeleteElement;
   final ValueChanged<HouseEnvelopeElement> onAddOpening;
   final ValueChanged<EnvelopeOpening> onEditOpening;
@@ -735,6 +567,9 @@ class _PlanAndRoomsSection extends StatefulWidget {
   final ValueChanged<Room> onAddHeatingDevice;
   final ValueChanged<HeatingDevice> onEditHeatingDevice;
   final ValueChanged<HeatingDevice> onDeleteHeatingDevice;
+  final VoidCallback onAddConstruction;
+  final ValueChanged<Construction> onEditConstruction;
+  final ValueChanged<Construction> onDeleteConstruction;
   final ValueChanged<HouseEnvelopeElement> onOpenThermocalc;
 
   @override
@@ -742,8 +577,33 @@ class _PlanAndRoomsSection extends StatefulWidget {
 }
 
 class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
+  final ScrollController _scrollController = ScrollController();
+  final Map<_WorkspaceSection, GlobalKey> _sectionKeys = {
+    for (final section in _WorkspaceSection.values) section: GlobalKey(),
+  };
+
+  final Map<_WorkspaceSection, bool> _expandedSections = {
+    _WorkspaceSection.overview: true,
+    _WorkspaceSection.rooms: true,
+    _WorkspaceSection.envelope: true,
+    _WorkspaceSection.heating: true,
+    _WorkspaceSection.constructions: true,
+  };
+
+  _WorkspaceSection _selectedSection = _WorkspaceSection.overview;
   String? _selectedRoomId;
-  String? _selectedElementId;
+
+  bool _menuOverviewExpanded = true;
+  bool _menuRoomsExpanded = true;
+  bool _menuEnvelopeExpanded = true;
+  bool _menuHeatingExpanded = true;
+  bool _menuConstructionsExpanded = true;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   String? get _effectiveSelectedRoomId {
     final rooms = widget.project.houseModel.rooms;
@@ -755,76 +615,633 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
     return exists ? selectedRoomId : rooms.first.id;
   }
 
-  void _selectRoom(String roomId) {
-    setState(() => _selectedRoomId = roomId);
+  void _activateSection(
+    _WorkspaceSection section, {
+    String? roomId,
+    bool closeDrawer = false,
+  }) {
+    setState(() {
+      _selectedSection = section;
+      _expandedSections[section] = true;
+      if (roomId != null) {
+        _selectedRoomId = roomId;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sectionContext = _sectionKeys[section]?.currentContext;
+      if (sectionContext != null) {
+        Scrollable.ensureVisible(
+          sectionContext,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+    if (closeDrawer) {
+      Navigator.of(context).pop();
+    }
   }
 
-  void _selectElement(String elementId, String roomId) {
+  void _toggleSection(_WorkspaceSection section) {
     setState(() {
-      _selectedElementId = elementId;
-      _selectedRoomId = roomId;
+      _expandedSections[section] = !(_expandedSections[section] ?? true);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedRoomId = _effectiveSelectedRoomId;
-    return Column(
+    final isWide = MediaQuery.of(context).size.width >= 1080;
+    final sidePanel = _SideNavigationPanel(
+      project: widget.project,
+      selectedSection: _selectedSection,
+      selectedRoomId: _effectiveSelectedRoomId,
+      showHeatingSection: widget.showHeatingDevices,
+      showConstructionsSection: widget.showConstructionsCard,
+      overviewExpanded: _menuOverviewExpanded,
+      roomsExpanded: _menuRoomsExpanded,
+      envelopeExpanded: _menuEnvelopeExpanded,
+      heatingExpanded: _menuHeatingExpanded,
+      constructionsExpanded: _menuConstructionsExpanded,
+      onToggleOverview: () =>
+          setState(() => _menuOverviewExpanded = !_menuOverviewExpanded),
+      onToggleRooms: () =>
+          setState(() => _menuRoomsExpanded = !_menuRoomsExpanded),
+      onToggleEnvelope: () =>
+          setState(() => _menuEnvelopeExpanded = !_menuEnvelopeExpanded),
+      onToggleHeating: () =>
+          setState(() => _menuHeatingExpanded = !_menuHeatingExpanded),
+      onToggleConstructions: () => setState(
+        () => _menuConstructionsExpanded = !_menuConstructionsExpanded,
+      ),
+      onSelectSection: (section) =>
+          _activateSection(section, closeDrawer: !isWide),
+      onSelectRoom: (roomId) => _activateSection(
+        _WorkspaceSection.rooms,
+        roomId: roomId,
+        closeDrawer: !isWide,
+      ),
+    );
+
+    final content = ListView(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       children: [
-        FloorPlanEditorCard(
-          project: widget.project,
-          selectedRoomId: selectedRoomId,
-          selectedElementId: _selectedElementId,
-          onAddRoom: widget.onAddRoom,
-          onSelectRoom: _selectRoom,
-          onSelectElement: _selectElement,
-          onUpdateRoomLayout: widget.onUpdateRoomLayout,
-          onUpdateElementWallPlacement: widget.onUpdateElementWallPlacement,
+        if (!isWide)
+          Builder(
+            builder: (context) => Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                key: const ValueKey('open-sections-button'),
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                icon: const Icon(Icons.menu),
+                label: const Text('Разделы'),
+              ),
+            ),
+          ),
+        if (!isWide) const SizedBox(height: 12),
+        _StatusCard(text: widget.statusText),
+        if (widget.trailingHeader != null) ...[
+          const SizedBox(height: 12),
+          widget.trailingHeader!,
+        ],
+        const SizedBox(height: 12),
+        _MainSectionHeader(
+          key: _sectionKeys[_WorkspaceSection.overview],
+          title: 'Общие данные',
+          selected: _selectedSection == _WorkspaceSection.overview,
+          expanded: _expandedSections[_WorkspaceSection.overview] ?? true,
+          onSelect: () => _activateSection(_WorkspaceSection.overview),
+          onToggle: () => _toggleSection(_WorkspaceSection.overview),
+          toggleKey: const ValueKey('main-section-overview-toggle'),
         ),
-        const SizedBox(height: 16),
-        _RoomsCard(
-          project: widget.project,
-          selectedRoomId: selectedRoomId,
-          onSelectRoom: _selectRoom,
-          onAddRoom: widget.onAddRoom,
-          onEditRoom: widget.onEditRoom,
-          onDeleteRoom: widget.onDeleteRoom,
-          onAddElement: widget.onAddElement,
-          onEditElement: widget.onEditElement,
-          onSelectElement: _selectElement,
-          onDeleteElement: widget.onDeleteElement,
-          onAddOpening: widget.onAddOpening,
-          onEditOpening: widget.onEditOpening,
-          onDeleteOpening: widget.onDeleteOpening,
-          onOpenThermocalc: widget.onOpenThermocalc,
-        ),
-        if (widget.showHeatingDevices) ...[
-          const SizedBox(height: 16),
-          HeatingDevicesCard(
+        if (_expandedSections[_WorkspaceSection.overview] ?? true) ...[
+          const SizedBox(height: 8),
+          _SummaryCard(
             project: widget.project,
-            catalog: widget.catalog,
             summary: widget.summary,
-            selectedRoomId: selectedRoomId,
-            onSelectRoom: _selectRoom,
-            onAddHeatingDevice: widget.onAddHeatingDevice,
-            onEditHeatingDevice: widget.onEditHeatingDevice,
-            onDeleteHeatingDevice: widget.onDeleteHeatingDevice,
+            onOpenBuildingHeatLoss: widget.onOpenBuildingHeatLoss,
           ),
         ],
+        const SizedBox(height: 12),
+        _MainSectionHeader(
+          key: _sectionKeys[_WorkspaceSection.rooms],
+          title: 'Помещения',
+          selected: _selectedSection == _WorkspaceSection.rooms,
+          expanded: _expandedSections[_WorkspaceSection.rooms] ?? true,
+          onSelect: () => _activateSection(_WorkspaceSection.rooms),
+          onToggle: () => _toggleSection(_WorkspaceSection.rooms),
+          toggleKey: const ValueKey('main-section-rooms-toggle'),
+        ),
+        if (_expandedSections[_WorkspaceSection.rooms] ?? true) ...[
+          const SizedBox(height: 8),
+          _RoomListCard(
+            project: widget.project,
+            selectedRoomId: _effectiveSelectedRoomId,
+            onSelectRoom: (roomId) => setState(() => _selectedRoomId = roomId),
+            onAddRoom: widget.onAddRoom,
+            onEditRoom: widget.onEditRoom,
+            onDeleteRoom: widget.onDeleteRoom,
+          ),
+        ],
+        const SizedBox(height: 12),
+        _MainSectionHeader(
+          key: _sectionKeys[_WorkspaceSection.envelope],
+          title: 'Ограждающие конструкции',
+          selected: _selectedSection == _WorkspaceSection.envelope,
+          expanded: _expandedSections[_WorkspaceSection.envelope] ?? true,
+          onSelect: () => _activateSection(_WorkspaceSection.envelope),
+          onToggle: () => _toggleSection(_WorkspaceSection.envelope),
+          toggleKey: const ValueKey('main-section-envelope-toggle'),
+        ),
+        if (_expandedSections[_WorkspaceSection.envelope] ?? true) ...[
+          const SizedBox(height: 8),
+          _ExteriorEnvelopeCard(
+            project: widget.project,
+            selectedRoomId: _effectiveSelectedRoomId,
+            onSelectRoom: (roomId) => setState(() => _selectedRoomId = roomId),
+            onAddElement: widget.onAddElement,
+            onEditElement: widget.onEditElement,
+            onDeleteElement: widget.onDeleteElement,
+            onAddOpening: widget.onAddOpening,
+            onEditOpening: widget.onEditOpening,
+            onDeleteOpening: widget.onDeleteOpening,
+            onOpenThermocalc: widget.onOpenThermocalc,
+          ),
+        ],
+        if (widget.showHeatingDevices) ...[
+          const SizedBox(height: 12),
+          _MainSectionHeader(
+            key: _sectionKeys[_WorkspaceSection.heating],
+            title: 'Отопительные приборы',
+            selected: _selectedSection == _WorkspaceSection.heating,
+            expanded: _expandedSections[_WorkspaceSection.heating] ?? true,
+            onSelect: () => _activateSection(_WorkspaceSection.heating),
+            onToggle: () => _toggleSection(_WorkspaceSection.heating),
+            toggleKey: const ValueKey('main-section-heating-toggle'),
+          ),
+          if (_expandedSections[_WorkspaceSection.heating] ?? true) ...[
+            const SizedBox(height: 8),
+            HeatingDevicesCard(
+              project: widget.project,
+              catalog: widget.catalog,
+              summary: widget.summary,
+              selectedRoomId: _effectiveSelectedRoomId,
+              onSelectRoom: (roomId) =>
+                  setState(() => _selectedRoomId = roomId),
+              onAddHeatingDevice: widget.onAddHeatingDevice,
+              onEditHeatingDevice: widget.onEditHeatingDevice,
+              onDeleteHeatingDevice: widget.onDeleteHeatingDevice,
+            ),
+          ],
+        ],
+        if (widget.showConstructionsCard) ...[
+          const SizedBox(height: 12),
+          _MainSectionHeader(
+            key: _sectionKeys[_WorkspaceSection.constructions],
+            title: 'Конструкции',
+            selected: _selectedSection == _WorkspaceSection.constructions,
+            expanded:
+                _expandedSections[_WorkspaceSection.constructions] ?? true,
+            onSelect: () => _activateSection(_WorkspaceSection.constructions),
+            onToggle: () => _toggleSection(_WorkspaceSection.constructions),
+            toggleKey: const ValueKey('main-section-constructions-toggle'),
+          ),
+          if (_expandedSections[_WorkspaceSection.constructions] ?? true) ...[
+            const SizedBox(height: 8),
+            _ConstructionsCard(
+              project: widget.project,
+              catalog: widget.catalog,
+              onAddConstruction: widget.onAddConstruction,
+              onEditConstruction: widget.onEditConstruction,
+              onDeleteConstruction: widget.onDeleteConstruction,
+            ),
+          ],
+        ],
       ],
+    );
+
+    return Scaffold(
+      drawer: isWide ? null : Drawer(child: sidePanel),
+      body: isWide
+          ? Row(
+              children: [
+                SizedBox(width: 312, child: sidePanel),
+                const VerticalDivider(width: 1),
+                Expanded(child: content),
+              ],
+            )
+          : content,
     );
   }
 }
 
-class _RoomsCard extends StatelessWidget {
-  const _RoomsCard({
+class _MainSectionHeader extends StatelessWidget {
+  const _MainSectionHeader({
+    super.key,
+    required this.title,
+    required this.selected,
+    required this.expanded,
+    required this.onSelect,
+    required this.onToggle,
+    required this.toggleKey,
+  });
+
+  final String title;
+  final bool selected;
+  final bool expanded;
+  final VoidCallback onSelect;
+  final VoidCallback onToggle;
+  final Key toggleKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.outlineVariant,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: onSelect,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            key: toggleKey,
+            onPressed: onToggle,
+            icon: Icon(expanded ? Icons.expand_less : Icons.expand_more),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SideNavigationPanel extends StatelessWidget {
+  const _SideNavigationPanel({
+    required this.project,
+    required this.selectedSection,
+    required this.selectedRoomId,
+    required this.showHeatingSection,
+    required this.showConstructionsSection,
+    required this.overviewExpanded,
+    required this.roomsExpanded,
+    required this.envelopeExpanded,
+    required this.heatingExpanded,
+    required this.constructionsExpanded,
+    required this.onToggleOverview,
+    required this.onToggleRooms,
+    required this.onToggleEnvelope,
+    required this.onToggleHeating,
+    required this.onToggleConstructions,
+    required this.onSelectSection,
+    required this.onSelectRoom,
+  });
+
+  final Project project;
+  final _WorkspaceSection selectedSection;
+  final String? selectedRoomId;
+  final bool showHeatingSection;
+  final bool showConstructionsSection;
+  final bool overviewExpanded;
+  final bool roomsExpanded;
+  final bool envelopeExpanded;
+  final bool heatingExpanded;
+  final bool constructionsExpanded;
+  final VoidCallback onToggleOverview;
+  final VoidCallback onToggleRooms;
+  final VoidCallback onToggleEnvelope;
+  final VoidCallback onToggleHeating;
+  final VoidCallback onToggleConstructions;
+  final ValueChanged<_WorkspaceSection> onSelectSection;
+  final ValueChanged<String> onSelectRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF26315E),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(10, 4, 10, 8),
+              child: Text(
+                'Навигация по зданию',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            _SideGroup(
+              title: 'Общие данные',
+              expanded: overviewExpanded,
+              onToggle: onToggleOverview,
+              toggleKey: const ValueKey('side-group-overview-toggle'),
+              children: [
+                _SideItem(
+                  label: 'Сводка проекта',
+                  selected: selectedSection == _WorkspaceSection.overview,
+                  onTap: () => onSelectSection(_WorkspaceSection.overview),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _SideGroup(
+              title: 'Помещения',
+              expanded: roomsExpanded,
+              onToggle: onToggleRooms,
+              toggleKey: const ValueKey('side-group-rooms-toggle'),
+              children: [
+                _SideItem(
+                  label: 'Список помещений',
+                  selected: selectedSection == _WorkspaceSection.rooms,
+                  onTap: () => onSelectSection(_WorkspaceSection.rooms),
+                ),
+                ...project.houseModel.rooms.map(
+                  (room) => _SideItem(
+                    key: ValueKey('side-room-${room.id}'),
+                    label: room.title,
+                    selected: selectedRoomId == room.id,
+                    level: 1,
+                    onTap: () => onSelectRoom(room.id),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _SideGroup(
+              title: 'Ограждающие конструкции',
+              expanded: envelopeExpanded,
+              onToggle: onToggleEnvelope,
+              toggleKey: const ValueKey('side-group-envelope-toggle'),
+              children: [
+                _SideItem(
+                  label: 'Список ограждений',
+                  selected: selectedSection == _WorkspaceSection.envelope,
+                  onTap: () => onSelectSection(_WorkspaceSection.envelope),
+                ),
+              ],
+            ),
+            if (showHeatingSection) ...[
+              const SizedBox(height: 8),
+              _SideGroup(
+                title: 'Отопительные приборы',
+                expanded: heatingExpanded,
+                onToggle: onToggleHeating,
+                toggleKey: const ValueKey('side-group-heating-toggle'),
+                children: [
+                  _SideItem(
+                    label: 'Список приборов',
+                    selected: selectedSection == _WorkspaceSection.heating,
+                    onTap: () => onSelectSection(_WorkspaceSection.heating),
+                  ),
+                ],
+              ),
+            ],
+            if (showConstructionsSection) ...[
+              const SizedBox(height: 8),
+              _SideGroup(
+                title: 'Конструкции',
+                expanded: constructionsExpanded,
+                onToggle: onToggleConstructions,
+                toggleKey: const ValueKey('side-group-constructions-toggle'),
+                children: [
+                  _SideItem(
+                    label: 'Список конструкций',
+                    selected:
+                        selectedSection == _WorkspaceSection.constructions,
+                    onTap: () =>
+                        onSelectSection(_WorkspaceSection.constructions),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SideGroup extends StatelessWidget {
+  const _SideGroup({
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+    required this.toggleKey,
+    required this.children,
+  });
+
+  final String title;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final Key toggleKey;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF334074),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: toggleKey,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onToggle,
+                    color: Colors.white,
+                    icon: Icon(
+                      expanded ? Icons.expand_less : Icons.expand_more,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Column(children: children),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SideItem extends StatelessWidget {
+  const _SideItem({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.level = 0,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: level * 14.0, bottom: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFE3994A) : const Color(0xFF41508A),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomListCard extends StatelessWidget {
+  const _RoomListCard({
     required this.project,
     required this.selectedRoomId,
     required this.onSelectRoom,
     required this.onAddRoom,
     required this.onEditRoom,
-    required this.onSelectElement,
     required this.onDeleteRoom,
+  });
+
+  final Project project;
+  final String? selectedRoomId;
+  final ValueChanged<String> onSelectRoom;
+  final VoidCallback onAddRoom;
+  final ValueChanged<Room> onEditRoom;
+  final ValueChanged<Room> onDeleteRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardHeader(
+              title: 'Помещения',
+              actionLabel: 'Добавить помещение',
+              onAction: onAddRoom,
+            ),
+            const SizedBox(height: 12),
+            ...project.houseModel.rooms.map((room) {
+              final isSelected = selectedRoomId == room.id;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  key: ValueKey('room-tile-${room.id}'),
+                  onTap: () => onSelectRoom(room.id),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outlineVariant,
+                      width: isSelected ? 1.5 : 1,
+                    ),
+                  ),
+                  title: Text(
+                    room.title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    '${room.kind.label} • ${room.areaSquareMeters.toStringAsFixed(1)} м² • h ${room.heightMeters.toStringAsFixed(1)} м',
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        onEditRoom(room);
+                      } else if (value == 'delete') {
+                        onDeleteRoom(room);
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text('Редактировать помещение'),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Удалить помещение'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LegacyElementRecord {
+  const _LegacyElementRecord({required this.element, required this.reason});
+
+  final HouseEnvelopeElement element;
+  final String reason;
+}
+
+class _ExteriorEnvelopeCard extends StatelessWidget {
+  const _ExteriorEnvelopeCard({
+    required this.project,
+    required this.selectedRoomId,
+    required this.onSelectRoom,
     required this.onAddElement,
     required this.onEditElement,
     required this.onDeleteElement,
@@ -837,10 +1254,6 @@ class _RoomsCard extends StatelessWidget {
   final Project project;
   final String? selectedRoomId;
   final ValueChanged<String> onSelectRoom;
-  final VoidCallback onAddRoom;
-  final ValueChanged<Room> onEditRoom;
-  final void Function(String elementId, String roomId) onSelectElement;
-  final ValueChanged<Room> onDeleteRoom;
   final ValueChanged<Room> onAddElement;
   final ValueChanged<HouseEnvelopeElement> onEditElement;
   final ValueChanged<HouseEnvelopeElement> onDeleteElement;
@@ -856,6 +1269,29 @@ class _RoomsCard extends StatelessWidget {
         construction.id: construction,
     };
 
+    final supportedElements = <HouseEnvelopeElement>[];
+    final legacyElements = <_LegacyElementRecord>[];
+    for (final element in project.houseModel.elements) {
+      final construction = constructionMap[element.constructionId];
+      if (_isSupportedEnvelopeElement(element, construction)) {
+        supportedElements.add(element);
+      } else {
+        legacyElements.add(
+          _LegacyElementRecord(
+            element: element,
+            reason: _describeLegacyElement(element, construction),
+          ),
+        );
+      }
+    }
+
+    final supportedElementIds = supportedElements
+        .map((item) => item.id)
+        .toSet();
+    final legacyOpenings = project.houseModel.openings
+        .where((opening) => !supportedElementIds.contains(opening.elementId))
+        .toList(growable: false);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -863,19 +1299,35 @@ class _RoomsCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _CardHeader(
-              title: 'Помещения и ограждения',
-              actionLabel: 'Добавить помещение',
-              onAction: onAddRoom,
+              title: 'Ограждающие конструкции',
+              actionLabel: 'Добавить в выбранное помещение',
+              onAction: () {
+                if (project.houseModel.rooms.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Сначала добавьте хотя бы одно помещение.'),
+                    ),
+                  );
+                  return;
+                }
+                final room = project.houseModel.rooms.firstWhere(
+                  (item) =>
+                      item.id ==
+                      (selectedRoomId ?? project.houseModel.rooms.first.id),
+                  orElse: () => project.houseModel.rooms.first,
+                );
+                onAddElement(room);
+              },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Доступны только конструкции внешнего контура. Неподдерживаемые записи отображаются отдельно как наследие (read-only).',
             ),
             const SizedBox(height: 12),
             ...project.houseModel.rooms.map((room) {
-              final roomElements = project.houseModel.elements
+              final roomElements = supportedElements
                   .where((element) => element.roomId == room.id)
                   .toList(growable: false);
-              final envelopeArea = roomElements.fold<double>(
-                0,
-                (sum, item) => sum + item.areaSquareMeters,
-              );
               final roomElementIds = roomElements
                   .map((item) => item.id)
                   .toSet();
@@ -884,273 +1336,215 @@ class _RoomsCard extends StatelessWidget {
                     (opening) => roomElementIds.contains(opening.elementId),
                   )
                   .toList(growable: false);
-              final openingArea = roomOpenings.fold<double>(
-                0,
-                (sum, item) => sum + item.areaSquareMeters,
-              );
-              final opaqueArea = (envelopeArea - openingArea).clamp(
-                0.0,
-                envelopeArea,
-              );
               final isSelected = selectedRoomId == room.id;
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () => onSelectRoom(room.id),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? const Color(0xFFF1E8D6)
+                        : const Color(0xFFF9F7F2),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
                       color: isSelected
-                          ? const Color(0xFFF1E8D6)
-                          : const Color(0xFFF9F7F2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.outlineVariant,
-                        width: isSelected ? 1.5 : 1,
-                      ),
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outlineVariant,
+                      width: isSelected ? 1.5 : 1,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => onSelectRoom(room.id),
+                                child: Text(
+                                  room.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            FilledButton.tonal(
+                              onPressed: () => onAddElement(room),
+                              child: const Text('Добавить'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (roomElements.isEmpty)
+                          const Text(
+                            'Поддерживаемые ограждения пока не добавлены.',
+                          )
+                        else
+                          ...roomElements.map((element) {
+                            final construction =
+                                constructionMap[element.constructionId];
+                            final openings = roomOpenings
+                                .where(
+                                  (opening) => opening.elementId == element.id,
+                                )
+                                .toList(growable: false);
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFDFBF7),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outlineVariant,
+                                  ),
+                                ),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      room.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w800,
+                                    ListTile(
+                                      title: Text(
+                                        element.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        '${element.elementKind.label} • ${element.areaSquareMeters.toStringAsFixed(1)} м²\n'
+                                        'Конструкция: ${construction?.title ?? element.constructionId}',
+                                      ),
+                                      isThreeLine: true,
+                                      trailing: PopupMenuButton<String>(
+                                        onSelected: (value) {
+                                          if (value == 'calc') {
+                                            onOpenThermocalc(element);
+                                          } else if (value == 'opening') {
+                                            onAddOpening(element);
+                                          } else if (value == 'edit') {
+                                            onEditElement(element);
+                                          } else if (value == 'delete') {
+                                            onDeleteElement(element);
+                                          }
+                                        },
+                                        itemBuilder: (context) => const [
+                                          PopupMenuItem(
+                                            value: 'calc',
+                                            child: Text('Рассчитать'),
                                           ),
+                                          PopupMenuItem(
+                                            value: 'opening',
+                                            child: Text('Добавить проём'),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'edit',
+                                            child: Text('Редактировать'),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'delete',
+                                            child: Text('Удалить'),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${room.kind.label} • ${room.areaSquareMeters.toStringAsFixed(1)} м² • h ${room.heightMeters.toStringAsFixed(1)} м',
-                                    ),
-                                    Text(
-                                      'План: ${room.layout.widthMeters.toStringAsFixed(1)} x ${room.layout.heightMeters.toStringAsFixed(1)} м • позиция ${room.layout.xMeters.toStringAsFixed(1)} / ${room.layout.yMeters.toStringAsFixed(1)} м',
-                                    ),
-                                    Text(
-                                      'Ограждений: ${roomElements.length}, проёмов: ${roomOpenings.length}, валовая площадь ${envelopeArea.toStringAsFixed(1)} м², чистая ${opaqueArea.toStringAsFixed(1)} м²',
-                                    ),
+                                    if (openings.isEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.fromLTRB(
+                                          16,
+                                          0,
+                                          16,
+                                          10,
+                                        ),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text('Проемы не добавлены.'),
+                                        ),
+                                      )
+                                    else
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          10,
+                                          0,
+                                          10,
+                                          10,
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            ...openings.map(
+                                              (opening) => ListTile(
+                                                dense: true,
+                                                leading: const Icon(
+                                                  Icons
+                                                      .subdirectory_arrow_right,
+                                                ),
+                                                title: Text(opening.title),
+                                                subtitle: Text(
+                                                  '${opening.kind.label} • ${opening.areaSquareMeters.toStringAsFixed(1)} м² • U ${opening.heatTransferCoefficient.toStringAsFixed(2)}',
+                                                ),
+                                                trailing: PopupMenuButton<String>(
+                                                  onSelected: (value) {
+                                                    if (value == 'edit') {
+                                                      onEditOpening(opening);
+                                                    } else if (value ==
+                                                        'delete') {
+                                                      onDeleteOpening(opening);
+                                                    }
+                                                  },
+                                                  itemBuilder: (context) =>
+                                                      const [
+                                                        PopupMenuItem(
+                                                          value: 'edit',
+                                                          child: Text(
+                                                            'Редактировать проём',
+                                                          ),
+                                                        ),
+                                                        PopupMenuItem(
+                                                          value: 'delete',
+                                                          child: Text(
+                                                            'Удалить проём',
+                                                          ),
+                                                        ),
+                                                      ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
-                              PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    onEditRoom(room);
-                                  } else if (value == 'delete') {
-                                    onDeleteRoom(room);
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Text('Редактировать помещение'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Удалить помещение'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton.tonal(
-                            onPressed: () => onAddElement(room),
-                            child: const Text('Добавить ограждение'),
-                          ),
-                          const SizedBox(height: 12),
-                          if (roomElements.isEmpty)
-                            const Text('Пока нет ограждающих элементов.')
-                          else
-                            ...roomElements.map((element) {
-                              final construction =
-                                  constructionMap[element.constructionId];
-                              final openings = project.houseModel.openings
-                                  .where(
-                                    (opening) =>
-                                        opening.elementId == element.id,
-                                  )
-                                  .toList(growable: false);
-                              final openingArea = openings.fold<double>(
-                                0,
-                                (sum, item) => sum + item.areaSquareMeters,
-                              );
-                              final opaqueArea =
-                                  (element.areaSquareMeters - openingArea)
-                                      .clamp(0.0, element.areaSquareMeters);
-                              final geometryLabel =
-                                  element.elementKind ==
-                                          ConstructionElementKind.wall &&
-                                      element.wallPlacement != null
-                                  ? '${element.wallPlacement!.side.label}, сегмент ${element.wallPlacement!.lengthMeters.toStringAsFixed(1)} м, смещение ${element.wallPlacement!.offsetMeters.toStringAsFixed(1)} м'
-                                  : 'Без геометрической привязки';
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.outlineVariant,
-                                    ),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        ListTile(
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 4,
-                                                vertical: 0,
-                                              ),
-                                          onTap: () => onSelectElement(
-                                            element.id,
-                                            room.id,
-                                          ),
-                                          title: Text(
-                                            element.title,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          subtitle: Text(
-                                            '${element.elementKind.label} • валовая площадь ${element.areaSquareMeters.toStringAsFixed(1)} м² • чистая ${opaqueArea.toStringAsFixed(1)} м²\n'
-                                            'Проёмы: ${openings.length} / ${openingArea.toStringAsFixed(1)} м² • Конструкция: ${construction?.title ?? element.constructionId}\n'
-                                            '$geometryLabel',
-                                          ),
-                                          isThreeLine: true,
-                                          trailing: PopupMenuButton<String>(
-                                            onSelected: (value) {
-                                              switch (value) {
-                                                case 'calc':
-                                                  onOpenThermocalc(element);
-                                                case 'opening':
-                                                  onAddOpening(element);
-                                                case 'edit':
-                                                  onEditElement(element);
-                                                case 'delete':
-                                                  onDeleteElement(element);
-                                              }
-                                            },
-                                            itemBuilder: (context) => const [
-                                              PopupMenuItem(
-                                                value: 'calc',
-                                                child: Text('Рассчитать'),
-                                              ),
-                                              PopupMenuItem(
-                                                value: 'opening',
-                                                child: Text('Добавить проём'),
-                                              ),
-                                              PopupMenuItem(
-                                                value: 'edit',
-                                                child: Text('Редактировать'),
-                                              ),
-                                              PopupMenuItem(
-                                                value: 'delete',
-                                                child: Text('Удалить'),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        if (openings.isEmpty)
-                                          const Padding(
-                                            padding: EdgeInsets.fromLTRB(
-                                              16,
-                                              4,
-                                              16,
-                                              4,
-                                            ),
-                                            child: Text('Проёмы не добавлены.'),
-                                          )
-                                        else
-                                          ...openings.map(
-                                            (opening) => Padding(
-                                              padding: const EdgeInsets.only(
-                                                left: 12,
-                                                right: 12,
-                                                bottom: 8,
-                                              ),
-                                              child: ListTile(
-                                                tileColor: const Color(
-                                                  0xFFF9F7F2,
-                                                ),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(14),
-                                                ),
-                                                title: Text(
-                                                  opening.title,
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                                subtitle: Text(
-                                                  '${opening.kind.label} • ${opening.areaSquareMeters.toStringAsFixed(1)} м² • U ${opening.heatTransferCoefficient.toStringAsFixed(2)} Вт/м²·°C',
-                                                ),
-                                                trailing:
-                                                    PopupMenuButton<String>(
-                                                      onSelected: (value) {
-                                                        if (value == 'edit') {
-                                                          onEditOpening(
-                                                            opening,
-                                                          );
-                                                        } else if (value ==
-                                                            'delete') {
-                                                          onDeleteOpening(
-                                                            opening,
-                                                          );
-                                                        }
-                                                      },
-                                                      itemBuilder: (context) =>
-                                                          const [
-                                                            PopupMenuItem(
-                                                              value: 'edit',
-                                                              child: Text(
-                                                                'Редактировать',
-                                                              ),
-                                                            ),
-                                                            PopupMenuItem(
-                                                              value: 'delete',
-                                                              child: Text(
-                                                                'Удалить',
-                                                              ),
-                                                            ),
-                                                          ],
-                                                    ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                        ],
-                      ),
+                            );
+                          }),
+                      ],
                     ),
                   ),
                 ),
               );
             }),
+            if (legacyElements.isNotEmpty || legacyOpenings.isNotEmpty)
+              ExpansionTile(
+                key: const ValueKey('legacy-read-only-block'),
+                title: Text(
+                  'Наследие (только чтение): ${legacyElements.length + legacyOpenings.length}',
+                ),
+                children: [
+                  ...legacyElements.map(
+                    (item) => ListTile(
+                      title: Text(item.element.title),
+                      subtitle: Text(item.reason),
+                    ),
+                  ),
+                  ...legacyOpenings.map(
+                    (opening) => ListTile(
+                      title: Text(opening.title),
+                      subtitle: Text('Элемент: ${opening.elementId}'),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -1175,13 +1569,13 @@ class _ConstructionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final usageMap = <String, int>{};
-    for (final element in project.houseModel.elements) {
-      usageMap[element.constructionId] =
-          (usageMap[element.constructionId] ?? 0) + 1;
-    }
     final materialMap = {for (final item in catalog.materials) item.id: item};
-
+    final supportedConstructions = project.constructions
+        .where((item) => _allowedExteriorKinds.contains(item.elementKind))
+        .toList(growable: false);
+    final legacyConstructions = project.constructions
+        .where((item) => !_allowedExteriorKinds.contains(item.elementKind))
+        .toList(growable: false);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -1194,7 +1588,11 @@ class _ConstructionsCard extends StatelessWidget {
               onAction: onAddConstruction,
             ),
             const SizedBox(height: 12),
-            ...project.constructions.map((construction) {
+            const Text(
+              'В этом разделе доступны только конструкции внешнего контура.',
+            ),
+            const SizedBox(height: 12),
+            ...supportedConstructions.map((construction) {
               final layerTitles = construction.layers
                   .map(
                     (layer) =>
@@ -1204,10 +1602,6 @@ class _ConstructionsCard extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 6,
-                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: BorderSide(
@@ -1219,8 +1613,7 @@ class _ConstructionsCard extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   subtitle: Text(
-                    '${construction.elementKind.label} • слоёв ${construction.layers.length} • используется ${usageMap[construction.id] ?? 0} раз(а)\n'
-                    '$layerTitles',
+                    '${construction.elementKind.label}\n$layerTitles',
                   ),
                   isThreeLine: true,
                   trailing: PopupMenuButton<String>(
@@ -1245,6 +1638,31 @@ class _ConstructionsCard extends StatelessWidget {
                 ),
               );
             }),
+            if (legacyConstructions.isNotEmpty)
+              ExpansionTile(
+                key: const ValueKey('legacy-constructions-read-only-block'),
+                title: Text(
+                  'Наследие (только чтение): ${legacyConstructions.length}',
+                ),
+                children: [
+                  ...legacyConstructions.map((construction) {
+                    final layerTitles = construction.layers
+                        .map(
+                          (layer) =>
+                              materialMap[layer.materialId]?.name ??
+                              layer.materialId,
+                        )
+                        .join(', ');
+                    return ListTile(
+                      title: Text(construction.title),
+                      subtitle: Text(
+                        '${construction.elementKind.label}\n$layerTitles',
+                      ),
+                      isThreeLine: true,
+                    );
+                  }),
+                ],
+              ),
           ],
         ),
       ),
@@ -1319,13 +1737,16 @@ Future<Room?> _showRoomEditor(
   Room? room,
   RoomLayoutRect? initialLayout,
 }) async {
-  final titleController = TextEditingController(text: room?.title ?? '');
-  final heightController = TextEditingController(
-    text: (room?.heightMeters ?? defaultRoomHeightMeters).toString(),
-  );
-  var selectedKind = room?.kind ?? RoomKind.livingRoom;
   final effectiveLayout =
       room?.layout ?? initialLayout ?? RoomLayoutRect.defaultRect();
+  final titleController = TextEditingController(text: room?.title ?? '');
+  final areaController = TextEditingController(
+    text: effectiveLayout.areaSquareMeters.toStringAsFixed(1),
+  );
+  final heightController = TextEditingController(
+    text: (room?.heightMeters ?? defaultRoomHeightMeters).toStringAsFixed(2),
+  );
+  var selectedKind = room?.kind ?? RoomKind.livingRoom;
 
   final result = await showModalBottomSheet<Room>(
     context: context,
@@ -1374,18 +1795,12 @@ Future<Room?> _showRoomEditor(
                   },
                 ),
                 const SizedBox(height: 12),
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Площадь на плане',
+                TextField(
+                  controller: areaController,
+                  decoration: const InputDecoration(labelText: 'Площадь, м²'),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
                   ),
-                  child: Text(
-                    '${effectiveLayout.areaSquareMeters.toStringAsFixed(1)} м²',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Размеры и позиция комнаты редактируются на плане.',
-                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -1395,9 +1810,22 @@ Future<Room?> _showRoomEditor(
                     decimal: true,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Геометрия плана сохраняется автоматически как квадрат по заданной площади.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () {
+                    final area = _parseDouble(
+                      areaController.text,
+                      fallback: effectiveLayout.areaSquareMeters,
+                    );
+                    final layout = _squareLayoutFromArea(
+                      area,
+                      baseLayout: effectiveLayout,
+                    );
                     Navigator.of(context).pop(
                       Room(
                         id: room?.id ?? _buildId('room'),
@@ -1410,7 +1838,7 @@ Future<Room?> _showRoomEditor(
                           heightController.text,
                           fallback: defaultRoomHeightMeters,
                         ),
-                        layout: effectiveLayout,
+                        layout: layout,
                       ),
                     );
                   },
@@ -1425,6 +1853,7 @@ Future<Room?> _showRoomEditor(
   );
 
   titleController.dispose();
+  areaController.dispose();
   heightController.dispose();
   return result;
 }
@@ -1436,27 +1865,57 @@ Future<HouseEnvelopeElement?> _showElementEditor(
   required String roomId,
   HouseEnvelopeElement? element,
 }) async {
+  final allowedConstructions = project.constructions
+      .where(
+        (construction) =>
+            _allowedExteriorKinds.contains(construction.elementKind),
+      )
+      .toList(growable: false);
+  if (allowedConstructions.isEmpty) {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => const Padding(
+        padding: EdgeInsets.all(20),
+        child: Text('Нет доступных конструкций внешнего контура.'),
+      ),
+    );
+    return null;
+  }
+
+  final availableKinds =
+      allowedConstructions
+          .map((item) => item.elementKind)
+          .toSet()
+          .toList(growable: false)
+        ..sort((left, right) => left.index.compareTo(right.index));
+
   final titleController = TextEditingController(text: element?.title ?? '');
   final areaController = TextEditingController(
     text: (element?.areaSquareMeters ?? defaultHouseElementAreaSquareMeters)
-        .toString(),
+        .toStringAsFixed(2),
   );
   final offsetController = TextEditingController(
-    text: (element?.wallPlacement?.offsetMeters ?? 0).toString(),
+    text: (element?.wallPlacement?.offsetMeters ?? 0).toStringAsFixed(2),
   );
   final lengthController = TextEditingController(
     text: (element?.wallPlacement?.lengthMeters ?? defaultRoomLayoutWidthMeters)
-        .toString(),
+        .toStringAsFixed(2),
   );
+
   var selectedRoomId = element?.roomId ?? roomId;
-  var selectedConstructionId =
-      element?.constructionId ??
-      (project.constructions.isEmpty ? null : project.constructions.first.id);
-  var selectedKind =
-      element?.elementKind ??
-      (project.constructions.isEmpty
-          ? ConstructionElementKind.wall
-          : project.constructions.first.elementKind);
+  var selectedKind = availableKinds.contains(element?.elementKind)
+      ? element!.elementKind
+      : availableKinds.first;
+  var selectedConstructionId = allowedConstructions
+      .firstWhere(
+        (item) =>
+            item.id == element?.constructionId &&
+            item.elementKind == selectedKind,
+        orElse: () => allowedConstructions.firstWhere(
+          (item) => item.elementKind == selectedKind,
+        ),
+      )
+      .id;
   var selectedSide = element?.wallPlacement?.side ?? RoomSide.top;
 
   final result = await showModalBottomSheet<HouseEnvelopeElement>(
@@ -1468,15 +1927,15 @@ Future<HouseEnvelopeElement?> _showElementEditor(
           final selectedRoom = project.houseModel.rooms.firstWhere(
             (room) => room.id == selectedRoomId,
           );
-          final constructionsForKind = project.constructions
+          final constructionsForKind = allowedConstructions
               .where((construction) => construction.elementKind == selectedKind)
               .toList(growable: false);
-          if (constructionsForKind.isNotEmpty &&
-              !constructionsForKind.any(
-                (construction) => construction.id == selectedConstructionId,
-              )) {
+          if (!constructionsForKind.any(
+            (item) => item.id == selectedConstructionId,
+          )) {
             selectedConstructionId = constructionsForKind.first.id;
           }
+
           final effectiveLength = _parseDouble(
             lengthController.text,
             fallback: selectedRoom.layout.sideLength(selectedSide),
@@ -1486,7 +1945,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
             fallback: 0,
           );
           final wallPlacement = selectedKind == ConstructionElementKind.wall
-              ? snapWallPlacement(
+              ? _snapWallPlacement(
                   EnvelopeWallPlacement(
                     side: selectedSide,
                     offsetMeters: effectiveOffset,
@@ -1518,7 +1977,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 TextField(
                   controller: titleController,
                   decoration: const InputDecoration(labelText: 'Название'),
@@ -1537,42 +1996,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                       .toList(),
                   onChanged: (value) {
                     if (value != null) {
-                      setState(() {
-                        selectedRoomId = value;
-                        final room = project.houseModel.rooms.firstWhere(
-                          (item) => item.id == selectedRoomId,
-                        );
-                        if (selectedKind == ConstructionElementKind.wall) {
-                          final sideLength = room.layout.sideLength(
-                            selectedSide,
-                          );
-                          lengthController.text = math
-                              .min(
-                                _parseDouble(
-                                  lengthController.text,
-                                  fallback: sideLength,
-                                ),
-                                sideLength,
-                              )
-                              .toString();
-                          offsetController.text = math
-                              .min(
-                                _parseDouble(
-                                  offsetController.text,
-                                  fallback: 0,
-                                ),
-                                math.max(
-                                  0,
-                                  sideLength -
-                                      _parseDouble(
-                                        lengthController.text,
-                                        fallback: sideLength,
-                                      ),
-                                ),
-                              )
-                              .toString();
-                        }
-                      });
+                      setState(() => selectedRoomId = value);
                     }
                   },
                 ),
@@ -1582,7 +2006,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                   decoration: const InputDecoration(
                     labelText: 'Тип ограждения',
                   ),
-                  items: ConstructionElementKind.values
+                  items: availableKinds
                       .map(
                         (item) => DropdownMenuItem(
                           value: item,
@@ -1594,15 +2018,11 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                     if (value != null) {
                       setState(() {
                         selectedKind = value;
-                        final firstMatching = project.constructions
-                            .where(
-                              (construction) =>
-                                  construction.elementKind == selectedKind,
+                        selectedConstructionId = allowedConstructions
+                            .firstWhere(
+                              (item) => item.elementKind == selectedKind,
                             )
-                            .toList(growable: false);
-                        selectedConstructionId = firstMatching.isEmpty
-                            ? null
-                            : firstMatching.first.id;
+                            .id;
                       });
                     }
                   },
@@ -1642,30 +2062,14 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                         .toList(),
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() {
-                          selectedSide = value;
-                          final sideLength = selectedRoom.layout.sideLength(
-                            value,
-                          );
-                          lengthController.text = math
-                              .min(
-                                _parseDouble(
-                                  lengthController.text,
-                                  fallback: sideLength,
-                                ),
-                                sideLength,
-                              )
-                              .toString();
-                        });
+                        setState(() => selectedSide = value);
                       }
                     },
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: offsetController,
-                    decoration: const InputDecoration(
-                      labelText: 'Смещение от начала стороны, м',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Смещение, м'),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
@@ -1674,7 +2078,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                   TextField(
                     controller: lengthController,
                     decoration: const InputDecoration(
-                      labelText: 'Длина сегмента стены, м',
+                      labelText: 'Длина сегмента, м',
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
@@ -1686,7 +2090,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                       labelText: 'Расчётная площадь стены',
                     ),
                     child: Text(
-                      '${(derivedWallArea ?? 0).toStringAsFixed(1)} м² при высоте ${selectedRoom.heightMeters.toStringAsFixed(1)} м',
+                      '${(derivedWallArea ?? 0).toStringAsFixed(1)} м²',
                     ),
                   ),
                 ] else
@@ -1699,45 +2103,42 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                   ),
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: selectedConstructionId == null
-                      ? null
-                      : () {
-                          final selectedConstruction = project.constructions
-                              .firstWhere(
-                                (item) => item.id == selectedConstructionId,
-                              );
-                          Navigator.of(context).pop(
-                            HouseEnvelopeElement(
-                              id: element?.id ?? _buildId('element'),
-                              roomId: selectedRoomId,
-                              title: _requiredText(
-                                titleController.text,
-                                fallback: selectedKind.label,
+                  onPressed: () {
+                    final selectedConstruction = allowedConstructions
+                        .firstWhere(
+                          (item) => item.id == selectedConstructionId,
+                        );
+                    Navigator.of(context).pop(
+                      HouseEnvelopeElement(
+                        id: element?.id ?? _buildId('element'),
+                        roomId: selectedRoomId,
+                        title: _requiredText(
+                          titleController.text,
+                          fallback: selectedKind.label,
+                        ),
+                        elementKind: selectedConstruction.elementKind,
+                        areaSquareMeters:
+                            selectedConstruction.elementKind ==
+                                ConstructionElementKind.wall
+                            ? (derivedWallArea ?? 0)
+                            : _parseDouble(
+                                areaController.text,
+                                fallback: defaultHouseElementAreaSquareMeters,
                               ),
-                              elementKind: selectedConstruction.elementKind,
-                              areaSquareMeters:
-                                  selectedConstruction.elementKind ==
-                                      ConstructionElementKind.wall
-                                  ? (derivedWallArea ?? 0)
-                                  : _parseDouble(
-                                      areaController.text,
-                                      fallback:
-                                          defaultHouseElementAreaSquareMeters,
-                                    ),
-                              constructionId: selectedConstruction.id,
-                              wallPlacement:
-                                  selectedConstruction.elementKind ==
-                                      ConstructionElementKind.wall
-                                  ? wallPlacement
-                                  : null,
-                            ),
-                          );
-                        },
+                        constructionId: selectedConstruction.id,
+                        wallPlacement:
+                            selectedConstruction.elementKind ==
+                                ConstructionElementKind.wall
+                            ? wallPlacement
+                            : null,
+                      ),
+                    );
+                  },
                   child: const Text('Сохранить'),
                 ),
                 if (catalog.materials.isEmpty)
                   const Padding(
-                    padding: EdgeInsets.only(top: 12),
+                    padding: EdgeInsets.only(top: 8),
                     child: Text('Каталог материалов пуст.'),
                   ),
               ],
@@ -1775,6 +2176,7 @@ Future<Construction?> _showConstructionEditor(
         )
         .toList(growable: false),
     construction: construction,
+    allowedElementKinds: _allowedExteriorKinds,
   );
 }
 
@@ -1800,101 +2202,81 @@ Future<EnvelopeOpening?> _showOpeningEditor(
     context: context,
     isScrollControlled: true,
     builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              20 + MediaQuery.of(context).viewInsets.bottom,
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              opening == null ? 'Новый проём' : 'Редактирование проёма',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  opening == null ? 'Новый проём' : 'Редактирование проёма',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<OpeningKind>(
-                  initialValue: selectedKind,
-                  decoration: const InputDecoration(labelText: 'Тип проёма'),
-                  items: OpeningKind.values
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        selectedKind = value;
-                        if (opening == null &&
-                            coefficientController.text.trim().isEmpty) {
-                          coefficientController.text = value
-                              .defaultHeatTransferCoefficient
-                              .toString();
-                        }
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Название'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: areaController,
-                  decoration: const InputDecoration(labelText: 'Площадь, м²'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: coefficientController,
-                  decoration: const InputDecoration(labelText: 'U, Вт/м²·°C'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(
-                      EnvelopeOpening(
-                        id: opening?.id ?? _buildId('opening'),
-                        elementId: elementId,
-                        title: _requiredText(
-                          titleController.text,
-                          fallback: selectedKind.label,
-                        ),
-                        kind: selectedKind,
-                        areaSquareMeters: _parseDouble(
-                          areaController.text,
-                          fallback: 2.0,
-                        ),
-                        heatTransferCoefficient: _parseDouble(
-                          coefficientController.text,
-                          fallback: selectedKind.defaultHeatTransferCoefficient,
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text('Сохранить проём'),
-                ),
-              ],
+            const SizedBox(height: 12),
+            DropdownButtonFormField<OpeningKind>(
+              initialValue: selectedKind,
+              decoration: const InputDecoration(labelText: 'Тип проёма'),
+              items: OpeningKind.values
+                  .map(
+                    (item) =>
+                        DropdownMenuItem(value: item, child: Text(item.label)),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  selectedKind = value;
+                }
+              },
             ),
-          );
-        },
+            const SizedBox(height: 12),
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: 'Название'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: areaController,
+              decoration: const InputDecoration(labelText: 'Площадь, м²'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: coefficientController,
+              decoration: const InputDecoration(labelText: 'U, Вт/м²·°C'),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(
+                  EnvelopeOpening(
+                    id: opening?.id ?? _buildId('opening'),
+                    elementId: elementId,
+                    title: _requiredText(
+                      titleController.text,
+                      fallback: selectedKind.label,
+                    ),
+                    kind: selectedKind,
+                    areaSquareMeters: _parseDouble(
+                      areaController.text,
+                      fallback: 2.0,
+                    ),
+                    heatTransferCoefficient: _parseDouble(
+                      coefficientController.text,
+                      fallback: selectedKind.defaultHeatTransferCoefficient,
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Сохранить проём'),
+            ),
+          ],
+        ),
       );
     },
   );
@@ -1902,118 +2284,6 @@ Future<EnvelopeOpening?> _showOpeningEditor(
   titleController.dispose();
   areaController.dispose();
   coefficientController.dispose();
-  return result;
-}
-
-// ignore: unused_element
-Future<ConstructionLayer?> _showLayerEditor(
-  BuildContext context, {
-  required CatalogSnapshot catalog,
-  ConstructionLayer? layer,
-}) async {
-  if (catalog.materials.isEmpty) {
-    return null;
-  }
-  final thicknessController = TextEditingController(
-    text: (layer?.thicknessMm ?? 100).toString(),
-  );
-  var selectedMaterialId = layer?.materialId ?? catalog.materials.first.id;
-  var selectedKind = layer?.kind ?? LayerKind.solid;
-  var enabled = layer?.enabled ?? true;
-
-  final result = await showModalBottomSheet<ConstructionLayer>(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              20 + MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: selectedMaterialId,
-                  decoration: const InputDecoration(labelText: 'Материал'),
-                  items: catalog.materials
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item.id,
-                          child: Text(item.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => selectedMaterialId = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<LayerKind>(
-                  initialValue: selectedKind,
-                  decoration: const InputDecoration(labelText: 'Тип слоя'),
-                  items: LayerKind.values
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => selectedKind = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: thicknessController,
-                  decoration: const InputDecoration(labelText: 'Толщина, мм'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Учитывать в расчёте'),
-                  value: enabled,
-                  onChanged: (value) => setState(() => enabled = value),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(
-                      ConstructionLayer(
-                        id: layer?.id ?? _buildId('layer'),
-                        materialId: selectedMaterialId,
-                        kind: selectedKind,
-                        thicknessMm: _parseDouble(
-                          thicknessController.text,
-                          fallback: 100,
-                        ),
-                        enabled: enabled,
-                      ),
-                    );
-                  },
-                  child: const Text('Сохранить слой'),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-
-  thicknessController.dispose();
   return result;
 }
 
@@ -2043,16 +2313,6 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
       return StatefulBuilder(
         builder: (context, setState) {
           final catalogEntries = catalog.heatingDevices;
-          HeatingDeviceCatalogEntry? selectedCatalogItem;
-          if (selectedCatalogItemId != null) {
-            for (final item in catalogEntries) {
-              if (item.id == selectedCatalogItemId) {
-                selectedCatalogItem = item;
-                break;
-              }
-            }
-          }
-
           return Padding(
             padding: EdgeInsets.fromLTRB(
               20,
@@ -2073,7 +2333,7 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 if (catalogEntries.isNotEmpty) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<String?>(
                     initialValue: selectedCatalogItemId,
                     decoration: const InputDecoration(
@@ -2139,9 +2399,6 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
                   decoration: const InputDecoration(
                     labelText: 'Тепловая мощность, Вт',
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -2150,12 +2407,6 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
                   minLines: 1,
                   maxLines: 3,
                 ),
-                if (selectedCatalogItem != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Каталог: ${selectedCatalogItem.title} • ${selectedCatalogItem.ratedPowerWatts.toStringAsFixed(0)} Вт',
-                  ),
-                ],
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () {
@@ -2195,9 +2446,101 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
   return result;
 }
 
-String _buildId(String prefix) {
-  return '$prefix-${DateTime.now().microsecondsSinceEpoch}';
+RoomLayoutRect _buildNextRoomLayout(List<Room> rooms) {
+  if (rooms.isEmpty) {
+    return RoomLayoutRect.defaultRect();
+  }
+  final lastRoom = rooms.last;
+  return RoomLayoutRect.defaultRect(
+    xMeters: lastRoom.layout.rightMeters + roomLayoutGapMeters,
+    yMeters: lastRoom.layout.yMeters,
+  );
 }
+
+RoomLayoutRect _squareLayoutFromArea(
+  double areaSquareMeters, {
+  required RoomLayoutRect baseLayout,
+}) {
+  final minimumArea =
+      minimumRoomLayoutDimensionMeters * minimumRoomLayoutDimensionMeters;
+  final normalizedArea = math.max(areaSquareMeters, minimumArea);
+  final side = math.max(
+    minimumRoomLayoutDimensionMeters,
+    _snapToStep(math.sqrt(normalizedArea)),
+  );
+  return RoomLayoutRect(
+    xMeters: baseLayout.xMeters,
+    yMeters: baseLayout.yMeters,
+    widthMeters: side,
+    heightMeters: side,
+  );
+}
+
+EnvelopeWallPlacement _snapWallPlacement(
+  EnvelopeWallPlacement placement, {
+  required double sideLength,
+}) {
+  final snappedLength = math.min(
+    sideLength,
+    math.max(roomLayoutSnapStepMeters, _snapToStep(placement.lengthMeters)),
+  );
+  final maxOffset = math.max(0.0, sideLength - snappedLength);
+  return EnvelopeWallPlacement(
+    side: placement.side,
+    offsetMeters: math.min(
+      maxOffset,
+      math.max(0.0, _snapToStep(placement.offsetMeters)),
+    ),
+    lengthMeters: snappedLength,
+  );
+}
+
+double _snapToStep(double value) {
+  return (value / roomLayoutSnapStepMeters).round() * roomLayoutSnapStepMeters;
+}
+
+bool _isSupportedEnvelopeElement(
+  HouseEnvelopeElement element,
+  Construction? construction,
+) {
+  if (construction == null) {
+    return false;
+  }
+  if (!_allowedExteriorKinds.contains(construction.elementKind)) {
+    return false;
+  }
+  if (element.elementKind != construction.elementKind) {
+    return false;
+  }
+  if (element.elementKind == ConstructionElementKind.wall &&
+      element.wallPlacement == null) {
+    return false;
+  }
+  return true;
+}
+
+String _describeLegacyElement(
+  HouseEnvelopeElement element,
+  Construction? construction,
+) {
+  if (construction == null) {
+    return 'Конструкция ${element.constructionId} не найдена в проекте.';
+  }
+  if (!_allowedExteriorKinds.contains(construction.elementKind)) {
+    return 'Тип конструкции не поддерживается новым интерфейсом.';
+  }
+  if (element.elementKind != construction.elementKind) {
+    return 'Тип элемента не совпадает с типом конструкции.';
+  }
+  if (element.elementKind == ConstructionElementKind.wall &&
+      element.wallPlacement == null) {
+    return 'Для стены отсутствует привязка к стороне помещения.';
+  }
+  return 'Запись не соответствует ограничениям раздела.';
+}
+
+String _buildId(String prefix) =>
+    '$prefix-${DateTime.now().microsecondsSinceEpoch}';
 
 double _parseDouble(String value, {required double fallback}) {
   return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
@@ -2209,7 +2552,20 @@ String _requiredText(String value, {required String fallback}) {
 }
 
 String _describeError(Object error) {
-  return error.toString().replaceFirst(RegExp(r'^Bad state: '), '');
+  final raw = error.toString().replaceFirst(RegExp(r'^Bad state: '), '');
+  if (raw.contains('Комнаты не должны пересекаться на плане')) {
+    return 'Помещения пересекаются. Проверьте площадь и положение комнаты.';
+  }
+  if (raw.contains('Размер комнаты не может быть меньше')) {
+    return 'Площадь помещения слишком мала. Увеличьте площадь или высоту.';
+  }
+  if (raw.contains('Комната не может выходить в отрицательные координаты')) {
+    return 'Положение помещения некорректно. Проверьте исходные данные.';
+  }
+  if (raw.contains('Для наружной стены нужна привязка к стороне комнаты')) {
+    return 'Для стены выберите сторону комнаты и длину сегмента.';
+  }
+  return raw;
 }
 
 void _showError(ScaffoldMessengerState messenger, Object error) {
