@@ -23,6 +23,12 @@ class HouseSchemeScreen extends ConsumerWidget {
     this.showConstructionsCard = true,
     this.showHeatingDevices = true,
     this.trailingHeader,
+    this.constructorCardTitle = 'План дома',
+    this.constructorCardCollapsedByDefault = false,
+    this.onOpenPreviousStep,
+    this.previousStepLabel,
+    this.showFloorPlanEditor = true,
+    this.showRoomSelectionSidebar = false,
   });
 
   final String screenTitle;
@@ -31,6 +37,12 @@ class HouseSchemeScreen extends ConsumerWidget {
   final bool showConstructionsCard;
   final bool showHeatingDevices;
   final Widget? trailingHeader;
+  final String constructorCardTitle;
+  final bool constructorCardCollapsedByDefault;
+  final VoidCallback? onOpenPreviousStep;
+  final String? previousStepLabel;
+  final bool showFloorPlanEditor;
+  final bool showRoomSelectionSidebar;
 
   Future<void> _handleAddRoom(
     BuildContext context,
@@ -436,6 +448,10 @@ class HouseSchemeScreen extends ConsumerWidget {
                 return _SummaryCard(
                   project: effectiveProject,
                   summary: summary,
+                  title: constructorCardTitle,
+                  collapsedByDefault: constructorCardCollapsedByDefault,
+                  onOpenPreviousStep: onOpenPreviousStep,
+                  previousStepLabel: previousStepLabel,
                   onOpenBuildingHeatLoss: () =>
                       _handleOpenBuildingHeatLoss(context),
                 );
@@ -461,6 +477,8 @@ class HouseSchemeScreen extends ConsumerWidget {
                       catalog: catalog,
                       summary: summaryAsync.asData?.value,
                       showHeatingDevices: showHeatingDevices,
+                      showFloorPlanEditor: showFloorPlanEditor,
+                      showRoomSelectionSidebar: showRoomSelectionSidebar,
                       onAddRoom: () => _handleAddRoom(context, ref, project),
                       onUpdateRoomLayout: (roomId, layout) =>
                           _handleUpdateRoomLayout(context, ref, roomId, layout),
@@ -584,104 +602,158 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
+class _SummaryCard extends StatefulWidget {
   const _SummaryCard({
     required this.project,
     required this.summary,
+    required this.title,
+    required this.collapsedByDefault,
+    required this.onOpenPreviousStep,
+    required this.previousStepLabel,
     required this.onOpenBuildingHeatLoss,
   });
 
   final Project project;
   final BuildingHeatLossResult summary;
+  final String title;
+  final bool collapsedByDefault;
+  final VoidCallback? onOpenPreviousStep;
+  final String? previousStepLabel;
   final VoidCallback onOpenBuildingHeatLoss;
 
   @override
+  State<_SummaryCard> createState() => _SummaryCardState();
+}
+
+class _SummaryCardState extends State<_SummaryCard> {
+  late bool _collapsed;
+
+  @override
+  void initState() {
+    super.initState();
+    _collapsed = widget.collapsedByDefault;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final unresolvedCount = widget.summary.unresolvedElements.length;
+    final compactStatus =
+        '${widget.summary.totalRoomCount} пом., ${widget.summary.totalElementCount} огражд., '
+        '${widget.summary.totalHeatLossWatts.toStringAsFixed(0)} Вт';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              project.houseModel.title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text('Проект: ${project.name}'),
-            Text('Режим помещения для норм: ${project.roomPreset.label}'),
-            Text(
-              'Расчетная наружная температура: '
-              '${summary.outsideAirTemperature.toStringAsFixed(0)} °C',
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _MetricTile(
-                  label: 'Помещения',
-                  value: '${summary.totalRoomCount}',
-                ),
-                _MetricTile(
-                  label: 'Ограждения',
-                  value: '${summary.totalElementCount}',
-                ),
-                _MetricTile(
-                  label: 'Конструкции',
-                  value: '${project.constructions.length}',
-                ),
-                _MetricTile(
-                  label: 'Площадь помещений',
-                  value:
-                      '${summary.totalRoomAreaSquareMeters.toStringAsFixed(1)} м²',
-                ),
-                _MetricTile(
-                  label: 'Площадь ограждений',
-                  value:
-                      '${summary.totalEnvelopeAreaSquareMeters.toStringAsFixed(1)} м²',
-                ),
-                _MetricTile(
-                  label: 'Проёмы',
-                  value:
-                      '${summary.totalOpeningCount} / ${summary.totalOpeningAreaSquareMeters.toStringAsFixed(1)} м²',
-                ),
-                _MetricTile(
-                  label: 'Чистая площадь',
-                  value:
-                      '${summary.totalOpaqueAreaSquareMeters.toStringAsFixed(1)} м²',
-                ),
-                _MetricTile(
-                  label: 'Суммарные потери',
-                  value: '${summary.totalHeatLossWatts.toStringAsFixed(0)} Вт',
-                ),
-                _MetricTile(
-                  label: 'Через проёмы',
-                  value:
-                      '${summary.totalOpeningHeatLossWatts.toStringAsFixed(0)} Вт',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                FilledButton.icon(
-                  onPressed: onOpenBuildingHeatLoss,
-                  icon: const Icon(Icons.home_work_outlined),
-                  label: const Text('Рассчитать теплопотери здания'),
-                ),
-                if (summary.unresolvedElements.isNotEmpty)
-                  Chip(
-                    label: Text(
-                      'Пропущено элементов: ${summary.unresolvedElements.length}',
+            InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => setState(() => _collapsed = !_collapsed),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.title,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        Text('Проект: ${widget.project.name}'),
+                        Text(compactStatus),
+                      ],
                     ),
                   ),
-              ],
+                  Icon(
+                    _collapsed ? Icons.expand_more : Icons.expand_less,
+                    semanticLabel: _collapsed ? 'Развернуть' : 'Свернуть',
+                  ),
+                ],
+              ),
             ),
+            if (!_collapsed) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Режим помещения для норм: ${widget.project.roomPreset.label}',
+              ),
+              Text(
+                'Расчетная наружная температура: '
+                '${widget.summary.outsideAirTemperature.toStringAsFixed(0)} °C',
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _MetricTile(
+                    label: 'Помещения',
+                    value: '${widget.summary.totalRoomCount}',
+                  ),
+                  _MetricTile(
+                    label: 'Ограждения',
+                    value: '${widget.summary.totalElementCount}',
+                  ),
+                  _MetricTile(
+                    label: 'Конструкции',
+                    value: '${widget.project.constructions.length}',
+                  ),
+                  _MetricTile(
+                    label: 'Площадь помещений',
+                    value:
+                        '${widget.summary.totalRoomAreaSquareMeters.toStringAsFixed(1)} м²',
+                  ),
+                  _MetricTile(
+                    label: 'Площадь ограждений',
+                    value:
+                        '${widget.summary.totalEnvelopeAreaSquareMeters.toStringAsFixed(1)} м²',
+                  ),
+                  _MetricTile(
+                    label: 'Проёмы',
+                    value:
+                        '${widget.summary.totalOpeningCount} / ${widget.summary.totalOpeningAreaSquareMeters.toStringAsFixed(1)} м²',
+                  ),
+                  _MetricTile(
+                    label: 'Чистая площадь',
+                    value:
+                        '${widget.summary.totalOpaqueAreaSquareMeters.toStringAsFixed(1)} м²',
+                  ),
+                  _MetricTile(
+                    label: 'Суммарные потери',
+                    value:
+                        '${widget.summary.totalHeatLossWatts.toStringAsFixed(0)} Вт',
+                  ),
+                  _MetricTile(
+                    label: 'Через проёмы',
+                    value:
+                        '${widget.summary.totalOpeningHeatLossWatts.toStringAsFixed(0)} Вт',
+                  ),
+                  _MetricTile(label: 'Без расчета', value: '$unresolvedCount'),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  if (widget.onOpenPreviousStep != null &&
+                      widget.previousStepLabel != null)
+                    FilledButton.tonalIcon(
+                      onPressed: widget.onOpenPreviousStep,
+                      icon: const Icon(Icons.looks_one_outlined),
+                      label: Text(widget.previousStepLabel!),
+                    ),
+                  FilledButton.icon(
+                    onPressed: widget.onOpenBuildingHeatLoss,
+                    icon: const Icon(Icons.home_work_outlined),
+                    label: const Text('Рассчитать теплопотери здания'),
+                  ),
+                  if (widget.summary.unresolvedElements.isNotEmpty)
+                    Chip(label: Text('Пропущено элементов: $unresolvedCount')),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -695,6 +767,8 @@ class _PlanAndRoomsSection extends StatefulWidget {
     required this.catalog,
     required this.summary,
     required this.showHeatingDevices,
+    required this.showFloorPlanEditor,
+    required this.showRoomSelectionSidebar,
     required this.onAddRoom,
     required this.onUpdateRoomLayout,
     required this.onEditRoom,
@@ -716,6 +790,8 @@ class _PlanAndRoomsSection extends StatefulWidget {
   final CatalogSnapshot catalog;
   final BuildingHeatLossResult? summary;
   final bool showHeatingDevices;
+  final bool showFloorPlanEditor;
+  final bool showRoomSelectionSidebar;
   final VoidCallback onAddRoom;
   final Future<String?> Function(String roomId, RoomLayoutRect layout)
   onUpdateRoomLayout;
@@ -766,52 +842,285 @@ class _PlanAndRoomsSectionState extends State<_PlanAndRoomsSection> {
     });
   }
 
+  Future<void> _openRoomSidebar() async {
+    final selectedRoomId = _effectiveSelectedRoomId;
+    final selectedRoom = selectedRoomId == null
+        ? null
+        : widget.project.houseModel.rooms.firstWhere(
+            (room) => room.id == selectedRoomId,
+          );
+    await showGeneralDialog<void>(
+      context: context,
+      barrierLabel: 'Помещения',
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.22),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _RoomSelectionSidebarDialog(
+          project: widget.project,
+          selectedRoomId: selectedRoomId,
+          selectedRoom: selectedRoom,
+          onSelectRoom: (roomId) {
+            _selectRoom(roomId);
+            Navigator.of(context).pop();
+          },
+          onAddRoom: () {
+            Navigator.of(context).pop();
+            widget.onAddRoom();
+          },
+          onAddElement: selectedRoom == null
+              ? null
+              : () {
+                  Navigator.of(context).pop();
+                  widget.onAddElement(selectedRoom);
+                },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final offsetAnimation =
+            Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            );
+        return SlideTransition(position: offsetAnimation, child: child);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectedRoomId = _effectiveSelectedRoomId;
-    return Column(
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        FloorPlanEditorCard(
-          project: widget.project,
-          selectedRoomId: selectedRoomId,
-          selectedElementId: _selectedElementId,
-          onAddRoom: widget.onAddRoom,
-          onSelectRoom: _selectRoom,
-          onSelectElement: _selectElement,
-          onUpdateRoomLayout: widget.onUpdateRoomLayout,
-          onUpdateElementWallPlacement: widget.onUpdateElementWallPlacement,
+        Column(
+          children: [
+            if (widget.showFloorPlanEditor) ...[
+              FloorPlanEditorCard(
+                project: widget.project,
+                selectedRoomId: selectedRoomId,
+                selectedElementId: _selectedElementId,
+                onAddRoom: widget.onAddRoom,
+                onSelectRoom: _selectRoom,
+                onSelectElement: _selectElement,
+                onUpdateRoomLayout: widget.onUpdateRoomLayout,
+                onUpdateElementWallPlacement:
+                    widget.onUpdateElementWallPlacement,
+              ),
+              const SizedBox(height: 16),
+            ],
+            _RoomsCard(
+              project: widget.project,
+              selectedRoomId: selectedRoomId,
+              onSelectRoom: _selectRoom,
+              onAddRoom: widget.onAddRoom,
+              onEditRoom: widget.onEditRoom,
+              onDeleteRoom: widget.onDeleteRoom,
+              onAddElement: widget.onAddElement,
+              onEditElement: widget.onEditElement,
+              onSelectElement: _selectElement,
+              onDeleteElement: widget.onDeleteElement,
+              onAddOpening: widget.onAddOpening,
+              onEditOpening: widget.onEditOpening,
+              onDeleteOpening: widget.onDeleteOpening,
+              onOpenThermocalc: widget.onOpenThermocalc,
+            ),
+            if (widget.showHeatingDevices) ...[
+              const SizedBox(height: 16),
+              HeatingDevicesCard(
+                project: widget.project,
+                catalog: widget.catalog,
+                summary: widget.summary,
+                selectedRoomId: selectedRoomId,
+                onSelectRoom: _selectRoom,
+                onAddHeatingDevice: widget.onAddHeatingDevice,
+                onEditHeatingDevice: widget.onEditHeatingDevice,
+                onDeleteHeatingDevice: widget.onDeleteHeatingDevice,
+              ),
+            ],
+          ],
         ),
-        const SizedBox(height: 16),
-        _RoomsCard(
-          project: widget.project,
-          selectedRoomId: selectedRoomId,
-          onSelectRoom: _selectRoom,
-          onAddRoom: widget.onAddRoom,
-          onEditRoom: widget.onEditRoom,
-          onDeleteRoom: widget.onDeleteRoom,
-          onAddElement: widget.onAddElement,
-          onEditElement: widget.onEditElement,
-          onSelectElement: _selectElement,
-          onDeleteElement: widget.onDeleteElement,
-          onAddOpening: widget.onAddOpening,
-          onEditOpening: widget.onEditOpening,
-          onDeleteOpening: widget.onDeleteOpening,
-          onOpenThermocalc: widget.onOpenThermocalc,
-        ),
-        if (widget.showHeatingDevices) ...[
-          const SizedBox(height: 16),
-          HeatingDevicesCard(
-            project: widget.project,
-            catalog: widget.catalog,
-            summary: widget.summary,
-            selectedRoomId: selectedRoomId,
-            onSelectRoom: _selectRoom,
-            onAddHeatingDevice: widget.onAddHeatingDevice,
-            onEditHeatingDevice: widget.onEditHeatingDevice,
-            onDeleteHeatingDevice: widget.onDeleteHeatingDevice,
+        if (widget.showRoomSelectionSidebar)
+          Positioned(
+            right: 16,
+            top: 16,
+            child: FloatingActionButton.extended(
+              heroTag: 'room-sidebar-toggle',
+              key: const ValueKey('room-sidebar-toggle'),
+              onPressed: _openRoomSidebar,
+              icon: const Icon(Icons.menu),
+              label: const Text('Помещения'),
+            ),
           ),
-        ],
       ],
+    );
+  }
+}
+
+class _RoomSelectionSidebarDialog extends StatelessWidget {
+  const _RoomSelectionSidebarDialog({
+    required this.project,
+    required this.selectedRoomId,
+    required this.selectedRoom,
+    required this.onSelectRoom,
+    required this.onAddRoom,
+    required this.onAddElement,
+  });
+
+  final Project project;
+  final String? selectedRoomId;
+  final Room? selectedRoom;
+  final ValueChanged<String> onSelectRoom;
+  final VoidCallback onAddRoom;
+  final VoidCallback? onAddElement;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = math.min(MediaQuery.sizeOf(context).width * 0.82, 320.0);
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Material(
+          elevation: 12,
+          color: const Color(0xFF2F3A68),
+          borderRadius: const BorderRadius.horizontal(
+            left: Radius.circular(28),
+          ),
+          child: SizedBox(
+            width: width,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Помещения',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    selectedRoom == null
+                        ? 'Выберите помещение для работы с ограждениями.'
+                        : 'Активно: ${selectedRoom!.title}',
+                    style: const TextStyle(color: Color(0xFFD6DBF5)),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: onAddRoom,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Добавить помещение'),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: onAddElement,
+                        icon: const Icon(Icons.border_outer),
+                        label: const Text('Добавить ограждение'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: project.houseModel.rooms.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Помещения пока не добавлены.',
+                              style: TextStyle(color: Colors.white70),
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: project.houseModel.rooms.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final room = project.houseModel.rooms[index];
+                              final roomElements = project.houseModel.elements
+                                  .where((item) => item.roomId == room.id)
+                                  .length;
+                              final selected = room.id == selectedRoomId;
+                              return InkWell(
+                                key: ValueKey('room-sidebar-room-${room.id}'),
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () => onSelectRoom(room.id),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? const Color(0xFF4B578D)
+                                        : const Color(0xFF394574),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: selected
+                                          ? const Color(0xFFFF7A6B)
+                                          : const Color(0xFF5A679B),
+                                      width: selected ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              room.title,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '${room.kind.label} • ${room.areaSquareMeters.toStringAsFixed(1)} м²',
+                                              style: const TextStyle(
+                                                color: Color(0xFFD6DBF5),
+                                              ),
+                                            ),
+                                            Text(
+                                              'Ограждений: $roomElements',
+                                              style: const TextStyle(
+                                                color: Color(0xFFD6DBF5),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (selected)
+                                        const Icon(
+                                          Icons.check_circle,
+                                          color: Color(0xFFFF7A6B),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

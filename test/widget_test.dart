@@ -242,7 +242,120 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Шаг 2. План дома'), findsOneWidget);
-    expect(find.text('Контроль планировки'), findsOneWidget);
+    expect(find.text('Контроль планировки'), findsNothing);
+    expect(find.text('Конструктор дома'), findsOneWidget);
+    expect(find.text('Планировочная схема'), findsNothing);
+  });
+
+  testWidgets('building step constructor card expands and collapses', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: BuildingStepScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Режим помещения для норм:'), findsNothing);
+
+    await tester.tap(find.text('Конструктор дома'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Режим помещения для норм:'), findsOneWidget);
+
+    await tester.tap(find.text('Конструктор дома'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Режим помещения для норм:'), findsNothing);
+  });
+
+  testWidgets('building step room sidebar selects room', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final repository = FakeProjectRepository(
+      projects: [
+        buildTestProject(
+          houseModel: HouseModel(
+            id: 'house-model',
+            title: 'Конструктор дома',
+            rooms: [
+              buildRoom(
+                id: 'room-main',
+                title: 'Гостиная',
+                layout: buildRoomLayout(widthMeters: 4, heightMeters: 4),
+              ),
+              buildRoom(
+                id: 'room-bedroom',
+                title: 'Спальня',
+                kind: RoomKind.bedroom,
+                layout: buildRoomLayout(
+                  xMeters: 5,
+                  yMeters: 0,
+                  widthMeters: 3,
+                  heightMeters: 4,
+                ),
+              ),
+            ],
+            elements: [
+              HouseEnvelopeElement.fromConstruction(
+                buildWallConstruction(),
+                roomId: 'room-main',
+                room: buildRoom(
+                  id: 'room-main',
+                  title: 'Гостиная',
+                  layout: buildRoomLayout(widthMeters: 4, heightMeters: 4),
+                ),
+              ),
+            ],
+            openings: const [],
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(repository),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: BuildingStepScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Активно: Гостиная'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('room-sidebar-room-room-bedroom')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Активно: Гостиная'), findsNothing);
+    expect(find.text('Активно: Спальня'), findsOneWidget);
   });
 
   testWidgets('ground floor screen still renders directly', (tester) async {
