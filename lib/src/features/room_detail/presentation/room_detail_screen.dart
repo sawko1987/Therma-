@@ -185,6 +185,12 @@ class _HeatBalanceCard extends StatelessWidget {
     final balanceColor = balanceValue >= 0
         ? colorScheme.primary
         : colorScheme.error;
+    final grossEnvelopeArea =
+        roomResult?.totalEnvelopeAreaSquareMeters ?? data.grossEnvelopeArea;
+    final opaqueEnvelopeArea =
+        roomResult?.totalOpaqueAreaSquareMeters ?? data.opaqueEnvelopeArea;
+    final openingCount = roomResult?.openingCount ?? data.openings.length;
+    final elementCount = roomResult?.elementCount ?? data.elements.length;
 
     return Card(
       child: Padding(
@@ -204,14 +210,12 @@ class _HeatBalanceCard extends StatelessWidget {
               runSpacing: 12,
               children: [
                 _MetricTile(
-                  label: 'Внутри',
-                  value:
-                      '${data.insideTemperature.toStringAsFixed(0)} °C',
+                  label: 'Внутренняя температура',
+                  value: '${data.insideTemperature.toStringAsFixed(0)} °C',
                 ),
                 _MetricTile(
-                  label: 'Снаружи',
-                  value:
-                      '${data.outsideTemperature.toStringAsFixed(0)} °C',
+                  label: 'Наружная температура',
+                  value: '${data.outsideTemperature.toStringAsFixed(0)} °C',
                 ),
                 _MetricTile(
                   label: 'Суммарные потери',
@@ -232,21 +236,19 @@ class _HeatBalanceCard extends StatelessWidget {
                 ),
                 _MetricTile(
                   label: 'Площадь помещения',
-                  value:
-                      '${data.room.areaSquareMeters.toStringAsFixed(1)} м²',
+                  value: '${data.room.areaSquareMeters.toStringAsFixed(1)} м²',
                 ),
                 _MetricTile(
-                  label: 'Ограждения валовая',
-                  value: '${data.grossEnvelopeArea.toStringAsFixed(1)} м²',
+                  label: 'Ограждения, валовая',
+                  value: '${grossEnvelopeArea.toStringAsFixed(1)} м²',
                 ),
                 _MetricTile(
-                  label: 'Ограждения чистая',
-                  value: '${data.opaqueEnvelopeArea.toStringAsFixed(1)} м²',
+                  label: 'Ограждения, чистая',
+                  value: '${opaqueEnvelopeArea.toStringAsFixed(1)} м²',
                 ),
                 _MetricTile(
                   label: 'Количество',
-                  value:
-                      '${data.elements.length} огр. / ${data.openings.length} пр.',
+                  value: '$elementCount огр. / $openingCount пр.',
                 ),
               ],
             ),
@@ -261,6 +263,16 @@ class _HeatBalanceCard extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              if (roomResult.unresolvedElements.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Без расчёта: ${roomResult.unresolvedElements.map((item) => item.title).join(', ')}',
+                  style: TextStyle(
+                    color: colorScheme.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
           ],
         ),
@@ -280,6 +292,8 @@ class _ElementsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -322,6 +336,16 @@ class _ElementsSection extends ConsumerWidget {
                   ),
                 );
               }),
+            if (data.missingConstructionElements.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Часть ограждений без доступной конструкции: ${data.missingConstructionElements.map((item) => item.title).join(', ')}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -381,6 +405,8 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final openingArea = widget.openings.fold<double>(
       0,
       (sum, item) => sum + item.areaSquareMeters,
@@ -393,7 +419,8 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(color: colorScheme.outlineVariant),
+        color: colorScheme.surface,
       ),
       child: Column(
         children: [
@@ -411,16 +438,22 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
                       children: [
                         Text(
                           widget.element.title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${widget.element.elementKind.label} • ${widget.construction?.title ?? 'Конструкция не найдена'}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: widget.construction == null
+                                ? colorScheme.error
+                                : colorScheme.onSurfaceVariant,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Площадь ${widget.element.areaSquareMeters.toStringAsFixed(1)} / ${opaqueArea.toStringAsFixed(1)} м²',
+                          'Площадь валовая ${widget.element.areaSquareMeters.toStringAsFixed(1)} м² • чистая ${opaqueArea.toStringAsFixed(1)} м²',
                         ),
                         if (widget.element.elementKind ==
                                 ConstructionElementKind.wall &&
@@ -464,6 +497,13 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    'Проёмы',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       FilledButton.tonal(
@@ -622,6 +662,7 @@ class _OpeningTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       tileColor: const Color(0xFFF7F4ED),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -630,6 +671,7 @@ class _OpeningTile extends StatelessWidget {
         opening.kind == OpeningKind.window
             ? Icons.crop_landscape_outlined
             : Icons.door_front_door_outlined,
+        color: colorScheme.primary,
       ),
       title: Text(
         opening.title,
@@ -687,13 +729,14 @@ class _CalculationTableCard extends StatelessWidget {
                 return _CalculationDataRow(
                   backgroundColor: index.isEven
                       ? const Color(0xFFF7F4ED)
-                      : Theme.of(context).colorScheme.surfaceContainerLowest,
+                      : Theme.of(context).colorScheme.surfaceContainerLow,
                   title: element.title,
                   kind: element.elementKind.label,
                   resistance: result == null
                       ? '—'
                       : result.totalResistance.toStringAsFixed(2),
-                  area: element.areaSquareMeters.toStringAsFixed(1),
+                  area: (result?.elementAreaSquareMeters ?? element.areaSquareMeters)
+                      .toStringAsFixed(1),
                   heatLoss: result == null
                       ? '—'
                       : result.totalHeatLossWatts.toStringAsFixed(0),
@@ -738,6 +781,7 @@ class _WallSchemeCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 14),
                 child: _WallSideRow(
                   side: side,
+                  sideLength: sideLength,
                   segments: segments,
                   onTapElement: (element) =>
                       _showWallElementDetails(context, element),
@@ -799,6 +843,9 @@ class _WallSchemeCard extends StatelessWidget {
     BuildContext context,
     HouseEnvelopeElement element,
   ) {
+    final result = data.elementResultsById[element.id];
+    final openings = data.openingsByElementId[element.id] ?? const [];
+    final construction = data.constructionById[element.constructionId];
     showModalBottomSheet<void>(
       context: context,
       builder: (context) {
@@ -816,7 +863,13 @@ class _WallSchemeCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(element.elementKind.label),
+              Text('Конструкция: ${construction?.title ?? 'Не найдена'}'),
               Text('Площадь ${element.areaSquareMeters.toStringAsFixed(1)} м²'),
+              Text('Проёмы: ${openings.length}'),
+              if (result != null)
+                Text(
+                  'Потери ${result.totalHeatLossWatts.toStringAsFixed(0)} Вт • R ${result.totalResistance.toStringAsFixed(2)} м²·°C/Вт',
+                ),
               if (element.wallPlacement case final placement?)
                 Text(
                   '${placement.side.label} • сегмент ${placement.lengthMeters.toStringAsFixed(1)} м • '
@@ -833,11 +886,13 @@ class _WallSchemeCard extends StatelessWidget {
 class _WallSideRow extends StatelessWidget {
   const _WallSideRow({
     required this.side,
+    required this.sideLength,
     required this.segments,
     required this.onTapElement,
   });
 
   final RoomSide side;
+  final double sideLength;
   final List<_WallVisualSegment> segments;
   final ValueChanged<HouseEnvelopeElement> onTapElement;
 
@@ -848,8 +903,10 @@ class _WallSideRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          side.label,
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          '${side.label} • ${sideLength.toStringAsFixed(1)} м',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
         SizedBox(
@@ -981,10 +1038,10 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 132,
+      width: 148,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
@@ -1096,6 +1153,7 @@ class _RoomDetailData {
     required this.grossEnvelopeArea,
     required this.opaqueEnvelopeArea,
     required this.thermocalcElement,
+    required this.missingConstructionElements,
   });
 
   factory _RoomDetailData.fromSources({
@@ -1148,10 +1206,12 @@ class _RoomDetailData {
         0;
 
     HouseEnvelopeElement? thermocalcElement;
+    final missingConstructionElements = <HouseEnvelopeElement>[];
     for (final element in elements) {
       if (constructionById.containsKey(element.constructionId)) {
-        thermocalcElement = element;
-        break;
+        thermocalcElement ??= element;
+      } else {
+        missingConstructionElements.add(element);
       }
     }
 
@@ -1171,6 +1231,7 @@ class _RoomDetailData {
       grossEnvelopeArea: grossEnvelopeArea,
       opaqueEnvelopeArea: math.max(0, grossEnvelopeArea - openingArea),
       thermocalcElement: thermocalcElement,
+      missingConstructionElements: missingConstructionElements,
     );
   }
 
@@ -1189,6 +1250,7 @@ class _RoomDetailData {
   final double grossEnvelopeArea;
   final double opaqueEnvelopeArea;
   final HouseEnvelopeElement? thermocalcElement;
+  final List<HouseEnvelopeElement> missingConstructionElements;
 
   static BuildingRoomHeatLossResult? _findRoomResult(
     BuildingHeatLossResult? heatLoss,
