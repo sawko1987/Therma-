@@ -12,6 +12,7 @@ import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
 import 'floor_plan_geometry.dart';
 import 'widgets/floor_plan_editor_card.dart';
 import 'widgets/heating_devices_card.dart';
+import '../../room_detail/presentation/room_detail_screen.dart';
 import '../../thermocalc/presentation/thermocalc_screen.dart';
 
 class HouseSchemeScreen extends ConsumerStatefulWidget {
@@ -1348,22 +1349,37 @@ class _RoomsCard extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    onEditRoom(room);
-                                  } else if (value == 'delete') {
-                                    onDeleteRoom(room);
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Text('Редактировать помещение'),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Детали помещения',
+                                    icon: const Icon(Icons.open_in_new),
+                                    onPressed: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            RoomDetailScreen(room: room),
+                                      ),
+                                    ),
                                   ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Удалить помещение'),
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        onEditRoom(room);
+                                      } else if (value == 'delete') {
+                                        onDeleteRoom(room);
+                                      }
+                                    },
+                                    itemBuilder: (context) => const [
+                                      PopupMenuItem(
+                                        value: 'edit',
+                                        child: Text('Редактировать помещение'),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'delete',
+                                        child: Text('Удалить помещение'),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -1884,6 +1900,18 @@ Future<Room?> _showRoomEditor(
   return result;
 }
 
+Future<Room?> showRoomEditorSheet(
+  BuildContext context, {
+  Room? room,
+  RoomLayoutRect? initialLayout,
+}) {
+  return _showRoomEditor(
+    context,
+    room: room,
+    initialLayout: initialLayout,
+  );
+}
+
 Future<HouseEnvelopeElement?> _showElementEditor(
   BuildContext context, {
   required Project project,
@@ -2210,6 +2238,22 @@ Future<HouseEnvelopeElement?> _showElementEditor(
   return result;
 }
 
+Future<HouseEnvelopeElement?> showElementEditorSheet(
+  BuildContext context, {
+  required Project project,
+  required CatalogSnapshot catalog,
+  required String roomId,
+  HouseEnvelopeElement? element,
+}) {
+  return _showElementEditor(
+    context,
+    project: project,
+    catalog: catalog,
+    roomId: roomId,
+    element: element,
+  );
+}
+
 Future<Construction?> _showConstructionEditor(
   BuildContext context, {
   required CatalogSnapshot catalog,
@@ -2358,6 +2402,18 @@ Future<EnvelopeOpening?> _showOpeningEditor(
   areaController.dispose();
   coefficientController.dispose();
   return result;
+}
+
+Future<EnvelopeOpening?> showOpeningEditorSheet(
+  BuildContext context, {
+  required String elementId,
+  EnvelopeOpening? opening,
+}) {
+  return _showOpeningEditor(
+    context,
+    elementId: elementId,
+    opening: opening,
+  );
 }
 
 // ignore: unused_element
