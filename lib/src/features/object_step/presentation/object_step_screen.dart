@@ -5,6 +5,7 @@ import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 import '../../construction_library/presentation/construction_step_screen.dart';
+import '../../settings/presentation/settings_screen.dart';
 
 class ObjectStepScreen extends ConsumerWidget {
   const ObjectStepScreen({super.key});
@@ -15,7 +16,18 @@ class ObjectStepScreen extends ConsumerWidget {
     final selectedObjectId = ref.watch(selectedObjectIdProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Шаг 0. Объект')),
+      appBar: AppBar(
+        title: const Text('Шаг 0. Объект'),
+        actions: [
+          IconButton(
+            tooltip: 'Настройки',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+            ),
+            icon: const Icon(Icons.settings_outlined),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
         children: [

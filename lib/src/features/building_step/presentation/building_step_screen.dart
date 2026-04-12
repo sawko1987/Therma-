@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
+import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
 import '../../construction_library/presentation/construction_step_screen.dart';
-import '../../heating_economics/presentation/heating_economics_screen.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
 
 class BuildingStepScreen extends ConsumerWidget {
@@ -15,9 +15,9 @@ class BuildingStepScreen extends ConsumerWidget {
     final summaryAsync = ref.watch(buildingHeatLossResultProvider);
 
     return HouseSchemeScreen(
-      screenTitle: 'Шаг 2. Здание',
+      screenTitle: 'Шаг 2. План дома',
       statusText:
-          'Шаг 2 использует только конструкции, выбранные на шаге 1. Здесь собирается схема здания из помещений и ограждений, а ниже показывается краткая оценка теплопотерь по дому.',
+          'После выбора ограждающих конструкций на шаге 1 здесь формируется план дома: помещения, ограждения и проёмы. Когда планировка собрана, можно сразу открыть расчёт суммарных теплопотерь по зданию.',
       limitToSelectedConstructions: true,
       showConstructionsCard: false,
       showHeatingDevices: false,
@@ -28,7 +28,7 @@ class BuildingStepScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Контроль шага 2',
+                'Контроль планировки',
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -41,7 +41,7 @@ class BuildingStepScreen extends ConsumerWidget {
                       return const Text('Активный проект не найден.');
                     }
                     final selectedCount =
-                        project.effectiveSelectedConstructionIds.length;
+                        project.activeSelectedConstructionIds.length;
                     final unresolvedCount = summary.unresolvedElements.length;
                     return Wrap(
                       spacing: 12,
@@ -60,7 +60,7 @@ class BuildingStepScreen extends ConsumerWidget {
                           value: '${summary.totalElementCount}',
                         ),
                         _MetricTile(
-                          label: 'Оценка потерь',
+                          label: 'Суммарные потери',
                           value:
                               '${summary.totalHeatLossWatts.toStringAsFixed(0)} Вт',
                         ),
@@ -94,12 +94,12 @@ class BuildingStepScreen extends ConsumerWidget {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => const HeatingEconomicsScreen(),
+                      builder: (_) => const BuildingHeatLossScreen(),
                     ),
                   );
                 },
-                icon: const Icon(Icons.looks_3_outlined),
-                label: const Text('Перейти к шагу 3'),
+                icon: const Icon(Icons.analytics_outlined),
+                label: const Text('Открыть теплопотери здания'),
               ),
             ],
           ),

@@ -6,8 +6,11 @@ import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
 import 'package:smartcalc_mobile/src/features/building_step/presentation/building_step_screen.dart';
+import 'package:smartcalc_mobile/src/features/construction_library/presentation/construction_directory_screen.dart';
+import 'package:smartcalc_mobile/src/features/construction_library/presentation/construction_step_screen.dart';
 import 'package:smartcalc_mobile/src/features/ground_floor/presentation/ground_floor_screen.dart';
 import 'package:smartcalc_mobile/src/features/house_scheme/presentation/house_scheme_screen.dart';
+import 'package:smartcalc_mobile/src/features/settings/presentation/settings_screen.dart';
 
 import 'support/fakes.dart';
 
@@ -54,9 +57,12 @@ void main() {
 
     expect(find.text('Шаг 1. Конструкции'), findsOneWidget);
     expect(find.text('Конструкции проекта'), findsOneWidget);
+    expect(find.text('Перейти к созданию помещений (Шаг 2)'), findsOneWidget);
   });
 
-  testWidgets('step 1 opens material management screen', (tester) async {
+  testWidgets('settings screen opens material management screen', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -71,9 +77,9 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Demo project'));
+    await tester.tap(find.byTooltip('Настройки'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Материалы'));
+    await tester.tap(find.text('Справочник материалов'));
     await tester.pumpAndSettle();
 
     expect(find.text('Каталог материалов'), findsOneWidget);
@@ -111,6 +117,91 @@ void main() {
     expect(find.text('Шаг 1. Конструкции'), findsOneWidget);
   });
 
+  testWidgets('step 1 shows empty project state', (tester) async {
+    final emptySelectionProject = buildTestProject().copyWith(
+      selectedConstructionIds: const ['missing-construction'],
+      projectConstructionSelections: const [
+        ProjectConstructionSelection(constructionId: 'missing-construction'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(projects: [emptySelectionProject]),
+          ),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: ConstructionStepScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('В проект пока не добавлена ни одна конструкция'),
+      findsOneWidget,
+    );
+    expect(find.text('Добавить конструкцию'), findsOneWidget);
+  });
+
+  testWidgets('step 1 opens construction picker modal', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: ConstructionStepScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Добавить конструкцию'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Добавить конструкцию'), findsWidgets);
+    expect(find.text('Шаблон стены'), findsOneWidget);
+    expect(find.byTooltip('Копировать'), findsWidgets);
+  });
+
+  testWidgets('construction directory screen renders directly', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: ConstructionDirectoryScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Справочник конструкций'), findsWidgets);
+    expect(find.text('Шаблон стены'), findsOneWidget);
+  });
+
+  testWidgets('settings screen renders directly', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Настройки'), findsOneWidget);
+    expect(find.text('Справочник конструкций'), findsOneWidget);
+    expect(find.text('Справочник материалов'), findsOneWidget);
+  });
+
   testWidgets('house scheme screen still renders directly', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -124,9 +215,11 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Сборка дома'), findsOneWidget);
-    expect(find.text('Конструктор дома'), findsOneWidget);
-    expect(find.text('Разделы'), findsOneWidget);
+    expect(find.text('Планировка дома'), findsOneWidget);
+    expect(
+      find.textContaining('После выбора ограждающих конструкций'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('building step screen still renders directly', (tester) async {
@@ -148,8 +241,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Шаг 2. Здание'), findsOneWidget);
-    expect(find.text('Контроль шага 2'), findsOneWidget);
+    expect(find.text('Шаг 2. План дома'), findsOneWidget);
+    expect(find.text('Контроль планировки'), findsOneWidget);
   });
 
   testWidgets('ground floor screen still renders directly', (tester) async {

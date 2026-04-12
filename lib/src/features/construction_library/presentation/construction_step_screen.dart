@@ -5,9 +5,8 @@ import '../../../core/models/calculation.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
-import '../../thermocalc/presentation/thermocalc_screen.dart';
-import 'construction_editor_sheet.dart';
-import 'material_management_screen.dart';
+import '../../building_step/presentation/building_step_screen.dart';
+import 'construction_directory_screen.dart';
 
 class ConstructionStepScreen extends ConsumerWidget {
   const ConstructionStepScreen({super.key});
@@ -15,7 +14,6 @@ class ConstructionStepScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectAsync = ref.watch(selectedProjectProvider);
-    final catalogAsync = ref.watch(catalogSnapshotProvider);
     final libraryAsync = ref.watch(constructionLibraryProvider);
     final materialEntriesAsync = ref.watch(materialCatalogEntriesProvider);
 
@@ -26,26 +24,20 @@ class ConstructionStepScreen extends ConsumerWidget {
           if (project == null) {
             return const Center(child: Text('Активный проект не найден.'));
           }
-          return catalogAsync.when(
-            data: (catalog) => materialEntriesAsync.when(
-              data: (materialEntries) => libraryAsync.when(
-                data: (library) => _ConstructionStepBody(
-                  project: project,
-                  catalog: catalog,
-                  library: library,
-                  materialEntries: materialEntries,
-                ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) =>
-                    Center(child: Text('Ошибка загрузки библиотеки: $error')),
+          return materialEntriesAsync.when(
+            data: (materialEntries) => libraryAsync.when(
+              data: (library) => _ConstructionStepBody(
+                project: project,
+                library: library,
+                materialEntries: materialEntries,
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) =>
-                  Center(child: Text('Ошибка загрузки материалов: $error')),
+                  Center(child: Text('Ошибка загрузки библиотеки: $error')),
             ),
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) =>
-                Center(child: Text('Ошибка загрузки каталога: $error')),
+                Center(child: Text('Ошибка загрузки материалов: $error')),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -59,13 +51,11 @@ class ConstructionStepScreen extends ConsumerWidget {
 class _ConstructionStepBody extends ConsumerStatefulWidget {
   const _ConstructionStepBody({
     required this.project,
-    required this.catalog,
     required this.library,
     required this.materialEntries,
   });
 
   final Project project;
-  final CatalogSnapshot catalog;
   final List<Construction> library;
   final List<MaterialCatalogEntry> materialEntries;
 
@@ -75,686 +65,376 @@ class _ConstructionStepBody extends ConsumerStatefulWidget {
 }
 
 class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
-  ConstructionElementKind? _filterKind;
-  String _searchQuery = '';
-  _ConstructionLibraryScope _libraryScope = _ConstructionLibraryScope.all;
+  final Set<String> _expandedIds = <String>{};
 
   @override
   Widget build(BuildContext context) {
     final messenger = ScaffoldMessenger.of(context);
-    final selectedIds = widget.project.effectiveSelectedConstructionIds.toSet();
     final materialMap = {
       for (final entry in widget.materialEntries)
         entry.material.id: entry.material,
     };
-    final templateIds = widget.catalog.constructionTemplates
-        .map((item) => item.id)
-        .toSet();
-    final filteredLibrary = widget.library
-        .where((item) => _filterKind == null || item.elementKind == _filterKind)
-        .where(
-          (item) =>
-              _libraryScope.matches(isTemplate: templateIds.contains(item.id)),
-        )
-        .where((item) => _matchesConstruction(item, _searchQuery, materialMap))
-        .toList(growable: false);
-    final selectedConstructions = widget.project.constructions
-        .where((item) => selectedIds.contains(item.id))
-        .toList(growable: false);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.project.name,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Соберите набор ограждающих конструкций для проекта. Выбранные конструкции будут доступны на следующем этапе построения здания.',
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _MetricChip(
-                      label: 'Выбрано',
-                      value: '${selectedConstructions.length}',
-                    ),
-                    _MetricChip(
-                      label: 'В библиотеке',
-                      value: '${widget.library.length}',
-                    ),
-                    _MetricChip(
-                      label: 'Шаг 2',
-                      value: selectedConstructions.isEmpty
-                          ? 'ожидает'
-                          : 'готовится',
-                    ),
-                  ],
-                ),
-              ],
+    final selections = widget.project.effectiveProjectConstructionSelections;
+    final selectedRows = [
+      for (final selection in selections)
+        if (widget.project.constructions.any(
+          (construction) => construction.id == selection.constructionId,
+        ))
+          (
+            selection,
+            widget.project.constructions.firstWhere(
+              (construction) => construction.id == selection.constructionId,
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  alignment: WrapAlignment.spaceBetween,
+    ];
+
+    final hasActiveConstructions =
+        widget.project.activeSelectedConstructionIds.isNotEmpty;
+
+    return Stack(
+      children: [
+        ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 180),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Конструкции проекта',
+                      widget.project.name,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'На этом шаге собирается набор конструкций проекта. Здесь остаются только конструкции проекта: их можно временно исключать из расчета, разворачивать и готовить к следующему шагу.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        FilledButton.icon(
-                          onPressed: () =>
-                              _handleCreateConstruction(context, messenger),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Создать'),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const MaterialManagementScreen(),
-                            ),
+                        Expanded(
+                          child: Text(
+                            'Конструкции проекта',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
-                          icon: const Icon(Icons.inventory_2_outlined),
-                          label: const Text('Материалы'),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEAF3F0),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text('${selectedRows.length}'),
                         ),
                       ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  selectedConstructions.isEmpty
-                      ? 'Пока ничего не выбрано. Выберите готовую конструкцию из библиотеки или создайте новую.'
-                      : 'Этот набор будет передан в следующий этап.',
-                ),
-                const SizedBox(height: 16),
-                if (selectedConstructions.isEmpty)
-                  const Text('Конструкции проекта пока не выбраны.')
-                else
-                  ...selectedConstructions.map(
-                    (construction) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _ConstructionCard(
-                        construction: construction,
-                        materialMap: materialMap,
-                        selected: true,
-                        onTapPrimary: () async {
-                          await _handleRemoveFromProject(
-                            messenger,
-                            construction.id,
-                          );
-                        },
-                        primaryLabel: 'Убрать из проекта',
-                        onEdit: () => _handleEditConstruction(
-                          context,
-                          messenger,
-                          construction,
-                        ),
-                        onCopy: () => _handleCopyConstruction(
-                          context,
-                          messenger,
-                          construction,
-                        ),
-                        onDelete: () => _handleDeleteFromLibrary(
-                          messenger,
-                          construction.id,
-                        ),
-                        footer: _ConstructionStatusFooter(
-                          constructionId: construction.id,
-                          onOpenCalculation: () => _openConstructionCalculation(
-                            context,
-                            construction,
+                    const SizedBox(height: 8),
+                    const Text(
+                      'По умолчанию строки свернуты. Можно временно исключить конструкцию из расчета, вернуть ее обратно или развернуть для просмотра состава и расчетного статуса.',
+                    ),
+                    const SizedBox(height: 16),
+                    if (selectedRows.isEmpty)
+                      const _EmptyProjectConstructionsState()
+                    else
+                      ...selectedRows.map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ProjectConstructionRow(
+                            construction: entry.$2,
+                            selection: entry.$1,
+                            materialMap: materialMap,
+                            expanded: _expandedIds.contains(entry.$2.id),
+                            onToggleExpanded: () => setState(() {
+                              if (!_expandedIds.add(entry.$2.id)) {
+                                _expandedIds.remove(entry.$2.id);
+                              }
+                            }),
+                            onToggleIncluded: () async {
+                              try {
+                                if (entry.$1.includedInCalculation) {
+                                  await ref
+                                      .read(projectEditorProvider)
+                                      .excludeConstructionFromCalculation(
+                                        entry.$2.id,
+                                      );
+                                } else {
+                                  await ref
+                                      .read(projectEditorProvider)
+                                      .includeConstructionInCalculation(
+                                        entry.$2.id,
+                                      );
+                                }
+                              } catch (error) {
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text(error.toString())),
+                                );
+                              }
+                            },
+                            onRemove: () async {
+                              try {
+                                await ref
+                                    .read(projectEditorProvider)
+                                    .unselectConstructionFromProject(
+                                      entry.$2.id,
+                                    );
+                              } catch (error) {
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text(error.toString())),
+                                );
+                              }
+                            },
                           ),
                         ),
                       ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Библиотека конструкций',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FilterChip(
-                      label: const Text('Все'),
-                      selected: _filterKind == null,
-                      onSelected: (_) => setState(() => _filterKind = null),
-                    ),
-                    ...ConstructionElementKind.values.map(
-                      (kind) => FilterChip(
-                        label: Text(kind.label),
-                        selected: _filterKind == kind,
-                        onSelected: (_) => setState(() => _filterKind = kind),
+                    Text(
+                      'Следующий шаг',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    ..._ConstructionLibraryScope.values.map(
-                      (scope) => FilterChip(
-                        label: Text(scope.label),
-                        selected: _libraryScope == scope,
-                        onSelected: (_) =>
-                            setState(() => _libraryScope = scope),
+                    const SizedBox(height: 8),
+                    Text(
+                      hasActiveConstructions
+                          ? 'Можно переходить к созданию помещений и планировки дома.'
+                          : 'Чтобы перейти к шагу 2, оставьте хотя бы одну конструкцию включенной в расчет.',
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: hasActiveConstructions
+                            ? () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => const BuildingStepScreen(),
+                                  ),
+                                );
+                              }
+                            : null,
+                        icon: const Icon(Icons.meeting_room_outlined),
+                        label: const Text(
+                          'Перейти к созданию помещений (Шаг 2)',
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Поиск по названию и материалам',
-                    prefixIcon: Icon(Icons.search),
-                  ),
-                  onChanged: (value) => setState(() => _searchQuery = value),
-                ),
-                const SizedBox(height: 16),
-                if (filteredLibrary.isEmpty)
-                  const Text(
-                    'В библиотеке нет конструкций по текущему фильтру.',
-                  )
-                else
-                  ...filteredLibrary.map(
-                    (construction) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _ConstructionCard(
-                        construction: construction,
-                        materialMap: materialMap,
-                        selected: selectedIds.contains(construction.id),
-                        onTapPrimary: selectedIds.contains(construction.id)
-                            ? null
-                            : () => _handleSelectForProject(
-                                messenger,
-                                construction,
-                              ),
-                        primaryLabel: selectedIds.contains(construction.id)
-                            ? 'Уже выбрана'
-                            : 'Выбрать в проект',
-                        onEdit: () => _handleEditConstruction(
-                          context,
-                          messenger,
-                          construction,
-                        ),
-                        onCopy: () => _handleCopyConstruction(
-                          context,
-                          messenger,
-                          construction,
-                        ),
-                        onDelete: () => _handleDeleteFromLibrary(
-                          messenger,
-                          construction.id,
-                        ),
-                        footer: _ConstructionStatusFooter(
-                          constructionId: construction.id,
-                          onOpenCalculation: () => _openConstructionCalculation(
-                            context,
-                            construction,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Следующий этап',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  selectedConstructions.isEmpty
-                      ? 'Сначала добавьте хотя бы одну конструкцию в проект.'
-                      : 'Следующим шагом будет создание здания из выбранных конструкций.',
-                ),
-              ],
-            ),
+        Positioned(
+          right: 20,
+          bottom: 20,
+          child: FloatingActionButton.extended(
+            onPressed: () => _handleAddConstruction(context, materialMap),
+            icon: const Icon(Icons.add),
+            label: const Text('Добавить конструкцию'),
           ),
         ),
       ],
     );
   }
 
-  Future<void> _handleCreateConstruction(
+  Future<void> _handleAddConstruction(
     BuildContext context,
-    ScaffoldMessengerState messenger,
+    Map<String, MaterialEntry> materialMap,
   ) async {
-    final created = await showConstructionEditor(
+    final selected = await showConstructionPickerModal(
       context,
-      catalog: widget.catalog,
+      constructions: widget.library,
       materialEntries: widget.materialEntries,
-      onSaveCustomMaterial: (material) async {
-        await ref.read(projectEditorProvider).saveCustomMaterial(material);
-        return material;
-      },
+      materialMap: materialMap,
     );
-    if (!context.mounted || created == null) {
+    if (!context.mounted || selected == null) {
       return;
     }
     try {
-      await ref.read(projectEditorProvider).addConstruction(created);
+      switch (selected.action) {
+        case ConstructionPickerAction.selectExisting:
+          await ref
+              .read(projectEditorProvider)
+              .selectConstructionForProject(selected.construction);
+        case ConstructionPickerAction.addProjectOnly:
+          await ref
+              .read(projectEditorProvider)
+              .addProjectOnlyConstruction(selected.construction);
+        case ConstructionPickerAction.saveToLibraryAndProject:
+          await ref
+              .read(projectEditorProvider)
+              .addConstruction(selected.construction);
+      }
     } catch (error) {
-      _showError(messenger, error);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
-  }
-
-  Future<void> _handleEditConstruction(
-    BuildContext context,
-    ScaffoldMessengerState messenger,
-    Construction construction,
-  ) async {
-    final updated = await showConstructionEditor(
-      context,
-      catalog: widget.catalog,
-      materialEntries: widget.materialEntries,
-      construction: construction,
-      onSaveCustomMaterial: (material) async {
-        await ref.read(projectEditorProvider).saveCustomMaterial(material);
-        return material;
-      },
-    );
-    if (!context.mounted || updated == null) {
-      return;
-    }
-    try {
-      await ref.read(projectEditorProvider).updateLibraryConstruction(updated);
-    } catch (error) {
-      _showError(messenger, error);
-    }
-  }
-
-  Future<void> _handleCopyConstruction(
-    BuildContext context,
-    ScaffoldMessengerState messenger,
-    Construction source,
-  ) async {
-    final draft = source.copyWith(
-      id: buildEditorEntityId('construction'),
-      title: '${source.title} (копия)',
-    );
-    final copied = await showConstructionEditor(
-      context,
-      catalog: widget.catalog,
-      materialEntries: widget.materialEntries,
-      construction: draft,
-      onSaveCustomMaterial: (material) async {
-        await ref.read(projectEditorProvider).saveCustomMaterial(material);
-        return material;
-      },
-    );
-    if (!context.mounted || copied == null) {
-      return;
-    }
-    try {
-      await ref.read(projectEditorProvider).addConstruction(copied);
-    } catch (error) {
-      _showError(messenger, error);
-    }
-  }
-
-  Future<void> _handleSelectForProject(
-    ScaffoldMessengerState messenger,
-    Construction construction,
-  ) async {
-    try {
-      await ref
-          .read(projectEditorProvider)
-          .selectConstructionForProject(construction);
-    } catch (error) {
-      _showError(messenger, error);
-    }
-  }
-
-  Future<void> _handleRemoveFromProject(
-    ScaffoldMessengerState messenger,
-    String constructionId,
-  ) async {
-    try {
-      await ref
-          .read(projectEditorProvider)
-          .unselectConstructionFromProject(constructionId);
-    } catch (error) {
-      _showError(messenger, error);
-    }
-  }
-
-  Future<void> _handleDeleteFromLibrary(
-    ScaffoldMessengerState messenger,
-    String constructionId,
-  ) async {
-    try {
-      await ref
-          .read(projectEditorProvider)
-          .deleteConstructionFromLibrary(constructionId);
-    } catch (error) {
-      _showError(messenger, error);
-    }
-  }
-
-  void _openConstructionCalculation(
-    BuildContext context,
-    Construction construction,
-  ) {
-    ref.read(selectedConstructionIdProvider.notifier).select(construction.id);
-    ref.read(selectedEnvelopeElementIdProvider.notifier).select(null);
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ThermocalcScreen(
-          constructionId: construction.id,
-          showElementContext: false,
-        ),
-      ),
-    );
-  }
-
-  void _showError(ScaffoldMessengerState messenger, Object error) {
-    messenger.showSnackBar(SnackBar(content: Text(error.toString())));
   }
 }
 
-bool _matchesConstruction(
-  Construction construction,
-  String query,
-  Map<String, MaterialEntry> materialMap,
-) {
-  final normalized = query.trim().toLowerCase();
-  if (normalized.isEmpty) {
-    return true;
-  }
-  final haystack = [
-    construction.title,
-    construction.elementKind.label,
-    construction.floorConstructionType?.label,
-    construction.crawlSpaceVentilationMode?.label,
-    ...construction.layers.expand((layer) {
-      final material = materialMap[layer.materialId];
-      return [
-        layer.materialId,
-        material?.name,
-        material?.category,
-        material?.subcategory,
-        material?.manufacturer,
-        material?.notes,
-        ...?material?.aliases,
-        ...?material?.tags,
-      ];
-    }),
-  ].join(' ').toLowerCase();
-  return haystack.contains(normalized);
-}
-
-enum _ConstructionLibraryScope { all, templates, custom }
-
-extension on _ConstructionLibraryScope {
-  String get label => switch (this) {
-    _ConstructionLibraryScope.all => 'Все конструкции',
-    _ConstructionLibraryScope.templates => 'Шаблоны',
-    _ConstructionLibraryScope.custom => 'Свои',
-  };
-
-  bool matches({required bool isTemplate}) => switch (this) {
-    _ConstructionLibraryScope.all => true,
-    _ConstructionLibraryScope.templates => isTemplate,
-    _ConstructionLibraryScope.custom => !isTemplate,
-  };
-}
-
-class _ConstructionCard extends StatelessWidget {
-  const _ConstructionCard({
-    required this.construction,
-    required this.materialMap,
-    required this.selected,
-    required this.onTapPrimary,
-    required this.primaryLabel,
-    required this.onEdit,
-    required this.onCopy,
-    required this.onDelete,
-    this.footer,
-  });
-
-  final Construction construction;
-  final Map<String, MaterialEntry> materialMap;
-  final bool selected;
-  final VoidCallback? onTapPrimary;
-  final String primaryLabel;
-  final VoidCallback onEdit;
-  final VoidCallback onCopy;
-  final VoidCallback onDelete;
-  final Widget? footer;
+class _EmptyProjectConstructionsState extends StatelessWidget {
+  const _EmptyProjectConstructionsState();
 
   @override
   Widget build(BuildContext context) {
-    final layerTitles = construction.layers
-        .map((layer) => materialMap[layer.materialId]?.name ?? layer.materialId)
-        .join(', ');
-    final summaryParts = [
-      construction.elementKind.label,
-      if (construction.floorConstructionType case final floorType?)
-        floorType.label,
-      if (construction.crawlSpaceVentilationMode case final ventilationMode?)
-        ventilationMode.label,
-      'слоёв ${construction.layers.length}',
-    ];
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        border: Border.all(
-          color: selected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.outlineVariant,
-        ),
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFF7F4ED),
+        borderRadius: BorderRadius.circular(18),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(selected ? Icons.check_circle : Icons.layers_outlined),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  construction.title,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  switch (value) {
-                    case 'edit':
-                      onEdit();
-                    case 'copy':
-                      onCopy();
-                    case 'delete':
-                      onDelete();
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Редактировать')),
-                  PopupMenuItem(value: 'copy', child: Text('Копировать')),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Удалить из библиотеки'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            summaryParts.join(' • '),
-          ),
-          const SizedBox(height: 4),
-          Text(layerTitles, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.tonal(
-              onPressed: onTapPrimary,
-              child: Text(primaryLabel),
-            ),
-          ),
-          if (footer != null) ...[const SizedBox(height: 12), footer!],
-        ],
+      child: const Text(
+        'В проект пока не добавлена ни одна конструкция. Используйте плавающую кнопку, чтобы выбрать готовую конструкцию из отдельного списка.',
       ),
     );
   }
 }
 
-class _ConstructionStatusFooter extends ConsumerWidget {
-  const _ConstructionStatusFooter({
-    required this.constructionId,
-    required this.onOpenCalculation,
+class _ProjectConstructionRow extends StatelessWidget {
+  const _ProjectConstructionRow({
+    required this.construction,
+    required this.selection,
+    required this.materialMap,
+    required this.expanded,
+    required this.onToggleExpanded,
+    required this.onToggleIncluded,
+    required this.onRemove,
   });
 
-  final String constructionId;
-  final VoidCallback onOpenCalculation;
+  final Construction construction;
+  final ProjectConstructionSelection selection;
+  final Map<String, MaterialEntry> materialMap;
+  final bool expanded;
+  final VoidCallback onToggleExpanded;
+  final VoidCallback onToggleIncluded;
+  final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final calculationAsync = ref.watch(
-      calculationResultForConstructionProvider(constructionId),
-    );
-
-    return calculationAsync.when(
-      data: (result) {
-        if (result == null) {
-          return _StatusContainer(
-            child: Row(
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: selection.includedInCalculation
+              ? Theme.of(context).colorScheme.outlineVariant
+              : const Color(0xFFD1C6AF),
+        ),
+        borderRadius: BorderRadius.circular(18),
+        color: selection.includedInCalculation
+            ? Colors.white
+            : const Color(0xFFFCF8EF),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                const Expanded(
-                  child: Text('Расчет недоступен для этой конструкции.'),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        construction.title,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      _ProjectConstructionSummary(
+                        constructionId: construction.id,
+                        includedInCalculation: selection.includedInCalculation,
+                      ),
+                    ],
+                  ),
                 ),
-                FilledButton.icon(
-                  onPressed: onOpenCalculation,
-                  icon: const Icon(Icons.analytics_outlined),
-                  label: const Text('Проверить расчет'),
+                IconButton(
+                  tooltip: selection.includedInCalculation
+                      ? 'Исключить из расчета'
+                      : 'Вернуть в расчет',
+                  onPressed: onToggleIncluded,
+                  icon: Icon(
+                    selection.includedInCalculation
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                ),
+                IconButton(
+                  tooltip: expanded ? 'Свернуть' : 'Развернуть',
+                  onPressed: onToggleExpanded,
+                  icon: Icon(expanded ? Icons.expand_less : Icons.expand_more),
+                ),
+                IconButton(
+                  tooltip: 'Убрать из проекта',
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.close),
                 ),
               ],
             ),
-          );
-        }
-
-        if (!result.scenarioStatus.isDirectlySupported) {
-          return _StatusContainer(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Chip(label: Text(result.scenarioStatus.label)),
-                const SizedBox(height: 8),
-                Text(result.scenarioMessage),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: onOpenCalculation,
-                  icon: const Icon(Icons.analytics_outlined),
-                  label: const Text('Открыть расчет'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final thermalPassed = result.complianceIndicators.every(
-          (item) => item.isPassed,
-        );
-        final moistureVerdict = result.moistureCheck.verdict;
-        return _StatusContainer(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            if (expanded) ...[
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  Chip(
-                    label: Text(
-                      thermalPassed
-                          ? 'Теплозащита: ок'
-                          : 'Теплозащита: проверить',
-                    ),
-                  ),
-                  Chip(label: Text('Влага: ${moistureVerdict.label}')),
-                  Chip(
-                    label: Text(
-                      'R ${result.totalResistance.toStringAsFixed(2)} / ${result.requiredResistance.toStringAsFixed(2)}',
-                    ),
-                  ),
+                  Chip(label: Text(construction.elementKind.label)),
+                  if (construction.floorConstructionType case final floorType?)
+                    Chip(label: Text(floorType.label)),
+                  if (!selection.includedInCalculation)
+                    const Chip(label: Text('Исключена из расчета')),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(result.moistureCheck.summary),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: onOpenCalculation,
-                icon: const Icon(Icons.analytics_outlined),
-                label: const Text('Проверить расчет'),
+              ...construction.layers.map(
+                (layer) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF6F4ED),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      '${materialMap[layer.materialId]?.name ?? layer.materialId} • ${layer.kind.label} • ${layer.thicknessMm.toStringAsFixed(0)} мм'
+                      '${layer.enabled ? '' : ' • выключен'}',
+                    ),
+                  ),
+                ),
               ),
+              const SizedBox(height: 8),
+              ConstructionCalculationPanel(constructionId: construction.id),
             ],
-          ),
-        );
-      },
-      loading: () => const _StatusContainer(child: LinearProgressIndicator()),
-      error: (error, _) => _StatusContainer(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Ошибка расчета: $error'),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: onOpenCalculation,
-              icon: const Icon(Icons.analytics_outlined),
-              label: const Text('Открыть расчет'),
-            ),
           ],
         ),
       ),
@@ -762,51 +442,51 @@ class _ConstructionStatusFooter extends ConsumerWidget {
   }
 }
 
-class _StatusContainer extends StatelessWidget {
-  const _StatusContainer({required this.child});
+class _ProjectConstructionSummary extends ConsumerWidget {
+  const _ProjectConstructionSummary({
+    required this.constructionId,
+    required this.includedInCalculation,
+  });
 
-  final Widget child;
+  final String constructionId;
+  final bool includedInCalculation;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF6F4ED),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: child,
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!includedInCalculation) {
+      return Text(
+        'Исключена из расчета',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+
+    final calculationAsync = ref.watch(
+      calculationResultForConstructionProvider(constructionId),
+    );
+    return calculationAsync.when(
+      data: (result) {
+        if (result == null) {
+          return Text(
+            'Расчет пока недоступен',
+            style: Theme.of(context).textTheme.bodySmall,
+          );
+        }
+        return Text(
+          _buildShortCalculationText(result),
+          style: Theme.of(context).textTheme.bodySmall,
+        );
+      },
+      loading: () =>
+          Text('Считаем...', style: Theme.of(context).textTheme.bodySmall),
+      error: (error, _) =>
+          Text('Ошибка расчета', style: Theme.of(context).textTheme.bodySmall),
     );
   }
 }
 
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F7F6),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-    );
+String _buildShortCalculationText(CalculationResult result) {
+  if (!result.scenarioStatus.isDirectlySupported) {
+    return result.scenarioStatus.label;
   }
+  return 'R ${result.totalResistance.toStringAsFixed(2)} / ${result.requiredResistance.toStringAsFixed(2)}';
 }

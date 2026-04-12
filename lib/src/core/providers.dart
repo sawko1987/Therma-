@@ -322,6 +322,15 @@ class ProjectEditor {
     _ref.read(selectedConstructionIdProvider.notifier).select(construction.id);
   }
 
+  Future<void> addProjectOnlyConstruction(Construction construction) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addConstruction(project, construction);
+    await saveProject(updated);
+    _ref.read(selectedConstructionIdProvider.notifier).select(construction.id);
+  }
+
   Future<void> saveCustomMaterial(MaterialEntry material) async {
     final project = await _requireProject();
     final updatedMaterials = [
@@ -380,6 +389,24 @@ class ProjectEditor {
         .selectConstruction(project, construction);
     await saveProject(updated);
     _ref.read(selectedConstructionIdProvider.notifier).select(construction.id);
+  }
+
+  Future<void> excludeConstructionFromCalculation(String constructionId) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .excludeConstructionFromCalculation(project, constructionId);
+    await saveProject(updated);
+    _ref.read(selectedConstructionIdProvider.notifier).select(constructionId);
+  }
+
+  Future<void> includeConstructionInCalculation(String constructionId) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .includeConstructionInCalculation(project, constructionId);
+    await saveProject(updated);
+    _ref.read(selectedConstructionIdProvider.notifier).select(constructionId);
   }
 
   Future<void> unselectConstructionFromProject(String constructionId) async {

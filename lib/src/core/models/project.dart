@@ -1081,6 +1081,39 @@ class HeatingEconomicsSettings {
   };
 }
 
+class ProjectConstructionSelection {
+  const ProjectConstructionSelection({
+    required this.constructionId,
+    this.includedInCalculation = true,
+  });
+
+  factory ProjectConstructionSelection.fromJson(Map<String, dynamic> json) {
+    return ProjectConstructionSelection(
+      constructionId: json['constructionId'] as String,
+      includedInCalculation: json['includedInCalculation'] as bool? ?? true,
+    );
+  }
+
+  final String constructionId;
+  final bool includedInCalculation;
+
+  ProjectConstructionSelection copyWith({
+    String? constructionId,
+    bool? includedInCalculation,
+  }) {
+    return ProjectConstructionSelection(
+      constructionId: constructionId ?? this.constructionId,
+      includedInCalculation:
+          includedInCalculation ?? this.includedInCalculation,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'constructionId': constructionId,
+    'includedInCalculation': includedInCalculation,
+  };
+}
+
 class Project {
   const Project({
     required this.id,
@@ -1091,6 +1124,7 @@ class Project {
     this.customMaterials = const [],
     required this.houseModel,
     this.selectedConstructionIds = const [],
+    this.projectConstructionSelections = const [],
     this.groundFloorCalculations = const [],
     this.heatingEconomicsSettings = const HeatingEconomicsSettings(),
     this.datasetVersion,
@@ -1130,6 +1164,14 @@ class Project {
           ((json['selectedConstructionIds'] as List<dynamic>?) ?? const [])
               .map((item) => item as String)
               .toList(growable: false),
+      projectConstructionSelections:
+          ((json['projectConstructionSelections'] as List<dynamic>?) ??
+                  const [])
+              .map(
+                (item) =>
+                    ProjectConstructionSelection.fromJson(_asJsonMap(item)),
+              )
+              .toList(growable: false),
       groundFloorCalculations: groundFloorCalculations,
       heatingEconomicsSettings: heatingEconomicsSettingsJson == null
           ? const HeatingEconomicsSettings()
@@ -1150,16 +1192,43 @@ class Project {
   final List<MaterialEntry> customMaterials;
   final HouseModel houseModel;
   final List<String> selectedConstructionIds;
+  final List<ProjectConstructionSelection> projectConstructionSelections;
   final List<GroundFloorCalculation> groundFloorCalculations;
   final HeatingEconomicsSettings heatingEconomicsSettings;
   final String? datasetVersion;
   final String? migratedFromDatasetVersion;
   final int sourceProjectFormatVersion;
 
+  List<ProjectConstructionSelection>
+  get effectiveProjectConstructionSelections {
+    if (projectConstructionSelections.isNotEmpty) {
+      return projectConstructionSelections;
+    }
+    if (selectedConstructionIds.isNotEmpty) {
+      return selectedConstructionIds
+          .map(
+            (constructionId) =>
+                ProjectConstructionSelection(constructionId: constructionId),
+          )
+          .toList(growable: false);
+    }
+    return constructions
+        .map(
+          (construction) =>
+              ProjectConstructionSelection(constructionId: construction.id),
+        )
+        .toList(growable: false);
+  }
+
   List<String> get effectiveSelectedConstructionIds =>
-      selectedConstructionIds.isEmpty
-      ? constructions.map((item) => item.id).toList(growable: false)
-      : selectedConstructionIds;
+      effectiveProjectConstructionSelections
+          .map((item) => item.constructionId)
+          .toList(growable: false);
+
+  List<String> get activeSelectedConstructionIds => [
+    for (final item in effectiveProjectConstructionSelections)
+      if (item.includedInCalculation) item.constructionId,
+  ];
 
   bool get hasDatasetMigration => migratedFromDatasetVersion != null;
 
@@ -1181,6 +1250,7 @@ class Project {
     List<MaterialEntry>? customMaterials,
     HouseModel? houseModel,
     List<String>? selectedConstructionIds,
+    List<ProjectConstructionSelection>? projectConstructionSelections,
     List<GroundFloorCalculation>? groundFloorCalculations,
     HeatingEconomicsSettings? heatingEconomicsSettings,
     String? datasetVersion,
@@ -1198,6 +1268,8 @@ class Project {
       houseModel: houseModel ?? this.houseModel,
       selectedConstructionIds:
           selectedConstructionIds ?? this.selectedConstructionIds,
+      projectConstructionSelections:
+          projectConstructionSelections ?? this.projectConstructionSelections,
       groundFloorCalculations:
           groundFloorCalculations ?? this.groundFloorCalculations,
       heatingEconomicsSettings:
@@ -1225,6 +1297,9 @@ class Project {
         .toList(growable: false),
     'houseModel': houseModel.toJson(),
     'selectedConstructionIds': effectiveSelectedConstructionIds,
+    'projectConstructionSelections': effectiveProjectConstructionSelections
+        .map((item) => item.toJson())
+        .toList(growable: false),
     'groundFloorCalculations': groundFloorCalculations
         .map((item) => item.toJson())
         .toList(growable: false),

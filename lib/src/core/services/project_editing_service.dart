@@ -201,10 +201,17 @@ class ProjectEditingService {
   }
 
   Project addConstruction(Project project, Construction construction) {
-    final selectedIds = project.effectiveSelectedConstructionIds;
+    final selections = project.effectiveProjectConstructionSelections;
     return project.copyWith(
       constructions: [...project.constructions, construction],
-      selectedConstructionIds: [...selectedIds, construction.id],
+      selectedConstructionIds: [
+        ...project.effectiveSelectedConstructionIds,
+        construction.id,
+      ],
+      projectConstructionSelections: [
+        ...selections,
+        ProjectConstructionSelection(constructionId: construction.id),
+      ],
     );
   }
 
@@ -253,18 +260,75 @@ class ProjectEditingService {
         for (final item in project.effectiveSelectedConstructionIds)
           if (item != constructionId) item,
       ],
+      projectConstructionSelections: [
+        for (final item in project.effectiveProjectConstructionSelections)
+          if (item.constructionId != constructionId) item,
+      ],
     );
   }
 
   Project selectConstruction(Project project, Construction construction) {
     if (project.effectiveSelectedConstructionIds.contains(construction.id)) {
-      return project;
+      return includeConstructionInCalculation(project, construction.id);
     }
+    final existsInProject = project.constructions.any(
+      (item) => item.id == construction.id,
+    );
     return project.copyWith(
-      constructions: [...project.constructions, construction],
+      constructions: existsInProject
+          ? project.constructions
+          : [...project.constructions, construction],
       selectedConstructionIds: [
         ...project.effectiveSelectedConstructionIds,
         construction.id,
+      ],
+      projectConstructionSelections: [
+        ...project.effectiveProjectConstructionSelections,
+        ProjectConstructionSelection(constructionId: construction.id),
+      ],
+    );
+  }
+
+  Project excludeConstructionFromCalculation(
+    Project project,
+    String constructionId,
+  ) {
+    final selections = project.effectiveProjectConstructionSelections;
+    final hasSelection = selections.any(
+      (item) => item.constructionId == constructionId,
+    );
+    if (!hasSelection) {
+      return project;
+    }
+    return project.copyWith(
+      projectConstructionSelections: [
+        for (final item in selections)
+          if (item.constructionId == constructionId)
+            item.copyWith(includedInCalculation: false)
+          else
+            item,
+      ],
+    );
+  }
+
+  Project includeConstructionInCalculation(
+    Project project,
+    String constructionId,
+  ) {
+    final selections = project.effectiveProjectConstructionSelections;
+    final hasSelection = selections.any(
+      (item) => item.constructionId == constructionId,
+    );
+    if (!hasSelection) {
+      return project;
+    }
+    return project.copyWith(
+      projectConstructionSelections: [
+        for (final item in selections)
+          if (item.constructionId == constructionId)
+            item.copyWith(includedInCalculation: true)
+          else
+            item,
       ],
     );
   }
@@ -298,6 +362,10 @@ class ProjectEditingService {
       selectedConstructionIds: [
         for (final item in selectedIds)
           if (item != constructionId) item,
+      ],
+      projectConstructionSelections: [
+        for (final item in project.effectiveProjectConstructionSelections)
+          if (item.constructionId != constructionId) item,
       ],
     );
   }
@@ -375,16 +443,10 @@ class ProjectEditingService {
     );
   }
 
-  void _validateRoomLayout(
-    List<Room> rooms,
-    Room room, {
-    String? roomId,
-  }) {
+  void _validateRoomLayout(List<Room> rooms, Room room, {String? roomId}) {
     final layout = room.layout;
     if (layout.xMeters < 0 || layout.yMeters < 0) {
-      throw StateError(
-        'Комната не может выходить в отрицательные координаты.',
-      );
+      throw StateError('Комната не может выходить в отрицательные координаты.');
     }
     if (layout.widthMeters < minimumRoomLayoutDimensionMeters ||
         layout.heightMeters < minimumRoomLayoutDimensionMeters) {
@@ -450,7 +512,10 @@ class ProjectEditingService {
     }
   }
 
-  void _ensureWallPlacementFitsRoom(Room room, EnvelopeWallPlacement placement) {
+  void _ensureWallPlacementFitsRoom(
+    Room room,
+    EnvelopeWallPlacement placement,
+  ) {
     if (placement.offsetMeters < 0) {
       throw StateError(
         'Смещение стены по стороне не может быть отрицательным.',
