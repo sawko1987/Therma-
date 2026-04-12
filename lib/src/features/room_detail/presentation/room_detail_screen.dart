@@ -157,7 +157,7 @@ class RoomDetailScreen extends ConsumerWidget {
     ref.read(projectEditorProvider).selectEnvelopeElement(element);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ThermocalcScreen(constructionId: element.constructionId),
+        builder: (_) => const ThermocalcScreen(),
       ),
     );
   }
@@ -329,11 +329,11 @@ class _ElementsSection extends ConsumerWidget {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _ElementCard(
                     room: room,
-                    element: element,
-                    construction: data.constructionById[element.constructionId],
-                    openings: data.openingsByElementId[element.id] ?? const [],
-                    elementResult: data.elementResultsById[element.id],
-                  ),
+                     element: element,
+                     construction: element.construction,
+                     openings: data.openingsByElementId[element.id] ?? const [],
+                     elementResult: data.elementResultsById[element.id],
+                   ),
                 );
               }),
             if (data.missingConstructionElements.isNotEmpty) ...[
@@ -845,7 +845,7 @@ class _WallSchemeCard extends StatelessWidget {
   ) {
     final result = data.elementResultsById[element.id];
     final openings = data.openingsByElementId[element.id] ?? const [];
-    final construction = data.constructionById[element.constructionId];
+    final construction = element.construction;
     showModalBottomSheet<void>(
       context: context,
       builder: (context) {
@@ -863,7 +863,7 @@ class _WallSchemeCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(element.elementKind.label),
-              Text('Конструкция: ${construction?.title ?? 'Не найдена'}'),
+              Text('Конструкция: ${construction.title}'),
               Text('Площадь ${element.areaSquareMeters.toStringAsFixed(1)} м²'),
               Text('Проёмы: ${openings.length}'),
               if (result != null)
@@ -1176,6 +1176,8 @@ class _RoomDetailData {
     }
     final constructionById = {
       for (final construction in project.constructions) construction.id: construction,
+      for (final element in elements)
+        (element.sourceConstructionId ?? element.construction.id): element.construction,
     };
     final elementResultsById = {
       for (final result in roomResult?.elementResults ?? const <BuildingElementHeatLossResult>[])
@@ -1208,9 +1210,8 @@ class _RoomDetailData {
     HouseEnvelopeElement? thermocalcElement;
     final missingConstructionElements = <HouseEnvelopeElement>[];
     for (final element in elements) {
-      if (constructionById.containsKey(element.constructionId)) {
-        thermocalcElement ??= element;
-      } else {
+      thermocalcElement ??= element;
+      if (element.construction.layers.isEmpty) {
         missingConstructionElements.add(element);
       }
     }

@@ -207,7 +207,7 @@ class ProjectEditor {
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(element.id);
     _ref
         .read(selectedConstructionIdProvider.notifier)
-        .select(element.constructionId);
+        .select(element.sourceConstructionId ?? element.construction.id);
   }
 
   Future<void> updateEnvelopeElement(HouseEnvelopeElement element) async {
@@ -219,7 +219,7 @@ class ProjectEditor {
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(element.id);
     _ref
         .read(selectedConstructionIdProvider.notifier)
-        .select(element.constructionId);
+        .select(element.sourceConstructionId ?? element.construction.id);
   }
 
   Future<void> updateEnvelopeWallPlacement(
@@ -542,7 +542,7 @@ class ProjectEditor {
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(element.id);
     _ref
         .read(selectedConstructionIdProvider.notifier)
-        .select(element.constructionId);
+        .select(element.sourceConstructionId ?? element.construction.id);
   }
 
   Future<Project> _requireProject() async {
@@ -963,7 +963,7 @@ final selectedEnvelopeElementProvider = FutureProvider<HouseEnvelopeElement?>((
 
 final selectedConstructionProvider = FutureProvider<Construction?>((ref) async {
   final project = await ref.watch(selectedProjectProvider.future);
-  if (project == null || project.constructions.isEmpty) {
+  if (project == null) {
     return null;
   }
 
@@ -971,10 +971,20 @@ final selectedConstructionProvider = FutureProvider<Construction?>((ref) async {
   final selectedElement = await ref.watch(
     selectedEnvelopeElementProvider.future,
   );
-  final preferredIds = [
-    selectedConstructionId,
-    selectedElement?.constructionId,
-  ];
+  if (selectedElement != null) {
+    final sourceId =
+        selectedElement.sourceConstructionId ?? selectedElement.construction.id;
+    if (selectedConstructionId != sourceId) {
+      ref.read(selectedConstructionIdProvider.notifier).select(sourceId);
+    }
+    return selectedElement.construction;
+  }
+
+  if (project.constructions.isEmpty) {
+    return null;
+  }
+
+  final preferredIds = [selectedConstructionId];
 
   for (final preferredId in preferredIds) {
     for (final construction in project.constructions) {

@@ -309,6 +309,8 @@ Room buildRoom({
   String title = 'Основное помещение',
   RoomKind kind = RoomKind.livingRoom,
   double heightMeters = defaultRoomHeightMeters,
+  double comfortTemperatureC = defaultRoomComfortTemperatureC,
+  double ventilationSupplyM3h = defaultRoomVentilationSupplyM3h,
   RoomLayoutRect? layout,
 }) {
   return Room(
@@ -316,7 +318,40 @@ Room buildRoom({
     title: title,
     kind: kind,
     heightMeters: heightMeters,
+    comfortTemperatureC: comfortTemperatureC,
+    ventilationSupplyM3h: ventilationSupplyM3h,
     layout: layout ?? buildRoomLayout(),
+  );
+}
+
+HouseEnvelopeElement buildEnvelopeElement({
+  String id = 'element-wall',
+  String roomId = defaultRoomId,
+  String title = 'Наружная стена',
+  Construction? construction,
+  ConstructionElementKind? elementKind,
+  double areaSquareMeters = defaultHouseElementAreaSquareMeters,
+  EnvelopeWallPlacement? wallPlacement,
+  String? sourceConstructionId,
+  String? sourceConstructionTitle,
+}) {
+  final effectiveConstruction =
+      construction ??
+      buildWallConstruction().copyWith(
+        elementKind: elementKind ?? ConstructionElementKind.wall,
+      );
+  return HouseEnvelopeElement(
+    id: id,
+    roomId: roomId,
+    title: title,
+    elementKind: elementKind ?? effectiveConstruction.elementKind,
+    areaSquareMeters: areaSquareMeters,
+    construction: effectiveConstruction,
+    sourceConstructionId:
+        sourceConstructionId ?? effectiveConstruction.id,
+    sourceConstructionTitle:
+        sourceConstructionTitle ?? effectiveConstruction.title,
+    wallPlacement: wallPlacement,
   );
 }
 

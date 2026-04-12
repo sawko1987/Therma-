@@ -265,13 +265,14 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Шаг 2. План дома'), findsOneWidget);
-    expect(find.text('Контроль планировки'), findsNothing);
-    expect(find.text('Конструктор дома'), findsOneWidget);
-    expect(find.text('Планировочная схема'), findsNothing);
+    expect(find.text('Шаг 2. Помещения'), findsOneWidget);
+    expect(find.text('Помещения дома'), findsOneWidget);
+    expect(find.text('Расчётные температуры, °C'), findsOneWidget);
+    expect(find.text('Вентиляция (Проветривание)'), findsOneWidget);
+    expect(find.text('Конструктор дома'), findsNothing);
   });
 
-  testWidgets('building step constructor card expands and collapses', (
+  testWidgets('building step shows room-centric editor', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(800, 1400));
@@ -292,29 +293,13 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Режим помещения для норм:'), findsNothing);
-
-    final summaryToggle = tester.widget<InkWell>(
-      find.ancestor(
-        of: find.text('Конструктор дома'),
-        matching: find.byType(InkWell),
-      ),
+    expect(
+      find.text('Воздух в помещении в режиме “Комфорт”'),
+      findsOneWidget,
     );
-    summaryToggle.onTap?.call();
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Режим помещения для норм:'), findsOneWidget);
-
-    final expandedSummaryToggle = tester.widget<InkWell>(
-      find.ancestor(
-        of: find.text('Конструктор дома'),
-        matching: find.byType(InkWell),
-      ),
-    );
-    expandedSummaryToggle.onTap?.call();
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Режим помещения для норм:'), findsNothing);
+    expect(find.text('Приток, м³/ч'), findsOneWidget);
+    expect(find.text('Эконом'), findsNothing);
+    expect(find.text('Защита от замерзания'), findsNothing);
   });
 
   testWidgets('building step room sidebar selects room', (tester) async {
@@ -381,7 +366,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Активно: Гостиная'), findsOneWidget);
+    expect(find.text('Гостиная'), findsWidgets);
 
     await tester.tap(
       find.byKey(const ValueKey('room-sidebar-room-room-bedroom')),
@@ -391,11 +376,17 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Активно: Гостиная'), findsNothing);
-    expect(find.text('Активно: Спальня'), findsOneWidget);
+    expect(find.text('Гостиная'), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('room-editor-room-bedroom')),
+        matching: find.text('Спальня'),
+      ),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('building step shows onboarding and can disable it', (
+  testWidgets('building step inline room settings persist', (
     tester,
   ) async {
     final repository = FakeProjectRepository(projects: [buildTestProject()]);
@@ -415,48 +406,20 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('building-step-rooms-onboarding-dialog')),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Кнопка «Помещения»'), findsOneWidget);
-
-    await tester.tap(
-      find.byKey(const ValueKey('rooms-onboarding-dismiss-forever')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('building-step-rooms-onboarding-dialog')),
-      findsNothing,
-    );
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(repository),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const MaterialApp(home: BuildingStepScreen()),
+    await tester.enterText(
+      find.byKey(
+        const ValueKey('ventilation-room-main-0.0'),
       ),
+      '55',
     );
-
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('building-step-rooms-onboarding-dialog')),
-      findsNothing,
-    );
+    final savedProject = (await repository.getProject('demo'))!;
+    expect(savedProject.houseModel.rooms.single.ventilationSupplyM3h, 55);
   });
 
   testWidgets(
-    'building step sidebar opens envelope editor instead of add element',
+    'building step sidebar shows house construction overview',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -489,12 +452,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Редактор ограждений'), findsOneWidget);
-
-      await tester.tap(find.text('Редактор ограждений'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Шаг 1. Конструкции'), findsOneWidget);
+      expect(find.text('Конструкции дома'), findsOneWidget);
+      expect(find.textContaining('Наружная стена'), findsWidgets);
     },
   );
 

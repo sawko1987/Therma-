@@ -15,14 +15,12 @@ void main() {
           id: 'house-model',
           title: 'Конструктор дома',
           rooms: [Room.defaultRoom()],
-          elements: const [
-            HouseEnvelopeElement(
+          elements: [
+            buildEnvelopeElement(
               id: 'element-wall',
-              roomId: defaultRoomId,
               title: 'Наружная стена',
-              elementKind: ConstructionElementKind.wall,
               areaSquareMeters: 20,
-              constructionId: 'wall',
+              construction: buildWallConstruction(),
             ),
           ],
           openings: const [
@@ -70,7 +68,7 @@ void main() {
   );
 
   test(
-    'building heat loss uses room kind conditions for indoor temperature',
+    'building heat loss uses room comfort temperature for indoor temperature',
     () async {
       final project = buildTestProject(
         houseModel: HouseModel(
@@ -81,30 +79,30 @@ void main() {
               id: 'living',
               title: 'Гостиная',
               kind: RoomKind.livingRoom,
+              comfortTemperatureC: 20,
             ),
             buildRoom(
               id: 'bedroom',
               title: 'Спальня',
               kind: RoomKind.bedroom,
+              comfortTemperatureC: 18,
               layout: buildRoomLayout(xMeters: 6, yMeters: 0),
             ),
           ],
-          elements: const [
-            HouseEnvelopeElement(
+          elements: [
+            buildEnvelopeElement(
               id: 'element-living',
               roomId: 'living',
               title: 'Стена гостиной',
-              elementKind: ConstructionElementKind.wall,
               areaSquareMeters: 10,
-              constructionId: 'wall',
+              construction: buildWallConstruction(),
             ),
-            HouseEnvelopeElement(
+            buildEnvelopeElement(
               id: 'element-bedroom',
               roomId: 'bedroom',
               title: 'Стена спальни',
-              elementKind: ConstructionElementKind.wall,
               areaSquareMeters: 10,
-              constructionId: 'wall',
+              construction: buildWallConstruction(),
             ),
           ],
           openings: const [],
@@ -161,21 +159,19 @@ void main() {
           title: 'Конструктор дома',
           rooms: [Room.defaultRoom()],
           elements: [
-            const HouseEnvelopeElement(
+            buildEnvelopeElement(
               id: 'element-wall',
-              roomId: defaultRoomId,
               title: 'Наружная стена',
-              elementKind: ConstructionElementKind.wall,
               areaSquareMeters: 10,
-              constructionId: 'wall',
+              construction: buildWallConstruction(),
             ),
-            HouseEnvelopeElement(
+            buildEnvelopeElement(
               id: 'element-floor',
               roomId: defaultRoomId,
               title: 'Пол над подвалом',
-              elementKind: ConstructionElementKind.floor,
               areaSquareMeters: 16,
-              constructionId: floor.id,
+              construction: floor,
+              elementKind: ConstructionElementKind.floor,
             ),
           ],
           openings: const [],

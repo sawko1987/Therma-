@@ -3,13 +3,15 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 13;
+const int currentProjectFormatVersion = 14;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
 const double defaultRoomAreaSquareMeters =
     defaultRoomLayoutWidthMeters * defaultRoomLayoutHeightMeters;
 const double defaultRoomHeightMeters = 2.7;
+const double defaultRoomComfortTemperatureC = 20.0;
+const double defaultRoomVentilationSupplyM3h = 0.0;
 const double minimumRoomLayoutDimensionMeters = 1.5;
 const double roomLayoutSnapStepMeters = 0.5;
 const double roomLayoutGapMeters = 1.0;
@@ -551,6 +553,8 @@ class Room {
     required this.kind,
     required this.heightMeters,
     required this.layout,
+    this.comfortTemperatureC = defaultRoomComfortTemperatureC,
+    this.ventilationSupplyM3h = defaultRoomVentilationSupplyM3h,
   });
 
   factory Room.fromJson(Map<String, dynamic> json) {
@@ -573,6 +577,12 @@ class Room {
               yMeters: 0,
             )
           : RoomLayoutRect.fromJson(_asJsonMap(layoutJson)),
+      comfortTemperatureC:
+          (json['comfortTemperatureC'] as num?)?.toDouble() ??
+          defaultRoomComfortTemperatureC,
+      ventilationSupplyM3h:
+          (json['ventilationSupplyM3h'] as num?)?.toDouble() ??
+          defaultRoomVentilationSupplyM3h,
     );
   }
 
@@ -587,6 +597,8 @@ class Room {
       widthMeters: defaultRoomLayoutWidthMeters,
       heightMeters: defaultRoomLayoutHeightMeters,
     ),
+    comfortTemperatureC: defaultRoomComfortTemperatureC,
+    ventilationSupplyM3h: defaultRoomVentilationSupplyM3h,
   );
 
   final String id;
@@ -594,6 +606,8 @@ class Room {
   final RoomKind kind;
   final double heightMeters;
   final RoomLayoutRect layout;
+  final double comfortTemperatureC;
+  final double ventilationSupplyM3h;
 
   double get areaSquareMeters => layout.areaSquareMeters;
 
@@ -603,6 +617,8 @@ class Room {
     RoomKind? kind,
     double? heightMeters,
     RoomLayoutRect? layout,
+    double? comfortTemperatureC,
+    double? ventilationSupplyM3h,
   }) {
     return Room(
       id: id ?? this.id,
@@ -610,6 +626,8 @@ class Room {
       kind: kind ?? this.kind,
       heightMeters: heightMeters ?? this.heightMeters,
       layout: layout ?? this.layout,
+      comfortTemperatureC: comfortTemperatureC ?? this.comfortTemperatureC,
+      ventilationSupplyM3h: ventilationSupplyM3h ?? this.ventilationSupplyM3h,
     );
   }
 
@@ -620,6 +638,8 @@ class Room {
     'areaSquareMeters': areaSquareMeters,
     'heightMeters': heightMeters,
     'layout': layout.toJson(),
+    'comfortTemperatureC': comfortTemperatureC,
+    'ventilationSupplyM3h': ventilationSupplyM3h,
   };
 }
 
@@ -630,11 +650,16 @@ class HouseEnvelopeElement {
     required this.title,
     required this.elementKind,
     required this.areaSquareMeters,
-    required this.constructionId,
+    required this.construction,
+    this.sourceConstructionId,
+    this.sourceConstructionTitle,
     this.wallPlacement,
   });
 
-  factory HouseEnvelopeElement.fromJson(Map<String, dynamic> json) =>
+  factory HouseEnvelopeElement.fromJson(
+    Map<String, dynamic> json, {
+    List<Construction> availableConstructions = const [],
+  }) =>
       HouseEnvelopeElement(
         id: json['id'] as String,
         roomId: (json['roomId'] as String?) ?? defaultRoomId,
@@ -643,7 +668,13 @@ class HouseEnvelopeElement {
           json['elementKind'] as String,
         ),
         areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
-        constructionId: json['constructionId'] as String,
+        construction: _resolveElementConstruction(
+          json,
+          availableConstructions: availableConstructions,
+        ),
+        sourceConstructionId: json['sourceConstructionId'] as String? ??
+            json['constructionId'] as String?,
+        sourceConstructionTitle: json['sourceConstructionTitle'] as String?,
         wallPlacement: json['wallPlacement'] == null
             ? null
             : EnvelopeWallPlacement.fromJson(_asJsonMap(json['wallPlacement'])),
@@ -671,7 +702,9 @@ class HouseEnvelopeElement {
       areaSquareMeters: construction.elementKind == ConstructionElementKind.wall
           ? effectiveRoom.layout.widthMeters * effectiveRoom.heightMeters
           : defaultHouseElementAreaSquareMeters,
-      constructionId: construction.id,
+      construction: construction.copyWith(),
+      sourceConstructionId: construction.id,
+      sourceConstructionTitle: construction.title,
       wallPlacement: wallPlacement,
     );
   }
@@ -681,8 +714,12 @@ class HouseEnvelopeElement {
   final String title;
   final ConstructionElementKind elementKind;
   final double areaSquareMeters;
-  final String constructionId;
+  final Construction construction;
+  final String? sourceConstructionId;
+  final String? sourceConstructionTitle;
   final EnvelopeWallPlacement? wallPlacement;
+
+  String get constructionId => sourceConstructionId ?? construction.id;
 
   HouseEnvelopeElement copyWith({
     String? id,
@@ -690,7 +727,9 @@ class HouseEnvelopeElement {
     String? title,
     ConstructionElementKind? elementKind,
     double? areaSquareMeters,
-    String? constructionId,
+    Construction? construction,
+    String? sourceConstructionId,
+    String? sourceConstructionTitle,
     EnvelopeWallPlacement? wallPlacement,
     bool clearWallPlacement = false,
   }) {
@@ -700,7 +739,10 @@ class HouseEnvelopeElement {
       title: title ?? this.title,
       elementKind: elementKind ?? this.elementKind,
       areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
-      constructionId: constructionId ?? this.constructionId,
+      construction: construction ?? this.construction,
+      sourceConstructionId: sourceConstructionId ?? this.sourceConstructionId,
+      sourceConstructionTitle:
+          sourceConstructionTitle ?? this.sourceConstructionTitle,
       wallPlacement: clearWallPlacement
           ? null
           : wallPlacement ?? this.wallPlacement,
@@ -713,7 +755,9 @@ class HouseEnvelopeElement {
     'title': title,
     'elementKind': elementKind.storageKey,
     'areaSquareMeters': areaSquareMeters,
-    'constructionId': constructionId,
+    'construction': construction.toJson(),
+    'sourceConstructionId': sourceConstructionId,
+    'sourceConstructionTitle': sourceConstructionTitle,
     'wallPlacement': wallPlacement?.toJson(),
   };
 }
@@ -854,13 +898,21 @@ class HouseModel {
     this.heatingDevices = const [],
   });
 
-  factory HouseModel.fromJson(Map<String, dynamic> json) {
+  factory HouseModel.fromJson(
+    Map<String, dynamic> json, {
+    List<Construction> availableConstructions = const [],
+  }) {
     final roomsJson = (json['rooms'] as List<dynamic>?) ?? const [];
     final rooms = roomsJson
         .map((item) => Room.fromJson(_asJsonMap(item)))
         .toList(growable: false);
     final elements = (json['elements'] as List<dynamic>)
-        .map((item) => HouseEnvelopeElement.fromJson(_asJsonMap(item)))
+        .map(
+          (item) => HouseEnvelopeElement.fromJson(
+            _asJsonMap(item),
+            availableConstructions: availableConstructions,
+          ),
+        )
         .toList(growable: false);
     final openings = ((json['openings'] as List<dynamic>?) ?? const [])
         .map((item) => EnvelopeOpening.fromJson(_asJsonMap(item)))
@@ -1160,7 +1212,10 @@ class Project {
           .toList(growable: false),
       houseModel: houseModelJson == null
           ? HouseModel.bootstrapFromConstructions(constructions)
-          : HouseModel.fromJson(_asJsonMap(houseModelJson)),
+          : HouseModel.fromJson(
+              _asJsonMap(houseModelJson),
+              availableConstructions: constructions,
+            ),
       selectedConstructionIds:
           ((json['selectedConstructionIds'] as List<dynamic>?) ?? const [])
               .map((item) => item as String)
@@ -1320,4 +1375,33 @@ class Project {
 
 Map<String, dynamic> _asJsonMap(Object? value) {
   return Map<String, dynamic>.from(value! as Map);
+}
+
+Construction _resolveElementConstruction(
+  Map<String, dynamic> json, {
+  List<Construction> availableConstructions = const [],
+}) {
+  final constructionJson = json['construction'];
+  if (constructionJson != null) {
+    return Construction.fromJson(_asJsonMap(constructionJson));
+  }
+
+  final sourceConstructionId = json['sourceConstructionId'] as String? ??
+      json['constructionId'] as String?;
+  if (sourceConstructionId != null) {
+    for (final item in availableConstructions) {
+      if (item.id == sourceConstructionId) {
+        return item.copyWith();
+      }
+    }
+  }
+
+  return Construction(
+    id: sourceConstructionId ?? 'missing-construction',
+    title: json['sourceConstructionTitle'] as String? ??
+        json['title'] as String? ??
+        'Конструкция не найдена',
+    elementKind: parseConstructionElementKind(json['elementKind'] as String),
+    layers: const [],
+  );
 }

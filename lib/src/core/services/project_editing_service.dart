@@ -216,37 +216,15 @@ class ProjectEditingService {
   }
 
   Project updateConstruction(Project project, Construction construction) {
-    final updatedProject = project.copyWith(
+    return project.copyWith(
       constructions: [
         for (final item in project.constructions)
           if (item.id == construction.id) construction else item,
       ],
-      houseModel: project.houseModel.copyWith(
-        elements: [
-          for (final element in project.houseModel.elements)
-            if (element.constructionId == construction.id)
-              _retargetElementForConstruction(
-                project: project,
-                element: element,
-                construction: construction,
-              )
-            else
-              element,
-        ],
-      ),
     );
-    return _syncElementsForRooms(updatedProject);
   }
 
   Project deleteConstruction(Project project, String constructionId) {
-    final inUse = project.houseModel.elements.any(
-      (item) => item.constructionId == constructionId,
-    );
-    if (inUse) {
-      throw StateError(
-        'Нельзя удалить конструкцию, пока она используется в ограждениях.',
-      );
-    }
     if (project.constructions.length <= 1) {
       throw StateError('В проекте должна остаться хотя бы одна конструкция.');
     }
@@ -334,14 +312,6 @@ class ProjectEditingService {
   }
 
   Project unselectConstruction(Project project, String constructionId) {
-    final isUsedByElements = project.houseModel.elements.any(
-      (item) => item.constructionId == constructionId,
-    );
-    if (isUsedByElements) {
-      throw StateError(
-        'Нельзя убрать конструкцию из проекта, пока она используется в ограждениях.',
-      );
-    }
     final isUsedByGroundFloor = project.groundFloorCalculations.any(
       (item) => item.constructionId == constructionId,
     );
@@ -388,10 +358,7 @@ class ProjectEditingService {
     HouseEnvelopeElement element,
   ) {
     _ensureRoomExists(project, element.roomId);
-    _ensureConstructionExists(project, element.constructionId);
-    final construction = project.constructions.firstWhere(
-      (item) => item.id == element.constructionId,
-    );
+    final construction = element.construction;
     final effectiveKind = construction.elementKind;
     final room = project.houseModel.rooms.firstWhere(
       (item) => item.id == element.roomId,
@@ -399,6 +366,7 @@ class ProjectEditingService {
 
     if (effectiveKind != ConstructionElementKind.wall) {
       return element.copyWith(
+        construction: construction.copyWith(elementKind: effectiveKind),
         elementKind: effectiveKind,
         clearWallPlacement: true,
       );
@@ -410,36 +378,10 @@ class ProjectEditingService {
     }
     _ensureWallPlacementFitsRoom(room, placement);
     return element.copyWith(
+      construction: construction.copyWith(elementKind: effectiveKind),
       elementKind: effectiveKind,
       areaSquareMeters: placement.lengthMeters * room.heightMeters,
       wallPlacement: placement,
-    );
-  }
-
-  HouseEnvelopeElement _retargetElementForConstruction({
-    required Project project,
-    required HouseEnvelopeElement element,
-    required Construction construction,
-  }) {
-    if (construction.elementKind != ConstructionElementKind.wall) {
-      return element.copyWith(
-        elementKind: construction.elementKind,
-        clearWallPlacement: true,
-      );
-    }
-
-    final room = project.houseModel.rooms.firstWhere(
-      (item) => item.id == element.roomId,
-    );
-    return element.copyWith(
-      elementKind: construction.elementKind,
-      wallPlacement:
-          element.wallPlacement ??
-          EnvelopeWallPlacement(
-            side: RoomSide.top,
-            offsetMeters: 0,
-            lengthMeters: room.layout.widthMeters,
-          ),
     );
   }
 
@@ -480,15 +422,6 @@ class ProjectEditingService {
     final exists = project.houseModel.rooms.any((item) => item.id == roomId);
     if (!exists) {
       throw StateError('Помещение $roomId не найдено в проекте.');
-    }
-  }
-
-  void _ensureConstructionExists(Project project, String constructionId) {
-    final exists = project.constructions.any(
-      (item) => item.id == constructionId,
-    );
-    if (!exists) {
-      throw StateError('Конструкция $constructionId не найдена в проекте.');
     }
   }
 

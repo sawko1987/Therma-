@@ -106,17 +106,16 @@ void main() {
               ),
             ),
           ],
-          elements: [
-            HouseEnvelopeElement(
-              id: 'element-wall',
-              roomId: 'room-living',
-              title: 'Стена гостиной',
-              elementKind: ConstructionElementKind.wall,
-              areaSquareMeters: 10.8,
-              constructionId: 'wall',
-              wallPlacement: buildWallPlacement(lengthMeters: 4),
-            ),
-          ],
+            elements: [
+              buildEnvelopeElement(
+                id: 'element-wall',
+                roomId: 'room-living',
+                title: 'Стена гостиной',
+                areaSquareMeters: 10.8,
+                construction: firstConstruction,
+                wallPlacement: buildWallPlacement(lengthMeters: 4),
+              ),
+            ],
           openings: const [],
         ),
       ).copyWith(constructions: [firstConstruction, secondConstruction]);
@@ -125,7 +124,9 @@ void main() {
         project,
         project.houseModel.elements.single.copyWith(
           roomId: 'room-attic',
-          constructionId: 'roof',
+          construction: secondConstruction,
+          sourceConstructionId: 'roof',
+          sourceConstructionTitle: secondConstruction.title,
           elementKind: ConstructionElementKind.roof,
           clearWallPlacement: true,
         ),
@@ -227,13 +228,11 @@ void main() {
         title: 'Конструктор дома',
         rooms: [Room.defaultRoom()],
         elements: [
-          HouseEnvelopeElement(
+          buildEnvelopeElement(
             id: 'element-wall',
-            roomId: defaultRoomId,
             title: 'Стена',
-            elementKind: ConstructionElementKind.wall,
             areaSquareMeters: 10.8,
-            constructionId: 'wall',
+            construction: buildWallConstruction(),
             wallPlacement: buildWallPlacement(lengthMeters: 4),
           ),
         ],
@@ -263,13 +262,11 @@ void main() {
         title: 'Конструктор дома',
         rooms: [Room.defaultRoom()],
         elements: [
-          HouseEnvelopeElement(
+          buildEnvelopeElement(
             id: 'element-wall',
-            roomId: defaultRoomId,
             title: 'Стена',
-            elementKind: ConstructionElementKind.wall,
             areaSquareMeters: 5,
-            constructionId: 'wall',
+            construction: buildWallConstruction(),
             wallPlacement: buildWallPlacement(
               lengthMeters: 5 / defaultRoomHeightMeters,
             ),
@@ -304,13 +301,11 @@ void main() {
           title: 'Конструктор дома',
           rooms: [Room.defaultRoom()],
           elements: [
-            HouseEnvelopeElement(
+            buildEnvelopeElement(
               id: 'element-wall',
-              roomId: defaultRoomId,
               title: 'Стена',
-              elementKind: ConstructionElementKind.wall,
               areaSquareMeters: 10,
-              constructionId: 'wall',
+              construction: buildWallConstruction(),
               wallPlacement: buildWallPlacement(
                 lengthMeters: 10 / defaultRoomHeightMeters,
               ),

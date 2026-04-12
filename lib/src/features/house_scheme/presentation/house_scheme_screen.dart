@@ -1254,11 +1254,6 @@ class _RoomsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final constructionMap = {
-      for (final construction in project.constructions)
-        construction.id: construction,
-    };
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -1395,8 +1390,7 @@ class _RoomsCard extends StatelessWidget {
                             const Text('Пока нет ограждающих элементов.')
                           else
                             ...roomElements.map((element) {
-                              final construction =
-                                  constructionMap[element.constructionId];
+                              final construction = element.construction;
                               final openings = project.houseModel.openings
                                   .where(
                                     (opening) =>
@@ -1417,8 +1411,8 @@ class _RoomsCard extends StatelessWidget {
                                   roomId: room.id,
                                   element: element,
                                   constructionTitle:
-                                      construction?.title ??
-                                      element.constructionId,
+                                      element.sourceConstructionTitle ??
+                                      construction.title,
                                   opaqueArea: opaqueArea,
                                   openings: openings,
                                   openingArea: openingArea,
@@ -1648,8 +1642,8 @@ class _ConstructionsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final usageMap = <String, int>{};
     for (final element in project.houseModel.elements) {
-      usageMap[element.constructionId] =
-          (usageMap[element.constructionId] ?? 0) + 1;
+      final sourceId = element.sourceConstructionId ?? element.construction.id;
+      usageMap[sourceId] = (usageMap[sourceId] ?? 0) + 1;
     }
     final materialMap = {for (final item in catalog.materials) item.id: item};
 
@@ -1794,6 +1788,15 @@ Future<Room?> _showRoomEditor(
   final heightController = TextEditingController(
     text: (room?.heightMeters ?? defaultRoomHeightMeters).toString(),
   );
+  final comfortTemperatureController = TextEditingController(
+    text:
+        (room?.comfortTemperatureC ?? defaultRoomComfortTemperatureC).toString(),
+  );
+  final ventilationController = TextEditingController(
+    text:
+        (room?.ventilationSupplyM3h ?? defaultRoomVentilationSupplyM3h)
+            .toString(),
+  );
   var selectedKind = room?.kind ?? RoomKind.livingRoom;
   final effectiveLayout =
       room?.layout ?? initialLayout ?? RoomLayoutRect.defaultRect();
@@ -1847,21 +1850,36 @@ Future<Room?> _showRoomEditor(
                 const SizedBox(height: 12),
                 InputDecorator(
                   decoration: const InputDecoration(
-                    labelText: 'Площадь на плане',
+                    labelText: 'Площадь помещения',
                   ),
                   child: Text(
                     '${effectiveLayout.areaSquareMeters.toStringAsFixed(1)} м²',
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  'Размеры и позиция комнаты редактируются на плане.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 12),
                 TextField(
                   controller: heightController,
                   decoration: const InputDecoration(labelText: 'Высота, м'),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: comfortTemperatureController,
+                  decoration: const InputDecoration(
+                    labelText: 'Комфорт, °C',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ventilationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Приток воздуха, м³/ч',
+                  ),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -1881,6 +1899,14 @@ Future<Room?> _showRoomEditor(
                           heightController.text,
                           fallback: defaultRoomHeightMeters,
                         ),
+                        comfortTemperatureC: _parseDouble(
+                          comfortTemperatureController.text,
+                          fallback: defaultRoomComfortTemperatureC,
+                        ),
+                        ventilationSupplyM3h: _parseDouble(
+                          ventilationController.text,
+                          fallback: defaultRoomVentilationSupplyM3h,
+                        ),
                         layout: effectiveLayout,
                       ),
                     );
@@ -1897,6 +1923,8 @@ Future<Room?> _showRoomEditor(
 
   titleController.dispose();
   heightController.dispose();
+  comfortTemperatureController.dispose();
+  ventilationController.dispose();
   return result;
 }
 
@@ -1933,9 +1961,11 @@ Future<HouseEnvelopeElement?> _showElementEditor(
   );
   var selectedRoomId = element?.roomId ?? roomId;
   var selectedConstructionId =
-      element?.constructionId ??
+      element?.sourceConstructionId ??
+      element?.construction.id ??
       (project.constructions.isEmpty ? null : project.constructions.first.id);
   var selectedKind =
+      element?.construction.elementKind ??
       element?.elementKind ??
       (project.constructions.isEmpty
           ? ConstructionElementKind.wall
@@ -2207,7 +2237,10 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                                       fallback:
                                           defaultHouseElementAreaSquareMeters,
                                     ),
-                              constructionId: selectedConstruction.id,
+                              construction: selectedConstruction.copyWith(),
+                              sourceConstructionId: selectedConstruction.id,
+                              sourceConstructionTitle:
+                                  selectedConstruction.title,
                               wallPlacement:
                                   selectedConstruction.elementKind ==
                                       ConstructionElementKind.wall

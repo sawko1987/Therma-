@@ -81,9 +81,19 @@ class ProjectMigrationService {
     final rooms = houseModel.rooms.isEmpty
         ? [Room.defaultRoom()]
         : houseModel.rooms;
-    final normalizedRooms = project.sourceProjectFormatVersion < 5
+    var normalizedRooms = project.sourceProjectFormatVersion < 5
         ? _migrateRoomLayouts(rooms)
         : rooms;
+    if (project.sourceProjectFormatVersion < 14) {
+      normalizedRooms = normalizedRooms
+          .map(
+            (room) => room.copyWith(
+              comfortTemperatureC: room.comfortTemperatureC,
+              ventilationSupplyM3h: room.ventilationSupplyM3h,
+            ),
+          )
+          .toList(growable: false);
+    }
     final roomIds = normalizedRooms.map((item) => item.id).toSet();
     final normalizedElements = houseModel.elements
         .map(
@@ -92,12 +102,18 @@ class ProjectMigrationService {
               : item.copyWith(roomId: normalizedRooms.first.id),
         )
         .toList(growable: false);
-    final elements = project.sourceProjectFormatVersion < 6
+    var elements = project.sourceProjectFormatVersion < 6
         ? _migrateWallPlacements(
             rooms: normalizedRooms,
             elements: normalizedElements,
           )
         : normalizedElements;
+    if (project.sourceProjectFormatVersion < 14) {
+      elements = _materializeElementConstructions(
+        project: project,
+        elements: elements,
+      );
+    }
     final elementIds = elements.map((item) => item.id).toSet();
     final openings = houseModel.openings
         .where((item) => elementIds.contains(item.elementId))
@@ -160,6 +176,32 @@ class ProjectMigrationService {
               lengthMeters: lengthMeters,
             ),
             areaSquareMeters: lengthMeters * room.heightMeters,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<HouseEnvelopeElement> _materializeElementConstructions({
+    required Project project,
+    required List<HouseEnvelopeElement> elements,
+  }) {
+    final constructionMap = {
+      for (final construction in project.constructions) construction.id: construction,
+    };
+    return elements
+        .map((element) {
+          final sourceConstructionId = element.sourceConstructionId;
+          final sourceConstruction = sourceConstructionId == null
+              ? null
+              : constructionMap[sourceConstructionId];
+          if (sourceConstruction == null) {
+            return element;
+          }
+          return element.copyWith(
+            construction: sourceConstruction.copyWith(),
+            sourceConstructionId: sourceConstruction.id,
+            sourceConstructionTitle: sourceConstruction.title,
+            elementKind: sourceConstruction.elementKind,
           );
         })
         .toList(growable: false);

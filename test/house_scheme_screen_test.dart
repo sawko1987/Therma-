@@ -205,13 +205,11 @@ void main() {
               ),
             ],
             elements: [
-              HouseEnvelopeElement(
+              buildEnvelopeElement(
                 id: 'element-wall',
-                roomId: defaultRoomId,
                 title: 'Стена',
-                elementKind: ConstructionElementKind.wall,
                 areaSquareMeters: 3 * defaultRoomHeightMeters,
-                constructionId: 'wall',
+                construction: buildWallConstruction(),
                 wallPlacement: buildWallPlacement(lengthMeters: 3),
               ),
             ],
@@ -247,13 +245,11 @@ void main() {
             title: 'Планировка дома',
             rooms: [buildRoom()],
             elements: [
-              HouseEnvelopeElement(
+              buildEnvelopeElement(
                 id: 'element-wall',
-                roomId: defaultRoomId,
                 title: 'Наружная стена',
-                elementKind: ConstructionElementKind.wall,
                 areaSquareMeters: 3 * defaultRoomHeightMeters,
-                constructionId: 'wall',
+                construction: buildWallConstruction(),
                 wallPlacement: buildWallPlacement(lengthMeters: 3),
               ),
             ],
@@ -318,13 +314,11 @@ void main() {
               title: 'Планировка дома',
               rooms: [buildRoom()],
               elements: [
-                HouseEnvelopeElement(
+                buildEnvelopeElement(
                   id: 'element-wall',
-                  roomId: defaultRoomId,
                   title: 'Наружная стена',
-                  elementKind: ConstructionElementKind.wall,
                   areaSquareMeters: 3 * defaultRoomHeightMeters,
-                  constructionId: 'wall',
+                  construction: buildWallConstruction(),
                   wallPlacement: buildWallPlacement(lengthMeters: 3),
                 ),
               ],

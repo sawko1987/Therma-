@@ -50,6 +50,7 @@ class BuildingRoomHeatLossResult {
     required this.heatLossWatts,
     required this.opaqueHeatLossWatts,
     required this.openingHeatLossWatts,
+    required this.ventilationHeatLossWatts,
     required this.installedHeatingPowerWatts,
     required this.heatingPowerDeltaWatts,
   });
@@ -68,6 +69,7 @@ class BuildingRoomHeatLossResult {
   final double heatLossWatts;
   final double opaqueHeatLossWatts;
   final double openingHeatLossWatts;
+  final double ventilationHeatLossWatts;
   final double installedHeatingPowerWatts;
   final double heatingPowerDeltaWatts;
 }
@@ -83,6 +85,7 @@ class BuildingHeatLossResult {
     required this.totalOpeningCount,
     required this.totalOpaqueHeatLossWatts,
     required this.totalOpeningHeatLossWatts,
+    required this.totalVentilationHeatLossWatts,
     required this.totalHeatingDeviceCount,
     required this.totalInstalledHeatingPowerWatts,
     required this.totalHeatingPowerDeltaWatts,
@@ -99,6 +102,7 @@ class BuildingHeatLossResult {
   final int totalOpeningCount;
   final double totalOpaqueHeatLossWatts;
   final double totalOpeningHeatLossWatts;
+  final double totalVentilationHeatLossWatts;
   final int totalHeatingDeviceCount;
   final double totalInstalledHeatingPowerWatts;
   final double totalHeatingPowerDeltaWatts;

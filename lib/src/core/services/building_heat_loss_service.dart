@@ -20,13 +20,6 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         'Climate point ${project.climatePointId} is missing from the catalog.',
       ),
     );
-    final constructionMap = {
-      for (final construction in project.constructions) construction.id: construction,
-    };
-    final roomConditionMap = {
-      for (final condition in catalog.roomKindConditions)
-        condition.roomKindId: condition,
-    };
     final openingsByElementId = <String, List<EnvelopeOpening>>{};
     for (final opening in project.houseModel.openings) {
       openingsByElementId.putIfAbsent(opening.elementId, () => []).add(opening);
@@ -36,13 +29,6 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
     final unresolvedElements = <HouseEnvelopeElement>[];
 
     for (final room in project.houseModel.rooms) {
-      final roomCondition = roomConditionMap[room.kind.storageKey];
-      if (roomCondition == null) {
-        throw StateError(
-          'Room kind ${room.kind.storageKey} is missing from room conditions.',
-        );
-      }
-
       final roomElements = project.houseModel.elements
           .where((item) => item.roomId == room.id)
           .toList(growable: false);
@@ -56,16 +42,11 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       final elementResults = <BuildingElementHeatLossResult>[];
       final roomUnresolvedElements = <HouseEnvelopeElement>[];
       final outsideAirTemperature = climate.designTemperature;
-      final insideAirTemperature = roomCondition.insideTemperature;
+      final insideAirTemperature = room.comfortTemperatureC;
       final deltaTemperature = insideAirTemperature - outsideAirTemperature;
 
       for (final element in roomElements) {
-        final construction = constructionMap[element.constructionId];
-        if (construction == null) {
-          roomUnresolvedElements.add(element);
-          unresolvedElements.add(element);
-          continue;
-        }
+        final construction = element.construction;
 
         final result = await _engine.calculate(
           catalog: catalog,
@@ -126,6 +107,8 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         0,
         (sum, item) => sum + item.openingHeatLossWatts,
       );
+      final ventilationHeatLossWatts =
+          0.335 * room.ventilationSupplyM3h * deltaTemperature;
       final totalEnvelopeAreaSquareMeters = roomElements.fold<double>(
         0,
         (sum, item) => sum + item.areaSquareMeters,
@@ -156,11 +139,14 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           totalOpeningAreaSquareMeters: totalOpeningAreaSquareMeters,
           insideAirTemperature: insideAirTemperature,
           outsideAirTemperature: outsideAirTemperature,
-          heatLossWatts: heatLossWatts,
+          heatLossWatts: heatLossWatts + ventilationHeatLossWatts,
           opaqueHeatLossWatts: opaqueHeatLossWatts,
           openingHeatLossWatts: openingHeatLossWatts,
+          ventilationHeatLossWatts: ventilationHeatLossWatts,
           installedHeatingPowerWatts: installedHeatingPowerWatts,
-          heatingPowerDeltaWatts: installedHeatingPowerWatts - heatLossWatts,
+          heatingPowerDeltaWatts:
+              installedHeatingPowerWatts -
+              (heatLossWatts + ventilationHeatLossWatts),
         ),
       );
     }
@@ -188,6 +174,10 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       totalOpeningHeatLossWatts: roomResults.fold<double>(
         0,
         (sum, item) => sum + item.openingHeatLossWatts,
+      ),
+      totalVentilationHeatLossWatts: roomResults.fold<double>(
+        0,
+        (sum, item) => sum + item.ventilationHeatLossWatts,
       ),
       totalHeatingDeviceCount: project.houseModel.heatingDevices.length,
       totalInstalledHeatingPowerWatts: roomResults.fold<double>(
