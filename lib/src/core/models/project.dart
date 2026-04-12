@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 12;
+const int currentProjectFormatVersion = 13;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -1127,6 +1127,7 @@ class Project {
     this.projectConstructionSelections = const [],
     this.groundFloorCalculations = const [],
     this.heatingEconomicsSettings = const HeatingEconomicsSettings(),
+    this.showBuildingStepRoomsOnboarding = true,
     this.datasetVersion,
     this.migratedFromDatasetVersion,
     this.sourceProjectFormatVersion = currentProjectFormatVersion,
@@ -1178,6 +1179,8 @@ class Project {
           : HeatingEconomicsSettings.fromJson(
               _asJsonMap(heatingEconomicsSettingsJson),
             ),
+      showBuildingStepRoomsOnboarding:
+          json['showBuildingStepRoomsOnboarding'] as bool? ?? true,
       datasetVersion: json['datasetVersion'] as String?,
       migratedFromDatasetVersion: json['migratedFromDatasetVersion'] as String?,
       sourceProjectFormatVersion: formatVersion,
@@ -1195,6 +1198,7 @@ class Project {
   final List<ProjectConstructionSelection> projectConstructionSelections;
   final List<GroundFloorCalculation> groundFloorCalculations;
   final HeatingEconomicsSettings heatingEconomicsSettings;
+  final bool showBuildingStepRoomsOnboarding;
   final String? datasetVersion;
   final String? migratedFromDatasetVersion;
   final int sourceProjectFormatVersion;
@@ -1253,6 +1257,7 @@ class Project {
     List<ProjectConstructionSelection>? projectConstructionSelections,
     List<GroundFloorCalculation>? groundFloorCalculations,
     HeatingEconomicsSettings? heatingEconomicsSettings,
+    bool? showBuildingStepRoomsOnboarding,
     String? datasetVersion,
     String? migratedFromDatasetVersion,
     int? sourceProjectFormatVersion,
@@ -1274,6 +1279,9 @@ class Project {
           groundFloorCalculations ?? this.groundFloorCalculations,
       heatingEconomicsSettings:
           heatingEconomicsSettings ?? this.heatingEconomicsSettings,
+      showBuildingStepRoomsOnboarding:
+          showBuildingStepRoomsOnboarding ??
+          this.showBuildingStepRoomsOnboarding,
       datasetVersion: datasetVersion ?? this.datasetVersion,
       migratedFromDatasetVersion: clearMigratedFromDatasetVersion
           ? null
@@ -1304,6 +1312,7 @@ class Project {
         .map((item) => item.toJson())
         .toList(growable: false),
     'heatingEconomicsSettings': heatingEconomicsSettings.toJson(),
+    'showBuildingStepRoomsOnboarding': showBuildingStepRoomsOnboarding,
     'datasetVersion': datasetVersion,
     'migratedFromDatasetVersion': migratedFromDatasetVersion,
   };

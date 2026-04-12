@@ -20,7 +20,13 @@ void main() {
       ProviderScope(
         overrides: [
           catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(
+              projects: [
+                buildTestProject(showBuildingStepRoomsOnboarding: false),
+              ],
+            ),
+          ),
           thermalCalculationEngineProvider.overrideWithValue(
             const NormativeThermalCalculationEngine(),
           ),
@@ -42,7 +48,13 @@ void main() {
       ProviderScope(
         overrides: [
           catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(
+              projects: [
+                buildTestProject(showBuildingStepRoomsOnboarding: false),
+              ],
+            ),
+          ),
           thermalCalculationEngineProvider.overrideWithValue(
             const NormativeThermalCalculationEngine(),
           ),
@@ -67,7 +79,13 @@ void main() {
       ProviderScope(
         overrides: [
           catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(
+              projects: [
+                buildTestProject(showBuildingStepRoomsOnboarding: false),
+              ],
+            ),
+          ),
           thermalCalculationEngineProvider.overrideWithValue(
             const NormativeThermalCalculationEngine(),
           ),
@@ -93,7 +111,13 @@ void main() {
       ProviderScope(
         overrides: [
           catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
+          projectRepositoryProvider.overrideWithValue(
+            FakeProjectRepository(
+              projects: [
+                buildTestProject(showBuildingStepRoomsOnboarding: false),
+              ],
+            ),
+          ),
           thermalCalculationEngineProvider.overrideWithValue(
             const NormativeThermalCalculationEngine(),
           ),
@@ -270,12 +294,24 @@ void main() {
 
     expect(find.text('Режим помещения для норм:'), findsNothing);
 
-    await tester.tap(find.text('Конструктор дома'));
+    final summaryToggle = tester.widget<InkWell>(
+      find.ancestor(
+        of: find.text('Конструктор дома'),
+        matching: find.byType(InkWell),
+      ),
+    );
+    summaryToggle.onTap?.call();
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Режим помещения для норм:'), findsOneWidget);
 
-    await tester.tap(find.text('Конструктор дома'));
+    final expandedSummaryToggle = tester.widget<InkWell>(
+      find.ancestor(
+        of: find.text('Конструктор дома'),
+        matching: find.byType(InkWell),
+      ),
+    );
+    expandedSummaryToggle.onTap?.call();
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Режим помещения для норм:'), findsNothing);
@@ -288,6 +324,7 @@ void main() {
     final repository = FakeProjectRepository(
       projects: [
         buildTestProject(
+          showBuildingStepRoomsOnboarding: false,
           houseModel: HouseModel(
             id: 'house-model',
             title: 'Конструктор дома',
@@ -357,6 +394,109 @@ void main() {
     expect(find.text('Активно: Гостиная'), findsNothing);
     expect(find.text('Активно: Спальня'), findsOneWidget);
   });
+
+  testWidgets('building step shows onboarding and can disable it', (
+    tester,
+  ) async {
+    final repository = FakeProjectRepository(projects: [buildTestProject()]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(repository),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: BuildingStepScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('building-step-rooms-onboarding-dialog')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Кнопка «Помещения»'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('rooms-onboarding-dismiss-forever')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('building-step-rooms-onboarding-dialog')),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+          projectRepositoryProvider.overrideWithValue(repository),
+          thermalCalculationEngineProvider.overrideWithValue(
+            const NormativeThermalCalculationEngine(),
+          ),
+        ],
+        child: const MaterialApp(home: BuildingStepScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('building-step-rooms-onboarding-dialog')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'building step sidebar opens envelope editor instead of add element',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            catalogRepositoryProvider.overrideWithValue(
+              FakeCatalogRepository(),
+            ),
+            projectRepositoryProvider.overrideWithValue(
+              FakeProjectRepository(
+                projects: [
+                  buildTestProject(showBuildingStepRoomsOnboarding: false),
+                ],
+              ),
+            ),
+            thermalCalculationEngineProvider.overrideWithValue(
+              const NormativeThermalCalculationEngine(),
+            ),
+          ],
+          child: const MaterialApp(home: BuildingStepScreen()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FloatingActionButton), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Редактор ограждений'), findsOneWidget);
+
+      await tester.tap(find.text('Редактор ограждений'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Шаг 1. Конструкции'), findsOneWidget);
+    },
+  );
 
   testWidgets('ground floor screen still renders directly', (tester) async {
     final floorConstruction = Construction(

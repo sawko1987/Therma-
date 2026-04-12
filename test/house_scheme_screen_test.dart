@@ -32,7 +32,7 @@ void main() {
       await _scrollToPlan(tester);
 
       expect(find.text('План дома'), findsOneWidget);
-      expect(find.text('Ошибка commit'), findsOneWidget);
+      expect(find.text('Планировочная схема'), findsOneWidget);
     },
   );
 
@@ -40,10 +40,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await _pumpHouseScheme(
-      tester,
-      projectRepository: FakeProjectRepository(),
-    );
+    await _pumpHouseScheme(tester, projectRepository: FakeProjectRepository());
 
     await tester.scrollUntilVisible(
       find.text('Рассчитать теплопотери здания'),
@@ -85,43 +82,59 @@ void main() {
     expect(find.textContaining('1800'), findsWidgets);
   });
 
-  testWidgets('dragging a room persists updated layout', (tester) async {
+  testWidgets('room movement buttons persist updated layout', (tester) async {
     final repository = FakeProjectRepository();
 
     await _pumpHouseScheme(tester, projectRepository: repository);
     await _scrollToPlan(tester);
 
-    await _dispatchPan(
-      tester,
-      find.byKey(const ValueKey('floor-plan-room-room-main')),
-      const Offset(64, 32),
-    );
+    await tester.tap(find.text('Сдвинуть вправо'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Сдвинуть вниз'));
+    await tester.pumpAndSettle();
 
     final savedProject = (await repository.getProject('demo'))!;
     final room = savedProject.houseModel.rooms.single;
-    expect(room.layout.xMeters, 2);
-    expect(room.layout.yMeters, 1);
+    expect(room.layout.xMeters, 0.5);
+    expect(room.layout.yMeters, 0.5);
   });
 
-  testWidgets('room resize snaps to 0.5m grid', (tester) async {
-    final repository = FakeProjectRepository();
+  testWidgets('floor plan editor switches selected room', (tester) async {
+    final repository = FakeProjectRepository(
+      projects: [
+        buildTestProject(
+          houseModel: HouseModel(
+            id: 'house-model',
+            title: 'Планировка дома',
+            rooms: [
+              buildRoom(id: 'room-a', title: 'Гостиная'),
+              buildRoom(
+                id: 'room-b',
+                title: 'Спальня',
+                kind: RoomKind.bedroom,
+                layout: buildRoomLayout(xMeters: 5, yMeters: 0),
+              ),
+            ],
+            elements: const [],
+            openings: const [],
+          ),
+        ),
+      ],
+    );
 
     await _pumpHouseScheme(tester, projectRepository: repository);
     await _scrollToPlan(tester);
 
-    await _dispatchPan(
-      tester,
-      find.byKey(const ValueKey('floor-plan-room-resize-room-main')),
-      const Offset(16, 16),
-    );
+    expect(find.text('Гостиная'), findsWidgets);
+    expect(find.text('Спальня'), findsWidgets);
 
-    final savedProject = (await repository.getProject('demo'))!;
-    final room = savedProject.houseModel.rooms.single;
-    expect(room.layout.widthMeters, 4.5);
-    expect(room.layout.heightMeters, 4.5);
+    await tester.tap(find.text('Спальня • 4.0×4.0 м'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Позиция: 5.0 / 0.0 м'), findsOneWidget);
   });
 
-  testWidgets('invalid room overlap rolls back draft and shows error', (
+  testWidgets('invalid room overlap stops movement at last valid layout', (
     tester,
   ) async {
     final repository = FakeProjectRepository(
@@ -163,29 +176,23 @@ void main() {
     await _pumpHouseScheme(tester, projectRepository: repository);
     await _scrollToPlan(tester);
 
-    await _dispatchPan(
-      tester,
-      find.byKey(const ValueKey('floor-plan-room-room-a')),
-      const Offset(256, 0),
-    );
-
-    expect(
-      find.byKey(const ValueKey('floor-plan-inline-error')),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Комнаты не должны пересекаться'), findsWidgets);
+    for (var index = 0; index < 6; index++) {
+      await tester.tap(find.text('Сдвинуть вправо'));
+      await tester.pumpAndSettle();
+    }
 
     final savedProject = (await repository.getProject('demo'))!;
     final room = savedProject.houseModel.rooms.firstWhere(
       (item) => item.id == 'room-a',
     );
-    expect(room.layout.xMeters, 0);
+    expect(room.layout.xMeters, 2.0);
     expect(room.layout.yMeters, 0);
   });
 
-  testWidgets('dragging a wall segment persists wall placement', (
-    tester,
-  ) async {
+  testWidgets('wall placement menu persists wall placement', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final repository = FakeProjectRepository(
       projects: [
         buildTestProject(
@@ -216,18 +223,131 @@ void main() {
 
     await _pumpHouseScheme(tester, projectRepository: repository);
     await _scrollToPlan(tester);
-
-    await _dispatchPan(
-      tester,
-      find.byKey(const ValueKey('floor-plan-wall-element-wall')),
-      const Offset(32, 0),
-    );
+    for (final popupButton in tester.widgetList<PopupMenuButton<String>>(
+      find.byType(PopupMenuButton<String>),
+    )) {
+      popupButton.onSelected?.call('right');
+    }
+    await tester.pumpAndSettle();
 
     final savedProject = (await repository.getProject('demo'))!;
     final wall = savedProject.houseModel.elements.single;
-    expect(wall.wallPlacement?.offsetMeters, 1);
+    expect(wall.wallPlacement?.offsetMeters, 0.5);
     expect(wall.areaSquareMeters, closeTo(3 * defaultRoomHeightMeters, 0.0001));
   });
+
+  testWidgets('room envelope blocks are collapsed by default and expandable', (
+    tester,
+  ) async {
+    final repository = FakeProjectRepository(
+      projects: [
+        buildTestProject(
+          houseModel: HouseModel(
+            id: 'house-model',
+            title: 'Планировка дома',
+            rooms: [buildRoom()],
+            elements: [
+              HouseEnvelopeElement(
+                id: 'element-wall',
+                roomId: defaultRoomId,
+                title: 'Наружная стена',
+                elementKind: ConstructionElementKind.wall,
+                areaSquareMeters: 3 * defaultRoomHeightMeters,
+                constructionId: 'wall',
+                wallPlacement: buildWallPlacement(lengthMeters: 3),
+              ),
+            ],
+            openings: [
+              EnvelopeOpening(
+                id: 'opening-1',
+                elementId: 'element-wall',
+                title: 'Окно 1',
+                kind: OpeningKind.window,
+                areaSquareMeters: 1.5,
+                heatTransferCoefficient: 1.0,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    await _pumpHouseScheme(tester, projectRepository: repository);
+    await _scrollToPlan(tester);
+
+    expect(
+      find.byKey(const ValueKey('room-envelope-details-element-wall')),
+      findsNothing,
+    );
+    expect(find.text('Окно 1'), findsNothing);
+
+    final expandButton = tester.widget<IconButton>(
+      find.byKey(const ValueKey('room-envelope-toggle-element-wall')),
+    );
+    expandButton.onPressed?.call();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('room-envelope-details-element-wall')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('сегмент 3.0 м'), findsOneWidget);
+    expect(find.text('Окно 1'), findsOneWidget);
+
+    final collapseButton = tester.widget<IconButton>(
+      find.byKey(const ValueKey('room-envelope-toggle-element-wall')),
+    );
+    collapseButton.onPressed?.call();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('room-envelope-details-element-wall')),
+      findsNothing,
+    );
+    expect(find.text('Окно 1'), findsNothing);
+  });
+
+  testWidgets(
+    'room envelope without openings shows empty message only expanded',
+    (tester) async {
+      final repository = FakeProjectRepository(
+        projects: [
+          buildTestProject(
+            houseModel: HouseModel(
+              id: 'house-model',
+              title: 'Планировка дома',
+              rooms: [buildRoom()],
+              elements: [
+                HouseEnvelopeElement(
+                  id: 'element-wall',
+                  roomId: defaultRoomId,
+                  title: 'Наружная стена',
+                  elementKind: ConstructionElementKind.wall,
+                  areaSquareMeters: 3 * defaultRoomHeightMeters,
+                  constructionId: 'wall',
+                  wallPlacement: buildWallPlacement(lengthMeters: 3),
+                ),
+              ],
+              openings: const [],
+            ),
+          ),
+        ],
+      );
+
+      await _pumpHouseScheme(tester, projectRepository: repository);
+      await _scrollToPlan(tester);
+
+      expect(find.text('Проёмы не добавлены.'), findsNothing);
+
+      final expandButton = tester.widget<IconButton>(
+        find.byKey(const ValueKey('room-envelope-toggle-element-wall')),
+      );
+      expandButton.onPressed?.call();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Проёмы не добавлены.'), findsOneWidget);
+    },
+  );
 }
 
 Future<void> _pumpHouseScheme(
@@ -249,23 +369,5 @@ Future<void> _pumpHouseScheme(
 
 Future<void> _scrollToPlan(WidgetTester tester) async {
   await tester.drag(find.byType(ListView), const Offset(0, -700));
-  await tester.pumpAndSettle();
-}
-
-Future<void> _dispatchPan(
-  WidgetTester tester,
-  Finder finder,
-  Offset offset,
-) async {
-  final detector = tester.widget<GestureDetector>(finder);
-  final origin = tester.getCenter(finder);
-  detector.onPanStart?.call(DragStartDetails(globalPosition: origin));
-  detector.onPanUpdate?.call(
-    DragUpdateDetails(
-      globalPosition: origin + offset,
-      delta: offset,
-    ),
-  );
-  detector.onPanEnd?.call(DragEndDetails());
   await tester.pumpAndSettle();
 }

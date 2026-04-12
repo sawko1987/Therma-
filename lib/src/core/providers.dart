@@ -310,6 +310,13 @@ class ProjectEditor {
     await saveProject(project.copyWith(heatingEconomicsSettings: settings));
   }
 
+  Future<void> setBuildingStepRoomsOnboardingEnabled(bool enabled) async {
+    final project = await _requireProject();
+    await saveProject(
+      project.copyWith(showBuildingStepRoomsOnboarding: enabled),
+    );
+  }
+
   Future<void> addConstruction(Construction construction) async {
     final project = await _requireProject();
     await _ref

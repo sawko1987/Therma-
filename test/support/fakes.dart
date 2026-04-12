@@ -359,6 +359,7 @@ Project buildTestProject({
   List<Construction>? constructions,
   HouseModel? houseModel,
   List<GroundFloorCalculation>? groundFloorCalculations,
+  bool showBuildingStepRoomsOnboarding = true,
   String datasetVersion = currentDatasetVersion,
   String? migratedFromDatasetVersion,
 }) {
@@ -372,6 +373,7 @@ Project buildTestProject({
     houseModel:
         houseModel ?? buildHouseModel(constructions: effectiveConstructions),
     groundFloorCalculations: groundFloorCalculations ?? const [],
+    showBuildingStepRoomsOnboarding: showBuildingStepRoomsOnboarding,
     datasetVersion: datasetVersion,
     migratedFromDatasetVersion: migratedFromDatasetVersion,
     constructions: effectiveConstructions,
