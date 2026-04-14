@@ -7,8 +7,8 @@ import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
 import '../../construction_library/presentation/construction_editor_sheet.dart';
-import '../../house_scheme/presentation/floor_plan_geometry.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
+import '../../house_scheme/presentation/room_wizard_screen.dart';
 
 class RoomEditorStepScreen extends ConsumerStatefulWidget {
   const RoomEditorStepScreen({
@@ -74,14 +74,21 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
 
   Future<void> _handleAddRoom(Project project) async {
     final messenger = ScaffoldMessenger.of(context);
-    final room = await showRoomEditorSheet(
-      context,
-      initialLayout: buildNextRoomLayout(project.houseModel.rooms),
-    );
-    if (!mounted || room == null) return;
     try {
-      await ref.read(projectEditorProvider).addRoom(room);
-      setState(() => _selectedRoomId = room.id);
+      final initialCount = project.houseModel.rooms.length;
+      final catalog = await ref.read(catalogSnapshotProvider.future);
+      if (!mounted) {
+        return;
+      }
+      await showRoomWizard(context, project, catalog);
+      if (!mounted) {
+        return;
+      }
+      final updatedProject = await ref.read(selectedProjectProvider.future);
+      if (updatedProject != null &&
+          updatedProject.houseModel.rooms.length > initialCount) {
+        setState(() => _selectedRoomId = updatedProject.houseModel.rooms.last.id);
+      }
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text('Не удалось добавить помещение: $error')));
     }

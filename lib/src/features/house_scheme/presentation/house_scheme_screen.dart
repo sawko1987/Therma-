@@ -9,7 +9,8 @@ import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 import '../../construction_library/presentation/construction_editor_sheet.dart';
 import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
-import 'floor_plan_geometry.dart';
+import 'house_scheme_editor_helpers.dart' as editor_helpers;
+import 'room_wizard_screen.dart';
 import 'widgets/floor_plan_editor_card.dart';
 import 'widgets/heating_devices_card.dart';
 import '../../room_detail/presentation/room_detail_screen.dart';
@@ -184,18 +185,12 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
     Project project,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final room = await _showRoomEditor(
-      context,
-      initialLayout: buildNextRoomLayout(project.houseModel.rooms),
-    );
-    if (!context.mounted) {
-      return;
-    }
-    if (room == null) {
-      return;
-    }
     try {
-      await ref.read(projectEditorProvider).addRoom(room);
+      final catalog = await ref.read(catalogSnapshotProvider.future);
+      if (!context.mounted) {
+        return;
+      }
+      await showRoomWizard(context, project, catalog);
     } catch (error) {
       _showError(messenger, error);
     }
@@ -2223,173 +2218,14 @@ Future<EnvelopeOpening?> _showOpeningEditor(
   required String elementId,
   OpeningKind? initialKind,
   EnvelopeOpening? opening,
-}) async {
-  final titleController = TextEditingController(text: opening?.title ?? '');
-  final areaController = TextEditingController(
-    text: (opening?.areaSquareMeters ?? 2.0).toString(),
+}) {
+  return editor_helpers.showOpeningEditorSheet(
+    context,
+    catalog: catalog,
+    elementId: elementId,
+    initialKind: initialKind,
+    opening: opening,
   );
-  final coefficientController = TextEditingController(
-    text:
-            (opening?.heatTransferCoefficient ??
-                (opening?.kind ?? OpeningKind.window)
-                    .defaultHeatTransferCoefficient)
-            .toString(),
-  );
-  var selectedKind = opening?.kind ?? initialKind ?? OpeningKind.window;
-  String? selectedCatalogId;
-
-  final result = await showModalBottomSheet<EnvelopeOpening>(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final catalogEntries = catalog.openingCatalog
-              .where((item) => item.kind == selectedKind)
-              .toList(growable: false);
-          if (selectedCatalogId != null &&
-              !catalogEntries.any((item) => item.id == selectedCatalogId)) {
-            selectedCatalogId = null;
-          }
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              20 + MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  opening == null ? 'Новый проём' : 'Редактирование проёма',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<OpeningKind>(
-                  initialValue: selectedKind,
-                  decoration: const InputDecoration(labelText: 'Тип проёма'),
-                  items: OpeningKind.values
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        selectedKind = value;
-                        selectedCatalogId = null;
-                        coefficientController.text = value
-                            .defaultHeatTransferCoefficient
-                            .toString();
-                      });
-                    }
-                  },
-                ),
-                if (catalogEntries.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String?>(
-                    initialValue: selectedCatalogId,
-                    decoration: const InputDecoration(
-                      labelText: 'Шаблон из каталога',
-                    ),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Без шаблона'),
-                      ),
-                      ...catalogEntries.map(
-                        (item) => DropdownMenuItem<String?>(
-                          value: item.id,
-                          child: Text(
-                            '${item.title} • ${item.widthMeters.toStringAsFixed(2)}×${item.heightMeters.toStringAsFixed(2)} м • U ${item.heatTransferCoefficient.toStringAsFixed(2)}',
-                          ),
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        selectedCatalogId = value;
-                        if (value == null) {
-                          return;
-                        }
-                        final selected = catalogEntries.firstWhere(
-                          (item) => item.id == value,
-                        );
-                        titleController.text = selected.title;
-                        areaController.text = selected.areaSquareMeters
-                            .toStringAsFixed(2);
-                        coefficientController.text = selected
-                            .heatTransferCoefficient
-                            .toStringAsFixed(2);
-                      });
-                    },
-                  ),
-                ],
-                const SizedBox(height: 12),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Название'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: areaController,
-                  decoration: const InputDecoration(labelText: 'Площадь, м²'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: coefficientController,
-                  decoration: const InputDecoration(labelText: 'U, Вт/м²·°C'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(
-                      EnvelopeOpening(
-                        id: opening?.id ?? _buildId('opening'),
-                        elementId: elementId,
-                        title: _requiredText(
-                          titleController.text,
-                          fallback: selectedKind.label,
-                        ),
-                        kind: selectedKind,
-                        areaSquareMeters: _parseDouble(
-                          areaController.text,
-                          fallback: 2.0,
-                        ),
-                        heatTransferCoefficient: _parseDouble(
-                          coefficientController.text,
-                          fallback: selectedKind.defaultHeatTransferCoefficient,
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text('Сохранить проём'),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-
-  titleController.dispose();
-  areaController.dispose();
-  coefficientController.dispose();
-  return result;
 }
 
 Future<EnvelopeOpening?> showOpeningEditorSheet(
@@ -2699,16 +2535,15 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
 }
 
 String _buildId(String prefix) {
-  return '$prefix-${DateTime.now().microsecondsSinceEpoch}';
+  return editor_helpers.buildEditorId(prefix);
 }
 
 double _parseDouble(String value, {required double fallback}) {
-  return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
+  return editor_helpers.parseEditorDouble(value, fallback: fallback);
 }
 
 String _requiredText(String value, {required String fallback}) {
-  final trimmed = value.trim();
-  return trimmed.isEmpty ? fallback : trimmed;
+  return editor_helpers.requireEditorText(value, fallback: fallback);
 }
 
 String _describeError(Object error) {
