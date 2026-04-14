@@ -159,9 +159,18 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
     }
   }
 
-  Future<void> _handleAddOpening(HouseEnvelopeElement element) async {
+  Future<void> _handleAddOpening(
+    CatalogSnapshot catalog,
+    HouseEnvelopeElement element, {
+    OpeningKind? initialKind,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
-    final opening = await showOpeningEditorSheet(context, elementId: element.id);
+    final opening = await showOpeningEditorSheet(
+      context,
+      catalog: catalog,
+      elementId: element.id,
+      initialKind: initialKind,
+    );
     if (!mounted || opening == null) return;
     try {
       await ref.read(projectEditorProvider).addOpening(opening);
@@ -170,9 +179,17 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
     }
   }
 
-  Future<void> _handleEditOpening(EnvelopeOpening opening) async {
+  Future<void> _handleEditOpening(
+    CatalogSnapshot catalog,
+    EnvelopeOpening opening,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final updated = await showOpeningEditorSheet(context, elementId: opening.elementId, opening: opening);
+    final updated = await showOpeningEditorSheet(
+      context,
+      catalog: catalog,
+      elementId: opening.elementId,
+      opening: opening,
+    );
     if (!mounted || updated == null) return;
     try {
       await ref.read(projectEditorProvider).updateOpening(updated);
@@ -301,8 +318,10 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
                       onEditElement: (element) =>
                           _handleEditElement(project, catalog, element),
                       onDeleteElement: _handleDeleteElement,
-                      onAddOpening: _handleAddOpening,
-                      onEditOpening: _handleEditOpening,
+                      onAddOpening: (element, kind) =>
+                          _handleAddOpening(catalog, element, initialKind: kind),
+                      onEditOpening: (opening) =>
+                          _handleEditOpening(catalog, opening),
                       onDeleteOpening: _handleDeleteOpening,
                       onEditConstruction: (element) =>
                           _handleEditElementConstruction(
@@ -356,7 +375,7 @@ class _RoomEditorCard extends StatelessWidget {
   final VoidCallback onAddElement;
   final ValueChanged<HouseEnvelopeElement> onEditElement;
   final ValueChanged<HouseEnvelopeElement> onDeleteElement;
-  final ValueChanged<HouseEnvelopeElement> onAddOpening;
+  final void Function(HouseEnvelopeElement, OpeningKind?) onAddOpening;
   final ValueChanged<EnvelopeOpening> onEditOpening;
   final ValueChanged<EnvelopeOpening> onDeleteOpening;
   final ValueChanged<HouseEnvelopeElement> onEditConstruction;
@@ -474,7 +493,7 @@ class _RoomEditorCard extends StatelessWidget {
                     openings: openings,
                     onEditElement: () => onEditElement(element),
                     onDeleteElement: () => onDeleteElement(element),
-                    onAddOpening: () => onAddOpening(element),
+                    onAddOpening: (kind) => onAddOpening(element, kind),
                     onEditOpening: onEditOpening,
                     onDeleteOpening: onDeleteOpening,
                     onEditConstruction: () => onEditConstruction(element),
@@ -506,7 +525,7 @@ class _EnvelopeCard extends StatefulWidget {
   final List<EnvelopeOpening> openings;
   final VoidCallback onEditElement;
   final VoidCallback onDeleteElement;
-  final VoidCallback onAddOpening;
+  final ValueChanged<OpeningKind?> onAddOpening;
   final ValueChanged<EnvelopeOpening> onEditOpening;
   final ValueChanged<EnvelopeOpening> onDeleteOpening;
   final VoidCallback onEditConstruction;
@@ -557,8 +576,10 @@ class _EnvelopeCardState extends State<_EnvelopeCard> {
                         widget.onEditElement();
                       } else if (value == 'construction') {
                         widget.onEditConstruction();
-                      } else if (value == 'opening') {
-                        widget.onAddOpening();
+                      } else if (value == 'window') {
+                        widget.onAddOpening(OpeningKind.window);
+                      } else if (value == 'door') {
+                        widget.onAddOpening(OpeningKind.door);
                       } else if (value == 'delete') {
                         widget.onDeleteElement();
                       }
@@ -566,7 +587,8 @@ class _EnvelopeCardState extends State<_EnvelopeCard> {
                     itemBuilder: (context) => const [
                       PopupMenuItem(value: 'construction', child: Text('Редактировать конструкцию')),
                       PopupMenuItem(value: 'edit', child: Text('Редактировать ограждение')),
-                      PopupMenuItem(value: 'opening', child: Text('Добавить проём')),
+                      PopupMenuItem(value: 'window', child: Text('Добавить окно')),
+                      PopupMenuItem(value: 'door', child: Text('Добавить дверь')),
                       PopupMenuItem(value: 'delete', child: Text('Удалить')),
                     ],
                   ),
@@ -601,8 +623,30 @@ class _EnvelopeCardState extends State<_EnvelopeCard> {
                         ? 'Расчёт недоступен'
                         : '${widget.elementResult!.opaqueHeatLossWatts.toStringAsFixed(0)} Вт через ограждение • ${widget.elementResult!.openingHeatLossWatts.toStringAsFixed(0)} Вт через проёмы',
                   ),
+                  if (widget.element.wallOrientation != null)
+                    _DetailLine(
+                      label: 'Ориентация',
+                      value: widget.element.wallOrientation!.label,
+                    ),
                   const SizedBox(height: 8),
                   FilledButton.tonal(onPressed: widget.onEditConstruction, child: const Text('Редактировать конструкцию')),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: () => widget.onAddOpening(OpeningKind.window),
+                        icon: const Icon(Icons.window_outlined),
+                        label: const Text('Добавить окно'),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: () => widget.onAddOpening(OpeningKind.door),
+                        icon: const Icon(Icons.door_front_door_outlined),
+                        label: const Text('Добавить дверь'),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   if (widget.openings.isEmpty)
                     const Text('Проёмы не добавлены.')

@@ -200,6 +200,7 @@ void main() {
       moistureRules: testCatalogSnapshot.moistureRules,
       roomKindConditions: testCatalogSnapshot.roomKindConditions,
       heatingDevices: testCatalogSnapshot.heatingDevices,
+      openingCatalog: testCatalogSnapshot.openingCatalog,
       datasetVersion: 'invalid',
     );
     const construction = Construction(

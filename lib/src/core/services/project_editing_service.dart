@@ -368,19 +368,26 @@ class ProjectEditingService {
       return element.copyWith(
         construction: construction.copyWith(elementKind: effectiveKind),
         elementKind: effectiveKind,
+        clearWallOrientation: true,
         clearWallPlacement: true,
       );
     }
 
-    final placement = element.wallPlacement;
-    if (placement == null) {
-      throw StateError('Для наружной стены нужна привязка к стороне комнаты.');
+    if (element.wallOrientation == null) {
+      throw StateError('Для наружной стены нужно указать ориентацию.');
     }
-    _ensureWallPlacementFitsRoom(room, placement);
+    if (element.areaSquareMeters <= 0) {
+      throw StateError('Площадь стены должна быть больше нуля.');
+    }
+    final placement = element.wallPlacement;
+    if (placement != null) {
+      _ensureWallPlacementFitsRoom(room, placement);
+    }
     return element.copyWith(
       construction: construction.copyWith(elementKind: effectiveKind),
       elementKind: effectiveKind,
-      areaSquareMeters: placement.lengthMeters * room.heightMeters,
+      areaSquareMeters: element.areaSquareMeters,
+      wallOrientation: element.wallOrientation,
       wallPlacement: placement,
     );
   }

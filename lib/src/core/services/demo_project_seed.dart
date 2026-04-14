@@ -126,6 +126,7 @@ const Project demoProject = Project(
         ),
         sourceConstructionId: 'outer-wall',
         sourceConstructionTitle: 'Наружная стена',
+        wallOrientation: WallOrientation.north,
         wallPlacement: EnvelopeWallPlacement(
           side: RoomSide.top,
           offsetMeters: 0,

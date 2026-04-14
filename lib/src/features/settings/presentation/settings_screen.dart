@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../construction_library/presentation/construction_directory_screen.dart';
 import '../../construction_library/presentation/material_management_screen.dart';
+import 'opening_directory_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -27,7 +28,7 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Здесь находятся вспомогательные справочники приложения: материалы и конструкции.',
+                    'Здесь находятся вспомогательные справочники приложения: материалы, конструкции, окна и двери.',
                   ),
                   const SizedBox(height: 16),
                   ListTile(
@@ -52,6 +53,19 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const MaterialManagementScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.window_outlined),
+                    title: const Text('Справочник проёмов'),
+                    subtitle: const Text('Окна, двери и пользовательские шаблоны'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const OpeningDirectoryScreen(),
                       ),
                     ),
                   ),

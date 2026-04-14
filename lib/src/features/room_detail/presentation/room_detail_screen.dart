@@ -588,9 +588,15 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
   Future<void> _handleAddOpening(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
+      final catalog = await ref.read(catalogSnapshotProvider.future);
+      if (!context.mounted) {
+        return;
+      }
       final created = await showOpeningEditorSheet(
         context,
+        catalog: catalog,
         elementId: widget.element.id,
+        initialKind: OpeningKind.window,
       );
       if (!context.mounted || created == null) {
         return;
@@ -612,8 +618,13 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
+      final catalog = await ref.read(catalogSnapshotProvider.future);
+      if (!context.mounted) {
+        return;
+      }
       final updated = await showOpeningEditorSheet(
         context,
+        catalog: catalog,
         elementId: widget.element.id,
         opening: opening,
       );

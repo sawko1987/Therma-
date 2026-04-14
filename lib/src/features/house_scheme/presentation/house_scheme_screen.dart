@@ -348,7 +348,15 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
     HouseEnvelopeElement element,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final opening = await _showOpeningEditor(context, elementId: element.id);
+    final catalog = await ref.read(catalogSnapshotProvider.future);
+    if (!context.mounted) {
+      return;
+    }
+    final opening = await _showOpeningEditor(
+      context,
+      catalog: catalog,
+      elementId: element.id,
+    );
     if (!context.mounted) {
       return;
     }
@@ -368,8 +376,13 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
     EnvelopeOpening opening,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final catalog = await ref.read(catalogSnapshotProvider.future);
+    if (!context.mounted) {
+      return;
+    }
     final updated = await _showOpeningEditor(
       context,
+      catalog: catalog,
       elementId: opening.elementId,
       opening: opening,
     );
@@ -1952,13 +1965,6 @@ Future<HouseEnvelopeElement?> _showElementEditor(
     text: (element?.areaSquareMeters ?? defaultHouseElementAreaSquareMeters)
         .toString(),
   );
-  final offsetController = TextEditingController(
-    text: (element?.wallPlacement?.offsetMeters ?? 0).toString(),
-  );
-  final lengthController = TextEditingController(
-    text: (element?.wallPlacement?.lengthMeters ?? defaultRoomLayoutWidthMeters)
-        .toString(),
-  );
   var selectedRoomId = element?.roomId ?? roomId;
   var selectedConstructionId =
       element?.sourceConstructionId ??
@@ -1970,7 +1976,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
       (project.constructions.isEmpty
           ? ConstructionElementKind.wall
           : project.constructions.first.elementKind);
-  var selectedSide = element?.wallPlacement?.side ?? RoomSide.top;
+  var selectedOrientation = element?.wallOrientation ?? WallOrientation.north;
 
   final result = await showModalBottomSheet<HouseEnvelopeElement>(
     context: context,
@@ -1978,9 +1984,6 @@ Future<HouseEnvelopeElement?> _showElementEditor(
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
-          final selectedRoom = project.houseModel.rooms.firstWhere(
-            (room) => room.id == selectedRoomId,
-          );
           final constructionsForKind = project.constructions
               .where((construction) => construction.elementKind == selectedKind)
               .toList(growable: false);
@@ -1990,28 +1993,6 @@ Future<HouseEnvelopeElement?> _showElementEditor(
               )) {
             selectedConstructionId = constructionsForKind.first.id;
           }
-          final effectiveLength = _parseDouble(
-            lengthController.text,
-            fallback: selectedRoom.layout.sideLength(selectedSide),
-          );
-          final effectiveOffset = _parseDouble(
-            offsetController.text,
-            fallback: 0,
-          );
-          final wallPlacement = selectedKind == ConstructionElementKind.wall
-              ? snapWallPlacement(
-                  EnvelopeWallPlacement(
-                    side: selectedSide,
-                    offsetMeters: effectiveOffset,
-                    lengthMeters: effectiveLength,
-                  ),
-                  sideLength: selectedRoom.layout.sideLength(selectedSide),
-                )
-              : null;
-          final derivedWallArea = wallPlacement == null
-              ? null
-              : wallPlacement.lengthMeters * selectedRoom.heightMeters;
-
           return Padding(
             padding: EdgeInsets.fromLTRB(
               20,
@@ -2050,42 +2031,7 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                       .toList(),
                   onChanged: (value) {
                     if (value != null) {
-                      setState(() {
-                        selectedRoomId = value;
-                        final room = project.houseModel.rooms.firstWhere(
-                          (item) => item.id == selectedRoomId,
-                        );
-                        if (selectedKind == ConstructionElementKind.wall) {
-                          final sideLength = room.layout.sideLength(
-                            selectedSide,
-                          );
-                          lengthController.text = math
-                              .min(
-                                _parseDouble(
-                                  lengthController.text,
-                                  fallback: sideLength,
-                                ),
-                                sideLength,
-                              )
-                              .toString();
-                          offsetController.text = math
-                              .min(
-                                _parseDouble(
-                                  offsetController.text,
-                                  fallback: 0,
-                                ),
-                                math.max(
-                                  0,
-                                  sideLength -
-                                      _parseDouble(
-                                        lengthController.text,
-                                        fallback: sideLength,
-                                      ),
-                                ),
-                              )
-                              .toString();
-                        }
-                      });
+                      setState(() => selectedRoomId = value);
                     }
                   },
                 ),
@@ -2140,67 +2086,34 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                 ),
                 const SizedBox(height: 12),
                 if (selectedKind == ConstructionElementKind.wall) ...[
-                  DropdownButtonFormField<RoomSide>(
-                    initialValue: selectedSide,
+                  TextField(
+                    controller: areaController,
                     decoration: const InputDecoration(
-                      labelText: 'Сторона комнаты',
+                      labelText: 'Площадь стены, м²',
                     ),
-                    items: RoomSide.values
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<WallOrientation>(
+                    initialValue: selectedOrientation,
+                    decoration: const InputDecoration(
+                      labelText: 'Ориентация стены',
+                    ),
+                    items: WallOrientation.values
                         .map(
-                          (side) => DropdownMenuItem(
-                            value: side,
-                            child: Text(side.label),
+                          (orientation) => DropdownMenuItem(
+                            value: orientation,
+                            child: Text(orientation.label),
                           ),
                         )
                         .toList(),
                     onChanged: (value) {
                       if (value != null) {
-                        setState(() {
-                          selectedSide = value;
-                          final sideLength = selectedRoom.layout.sideLength(
-                            value,
-                          );
-                          lengthController.text = math
-                              .min(
-                                _parseDouble(
-                                  lengthController.text,
-                                  fallback: sideLength,
-                                ),
-                                sideLength,
-                              )
-                              .toString();
-                        });
+                        setState(() => selectedOrientation = value);
                       }
                     },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: offsetController,
-                    decoration: const InputDecoration(
-                      labelText: 'Смещение от начала стороны, м',
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: lengthController,
-                    decoration: const InputDecoration(
-                      labelText: 'Длина сегмента стены, м',
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Расчётная площадь стены',
-                    ),
-                    child: Text(
-                      '${(derivedWallArea ?? 0).toStringAsFixed(1)} м² при высоте ${selectedRoom.heightMeters.toStringAsFixed(1)} м',
-                    ),
                   ),
                 ] else
                   TextField(
@@ -2228,24 +2141,20 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                                 fallback: selectedKind.label,
                               ),
                               elementKind: selectedConstruction.elementKind,
-                              areaSquareMeters:
-                                  selectedConstruction.elementKind ==
-                                      ConstructionElementKind.wall
-                                  ? (derivedWallArea ?? 0)
-                                  : _parseDouble(
-                                      areaController.text,
-                                      fallback:
-                                          defaultHouseElementAreaSquareMeters,
-                                    ),
+                              areaSquareMeters: _parseDouble(
+                                areaController.text,
+                                fallback: defaultHouseElementAreaSquareMeters,
+                              ),
                               construction: selectedConstruction.copyWith(),
                               sourceConstructionId: selectedConstruction.id,
                               sourceConstructionTitle:
                                   selectedConstruction.title,
-                              wallPlacement:
+                              wallOrientation:
                                   selectedConstruction.elementKind ==
                                       ConstructionElementKind.wall
-                                  ? wallPlacement
+                                  ? selectedOrientation
                                   : null,
+                              wallPlacement: element?.wallPlacement,
                             ),
                           );
                         },
@@ -2266,8 +2175,6 @@ Future<HouseEnvelopeElement?> _showElementEditor(
 
   titleController.dispose();
   areaController.dispose();
-  offsetController.dispose();
-  lengthController.dispose();
   return result;
 }
 
@@ -2312,7 +2219,9 @@ Future<Construction?> _showConstructionEditor(
 
 Future<EnvelopeOpening?> _showOpeningEditor(
   BuildContext context, {
+  required CatalogSnapshot catalog,
   required String elementId,
+  OpeningKind? initialKind,
   EnvelopeOpening? opening,
 }) async {
   final titleController = TextEditingController(text: opening?.title ?? '');
@@ -2321,12 +2230,13 @@ Future<EnvelopeOpening?> _showOpeningEditor(
   );
   final coefficientController = TextEditingController(
     text:
-        (opening?.heatTransferCoefficient ??
+            (opening?.heatTransferCoefficient ??
                 (opening?.kind ?? OpeningKind.window)
                     .defaultHeatTransferCoefficient)
             .toString(),
   );
-  var selectedKind = opening?.kind ?? OpeningKind.window;
+  var selectedKind = opening?.kind ?? initialKind ?? OpeningKind.window;
+  String? selectedCatalogId;
 
   final result = await showModalBottomSheet<EnvelopeOpening>(
     context: context,
@@ -2334,6 +2244,13 @@ Future<EnvelopeOpening?> _showOpeningEditor(
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
+          final catalogEntries = catalog.openingCatalog
+              .where((item) => item.kind == selectedKind)
+              .toList(growable: false);
+          if (selectedCatalogId != null &&
+              !catalogEntries.any((item) => item.id == selectedCatalogId)) {
+            selectedCatalogId = null;
+          }
           return Padding(
             padding: EdgeInsets.fromLTRB(
               20,
@@ -2367,16 +2284,54 @@ Future<EnvelopeOpening?> _showOpeningEditor(
                     if (value != null) {
                       setState(() {
                         selectedKind = value;
-                        if (opening == null &&
-                            coefficientController.text.trim().isEmpty) {
-                          coefficientController.text = value
-                              .defaultHeatTransferCoefficient
-                              .toString();
-                        }
+                        selectedCatalogId = null;
+                        coefficientController.text = value
+                            .defaultHeatTransferCoefficient
+                            .toString();
                       });
                     }
                   },
                 ),
+                if (catalogEntries.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String?>(
+                    initialValue: selectedCatalogId,
+                    decoration: const InputDecoration(
+                      labelText: 'Шаблон из каталога',
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Без шаблона'),
+                      ),
+                      ...catalogEntries.map(
+                        (item) => DropdownMenuItem<String?>(
+                          value: item.id,
+                          child: Text(
+                            '${item.title} • ${item.widthMeters.toStringAsFixed(2)}×${item.heightMeters.toStringAsFixed(2)} м • U ${item.heatTransferCoefficient.toStringAsFixed(2)}',
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        selectedCatalogId = value;
+                        if (value == null) {
+                          return;
+                        }
+                        final selected = catalogEntries.firstWhere(
+                          (item) => item.id == value,
+                        );
+                        titleController.text = selected.title;
+                        areaController.text = selected.areaSquareMeters
+                            .toStringAsFixed(2);
+                        coefficientController.text = selected
+                            .heatTransferCoefficient
+                            .toStringAsFixed(2);
+                      });
+                    },
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: titleController,
@@ -2439,12 +2394,16 @@ Future<EnvelopeOpening?> _showOpeningEditor(
 
 Future<EnvelopeOpening?> showOpeningEditorSheet(
   BuildContext context, {
+  required CatalogSnapshot catalog,
   required String elementId,
+  OpeningKind? initialKind,
   EnvelopeOpening? opening,
 }) {
   return _showOpeningEditor(
     context,
+    catalog: catalog,
     elementId: elementId,
+    initialKind: initialKind,
     opening: opening,
   );
 }

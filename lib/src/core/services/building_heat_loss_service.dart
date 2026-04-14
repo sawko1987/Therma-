@@ -64,16 +64,24 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           0,
           (sum, item) => sum + item.areaSquareMeters,
         );
+        final orientationFactor =
+            element.elementKind == ConstructionElementKind.wall
+            ? (element.wallOrientation?.heatLossFactor ?? 1.0)
+            : 1.0;
         final opaqueArea = (element.areaSquareMeters - openingArea).clamp(
           0.0,
           element.areaSquareMeters,
         );
         final opaqueHeatLoss =
-            deltaTemperature / result.totalResistance * opaqueArea;
+            deltaTemperature / result.totalResistance * opaqueArea * orientationFactor;
         final openingHeatLoss = elementOpenings.fold<double>(
           0,
           (sum, item) =>
-              sum + deltaTemperature * item.heatTransferCoefficient * item.areaSquareMeters,
+              sum +
+              deltaTemperature *
+                  item.heatTransferCoefficient *
+                  item.areaSquareMeters *
+                  orientationFactor,
         );
 
         elementResults.add(

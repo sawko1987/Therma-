@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 14;
+const int currentProjectFormatVersion = 15;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -35,6 +35,8 @@ enum CrawlSpaceVentilationMode { ventilated, unventilated }
 enum OpeningKind { window, door }
 
 enum RoomSide { top, right, bottom, left }
+
+enum WallOrientation { north, east, south, west }
 
 enum LayerKind { solid, frame, crossFrame, masonry, ventilatedGap }
 
@@ -129,6 +131,29 @@ extension RoomSideX on RoomSide {
   };
 
   bool get isHorizontal => this == RoomSide.top || this == RoomSide.bottom;
+}
+
+extension WallOrientationX on WallOrientation {
+  String get label => switch (this) {
+    WallOrientation.north => 'Север',
+    WallOrientation.east => 'Восток',
+    WallOrientation.south => 'Юг',
+    WallOrientation.west => 'Запад',
+  };
+
+  String get storageKey => switch (this) {
+    WallOrientation.north => 'north',
+    WallOrientation.east => 'east',
+    WallOrientation.south => 'south',
+    WallOrientation.west => 'west',
+  };
+
+  double get heatLossFactor => switch (this) {
+    WallOrientation.north => 1.10,
+    WallOrientation.east => 1.0,
+    WallOrientation.south => 0.90,
+    WallOrientation.west => 1.0,
+  };
 }
 
 extension LayerKindX on LayerKind {
@@ -643,6 +668,16 @@ class Room {
   };
 }
 
+WallOrientation parseWallOrientation(String value) {
+  return switch (value) {
+    'north' => WallOrientation.north,
+    'east' => WallOrientation.east,
+    'south' => WallOrientation.south,
+    'west' => WallOrientation.west,
+    _ => throw StateError('Unknown WallOrientation: $value'),
+  };
+}
+
 class HouseEnvelopeElement {
   const HouseEnvelopeElement({
     required this.id,
@@ -653,6 +688,7 @@ class HouseEnvelopeElement {
     required this.construction,
     this.sourceConstructionId,
     this.sourceConstructionTitle,
+    this.wallOrientation,
     this.wallPlacement,
   });
 
@@ -675,6 +711,9 @@ class HouseEnvelopeElement {
         sourceConstructionId: json['sourceConstructionId'] as String? ??
             json['constructionId'] as String?,
         sourceConstructionTitle: json['sourceConstructionTitle'] as String?,
+        wallOrientation: (json['wallOrientation'] as String?) == null
+            ? null
+            : parseWallOrientation(json['wallOrientation'] as String),
         wallPlacement: json['wallPlacement'] == null
             ? null
             : EnvelopeWallPlacement.fromJson(_asJsonMap(json['wallPlacement'])),
@@ -705,6 +744,9 @@ class HouseEnvelopeElement {
       construction: construction.copyWith(),
       sourceConstructionId: construction.id,
       sourceConstructionTitle: construction.title,
+      wallOrientation: construction.elementKind == ConstructionElementKind.wall
+          ? WallOrientation.north
+          : null,
       wallPlacement: wallPlacement,
     );
   }
@@ -717,6 +759,7 @@ class HouseEnvelopeElement {
   final Construction construction;
   final String? sourceConstructionId;
   final String? sourceConstructionTitle;
+  final WallOrientation? wallOrientation;
   final EnvelopeWallPlacement? wallPlacement;
 
   String get constructionId => sourceConstructionId ?? construction.id;
@@ -730,7 +773,9 @@ class HouseEnvelopeElement {
     Construction? construction,
     String? sourceConstructionId,
     String? sourceConstructionTitle,
+    WallOrientation? wallOrientation,
     EnvelopeWallPlacement? wallPlacement,
+    bool clearWallOrientation = false,
     bool clearWallPlacement = false,
   }) {
     return HouseEnvelopeElement(
@@ -743,6 +788,9 @@ class HouseEnvelopeElement {
       sourceConstructionId: sourceConstructionId ?? this.sourceConstructionId,
       sourceConstructionTitle:
           sourceConstructionTitle ?? this.sourceConstructionTitle,
+      wallOrientation: clearWallOrientation
+          ? null
+          : wallOrientation ?? this.wallOrientation,
       wallPlacement: clearWallPlacement
           ? null
           : wallPlacement ?? this.wallPlacement,
@@ -758,6 +806,7 @@ class HouseEnvelopeElement {
     'construction': construction.toJson(),
     'sourceConstructionId': sourceConstructionId,
     'sourceConstructionTitle': sourceConstructionTitle,
+    'wallOrientation': wallOrientation?.storageKey,
     'wallPlacement': wallPlacement?.toJson(),
   };
 }

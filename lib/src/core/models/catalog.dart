@@ -324,6 +324,119 @@ class HeatingDeviceCatalogEntry {
   final double ratedPowerWatts;
 }
 
+class OpeningCatalogEntry {
+  const OpeningCatalogEntry({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.subcategory,
+    required this.manufacturer,
+    required this.widthMeters,
+    required this.heightMeters,
+    required this.heatTransferCoefficient,
+    required this.sourceUrl,
+    required this.sourceLabel,
+    required this.sourceCheckedAt,
+    this.imageAssetPath,
+    this.localImagePath,
+    this.isCustom = false,
+  });
+
+  factory OpeningCatalogEntry.fromJson(Map<String, dynamic> json) =>
+      OpeningCatalogEntry(
+        id: json['id'] as String,
+        kind: parseOpeningKind(json['kind'] as String),
+        title: json['title'] as String,
+        subcategory: json['subcategory'] as String,
+        manufacturer: json['manufacturer'] as String,
+        widthMeters: (json['widthMeters'] as num).toDouble(),
+        heightMeters: (json['heightMeters'] as num).toDouble(),
+        heatTransferCoefficient:
+            (json['heatTransferCoefficient'] as num).toDouble(),
+        imageAssetPath: json['imageAssetPath'] as String?,
+        localImagePath: json['localImagePath'] as String?,
+        sourceUrl: json['sourceUrl'] as String,
+        sourceLabel: json['sourceLabel'] as String,
+        sourceCheckedAt: json['sourceCheckedAt'] as String,
+        isCustom: json['isCustom'] as bool? ?? false,
+      );
+
+  final String id;
+  final OpeningKind kind;
+  final String title;
+  final String subcategory;
+  final String manufacturer;
+  final double widthMeters;
+  final double heightMeters;
+  final double heatTransferCoefficient;
+  final String? imageAssetPath;
+  final String? localImagePath;
+  final String sourceUrl;
+  final String sourceLabel;
+  final String sourceCheckedAt;
+  final bool isCustom;
+
+  double get areaSquareMeters => widthMeters * heightMeters;
+
+  OpeningCatalogEntry copyWith({
+    String? id,
+    OpeningKind? kind,
+    String? title,
+    String? subcategory,
+    String? manufacturer,
+    double? widthMeters,
+    double? heightMeters,
+    double? heatTransferCoefficient,
+    String? imageAssetPath,
+    String? localImagePath,
+    String? sourceUrl,
+    String? sourceLabel,
+    String? sourceCheckedAt,
+    bool? isCustom,
+    bool clearImageAssetPath = false,
+    bool clearLocalImagePath = false,
+  }) {
+    return OpeningCatalogEntry(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      title: title ?? this.title,
+      subcategory: subcategory ?? this.subcategory,
+      manufacturer: manufacturer ?? this.manufacturer,
+      widthMeters: widthMeters ?? this.widthMeters,
+      heightMeters: heightMeters ?? this.heightMeters,
+      heatTransferCoefficient:
+          heatTransferCoefficient ?? this.heatTransferCoefficient,
+      imageAssetPath: clearImageAssetPath
+          ? null
+          : imageAssetPath ?? this.imageAssetPath,
+      localImagePath: clearLocalImagePath
+          ? null
+          : localImagePath ?? this.localImagePath,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      sourceLabel: sourceLabel ?? this.sourceLabel,
+      sourceCheckedAt: sourceCheckedAt ?? this.sourceCheckedAt,
+      isCustom: isCustom ?? this.isCustom,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'kind': kind.storageKey,
+    'title': title,
+    'subcategory': subcategory,
+    'manufacturer': manufacturer,
+    'widthMeters': widthMeters,
+    'heightMeters': heightMeters,
+    'heatTransferCoefficient': heatTransferCoefficient,
+    'imageAssetPath': imageAssetPath,
+    'localImagePath': localImagePath,
+    'sourceUrl': sourceUrl,
+    'sourceLabel': sourceLabel,
+    'sourceCheckedAt': sourceCheckedAt,
+    'isCustom': isCustom,
+  };
+}
+
 class CatalogSnapshot {
   const CatalogSnapshot({
     required this.climatePoints,
@@ -333,6 +446,7 @@ class CatalogSnapshot {
     required this.moistureRules,
     required this.roomKindConditions,
     required this.heatingDevices,
+    required this.openingCatalog,
     required this.datasetVersion,
   });
 
@@ -343,5 +457,6 @@ class CatalogSnapshot {
   final MoistureRuleSet moistureRules;
   final List<RoomKindCondition> roomKindConditions;
   final List<HeatingDeviceCatalogEntry> heatingDevices;
+  final List<OpeningCatalogEntry> openingCatalog;
   final String datasetVersion;
 }

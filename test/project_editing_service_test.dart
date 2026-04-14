@@ -161,7 +161,7 @@ void main() {
     expect(updated.houseModel.rooms.single.areaSquareMeters, 30);
   });
 
-  test('updateRoom syncs derived wall area from room height', () {
+  test('updateRoom preserves manually entered wall area', () {
     final project = buildTestProject();
 
     final updated = service.updateRoom(
@@ -169,13 +169,10 @@ void main() {
       project.houseModel.rooms.single.copyWith(heightMeters: 3.1),
     );
 
-    expect(
-      updated.houseModel.elements.single.areaSquareMeters,
-      closeTo(12.4, 0.001),
-    );
+    expect(updated.houseModel.elements.single.areaSquareMeters, 10.8);
   });
 
-  test('updateEnvelopeWallPlacement updates derived area', () {
+  test('updateEnvelopeWallPlacement preserves manual area and changes placement', () {
     final project = buildTestProject();
 
     final updated = service.updateEnvelopeWallPlacement(
@@ -192,7 +189,8 @@ void main() {
       updated.houseModel.elements.single.wallPlacement?.side,
       RoomSide.right,
     );
-    expect(updated.houseModel.elements.single.areaSquareMeters, 6.75);
+    expect(updated.houseModel.elements.single.wallPlacement?.offsetMeters, 1);
+    expect(updated.houseModel.elements.single.areaSquareMeters, 10.8);
   });
 
   test('updateRoomLayout rejects when wall no longer fits side', () {
@@ -292,9 +290,7 @@ void main() {
     );
   });
 
-  test(
-    'updateEnvelopeElement rejects shrinking wall segment below linked openings',
-    () {
+  test('updateEnvelopeElement rejects shrinking wall area below linked openings', () {
       final project = buildTestProject(
         houseModel: HouseModel(
           id: 'house-model',
@@ -328,13 +324,12 @@ void main() {
         () => service.updateEnvelopeElement(
           project,
           project.houseModel.elements.single.copyWith(
-            wallPlacement: buildWallPlacement(lengthMeters: 1.0),
+            areaSquareMeters: 3.5,
           ),
         ),
         throwsStateError,
       );
-    },
-  );
+    });
 
   test('updateEnvelopeWallPlacement rejects segment outside room side', () {
     final project = buildTestProject();

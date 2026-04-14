@@ -24,14 +24,23 @@ class ProjectEntries extends Table {
   Set<Column<Object>>? get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [ProjectEntries])
+class StoredOpeningCatalogEntries extends Table {
+  TextColumn get id => text()();
+  TextColumn get payloadJson => text().named('payload_json')();
+  IntColumn get updatedAtEpochMs => integer().named('updated_at_epoch_ms')();
+
+  @override
+  Set<Column<Object>>? get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [ProjectEntries, StoredOpeningCatalogEntries])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -46,6 +55,9 @@ class AppDatabase extends _$AppDatabase {
           projectEntries,
           projectEntries.migratedFromDatasetVersion,
         );
+      }
+      if (from < 3) {
+        await migrator.createTable(storedOpeningCatalogEntries);
       }
     },
   );

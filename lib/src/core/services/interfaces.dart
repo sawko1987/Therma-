@@ -38,6 +38,12 @@ abstract interface class FavoriteMaterialsRepository {
   Future<void> saveFavoriteMaterialIds(Set<String> ids);
 }
 
+abstract interface class OpeningCatalogRepository {
+  Future<List<OpeningCatalogEntry>> listEntries();
+  Future<void> saveEntry(OpeningCatalogEntry entry);
+  Future<void> deleteEntry(String id);
+}
+
 abstract interface class ThermalCalculationEngine {
   Future<CalculationResult> calculate({
     required CatalogSnapshot catalog,

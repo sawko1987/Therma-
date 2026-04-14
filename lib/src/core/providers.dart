@@ -20,7 +20,7 @@ import 'services/normative_thermal_calculation_engine.dart';
 import 'services/pdf_report_service.dart';
 import 'services/project_editing_service.dart';
 import 'services/thermal_report_content_builder.dart';
-import 'storage/app_database.dart';
+import 'storage/app_database.dart' as db;
 
 class SelectedProjectIdNotifier extends Notifier<String?> {
   @override
@@ -75,6 +75,7 @@ class ProjectEditor {
   Future<void> saveProject(Project project) async {
     await _ref.read(projectRepositoryProvider).saveProject(project);
     _ref.invalidate(catalogSnapshotProvider);
+    _ref.invalidate(openingCatalogEntriesProvider);
     _ref.invalidate(materialCatalogEntriesProvider);
     _ref.invalidate(projectListProvider);
     _ref.invalidate(selectedProjectProvider);
@@ -367,6 +368,18 @@ class ProjectEditor {
     await saveProject(project.copyWith(customMaterials: updatedMaterials));
   }
 
+  Future<void> saveOpeningCatalogEntry(OpeningCatalogEntry entry) async {
+    await _ref.read(openingCatalogRepositoryProvider).saveEntry(entry);
+    _ref.invalidate(catalogSnapshotProvider);
+    _ref.invalidate(openingCatalogEntriesProvider);
+  }
+
+  Future<void> deleteOpeningCatalogEntry(String entryId) async {
+    await _ref.read(openingCatalogRepositoryProvider).deleteEntry(entryId);
+    _ref.invalidate(catalogSnapshotProvider);
+    _ref.invalidate(openingCatalogEntriesProvider);
+  }
+
   Future<void> toggleFavoriteMaterial(String materialId) async {
     final repository = _ref.read(favoriteMaterialsRepositoryProvider);
     final current = await repository.listFavoriteMaterialIds();
@@ -596,8 +609,8 @@ final catalogRepositoryProvider = Provider<CatalogRepository>(
   (ref) => AssetCatalogRepository(rootBundle),
 );
 
-final appDatabaseProvider = Provider<AppDatabase>((ref) {
-  final database = AppDatabase();
+final appDatabaseProvider = Provider<db.AppDatabase>((ref) {
+  final database = db.AppDatabase();
   ref.onDispose(database.close);
   return database;
 });
@@ -631,6 +644,16 @@ final favoriteMaterialsRepositoryProvider =
       }
       return DriftProjectRepository(ref.watch(appDatabaseProvider));
     });
+
+final openingCatalogRepositoryProvider = Provider<OpeningCatalogRepository>((
+  ref,
+) {
+  final repository = ref.watch(projectRepositoryProvider);
+  if (repository is OpeningCatalogRepository) {
+    return repository as OpeningCatalogRepository;
+  }
+  return DriftProjectRepository(ref.watch(appDatabaseProvider));
+});
 
 final thermalCalculationEngineProvider = Provider<ThermalCalculationEngine>(
   (ref) => const NormativeThermalCalculationEngine(),
@@ -693,9 +716,18 @@ final catalogSnapshotProvider = FutureProvider<CatalogSnapshot>((ref) async {
     moistureRules: baseCatalog.moistureRules,
     roomKindConditions: baseCatalog.roomKindConditions,
     heatingDevices: baseCatalog.heatingDevices,
+    openingCatalog: _mergeOpenings(
+      baseCatalog.openingCatalog,
+      await ref.watch(openingCatalogEntriesProvider.future),
+    ),
     datasetVersion: baseCatalog.datasetVersion,
   );
 });
+
+final openingCatalogEntriesProvider =
+    FutureProvider<List<OpeningCatalogEntry>>((ref) async {
+      return ref.read(openingCatalogRepositoryProvider).listEntries();
+    });
 
 final favoriteMaterialIdsProvider = FutureProvider<Set<String>>((ref) async {
   return ref
@@ -828,6 +860,21 @@ List<Construction> _mergeConstructions(
     merged[item.id] = item;
   }
   return merged.values.toList(growable: false);
+}
+
+List<OpeningCatalogEntry> _mergeOpenings(
+  List<OpeningCatalogEntry> seeded,
+  List<OpeningCatalogEntry> custom,
+) {
+  final merged = <String, OpeningCatalogEntry>{
+    for (final item in seeded) item.id: item,
+  };
+  for (final item in custom) {
+    merged[item.id] = item;
+  }
+  final result = merged.values.toList(growable: false);
+  result.sort((a, b) => a.title.compareTo(b.title));
+  return result;
 }
 
 final selectedProjectProvider = FutureProvider<Project?>((ref) async {

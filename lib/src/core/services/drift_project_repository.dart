@@ -2,9 +2,10 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../models/catalog.dart';
 import '../models/project.dart';
 import '../models/versioning.dart';
-import '../storage/app_database.dart';
+import '../storage/app_database.dart' as db;
 import 'demo_project_seed.dart';
 import 'interfaces.dart';
 import 'project_migration_service.dart';
@@ -21,10 +22,11 @@ class DriftProjectRepository
         ProjectRepository,
         ConstructionLibraryRepository,
         ObjectRepository,
-        FavoriteMaterialsRepository {
+        FavoriteMaterialsRepository,
+        OpeningCatalogRepository {
   DriftProjectRepository(this._database);
 
-  final AppDatabase _database;
+  final db.AppDatabase _database;
   final ProjectMigrationService _migrationService =
       const ProjectMigrationService();
 
@@ -88,7 +90,7 @@ class DriftProjectRepository
     await _database
         .into(_database.projectEntries)
         .insertOnConflictUpdate(
-          ProjectEntriesCompanion.insert(
+          db.ProjectEntriesCompanion.insert(
             id: project.id,
             name: project.name,
             climatePointId: project.climatePointId,
@@ -180,7 +182,7 @@ class DriftProjectRepository
     await _database
         .into(_database.projectEntries)
         .insertOnConflictUpdate(
-          ProjectEntriesCompanion.insert(
+          db.ProjectEntriesCompanion.insert(
             id: _favoriteMaterialsEntryId,
             name: 'Favorite materials',
             climatePointId: 'favorites',
@@ -228,7 +230,7 @@ class DriftProjectRepository
     await _database
         .into(_database.projectEntries)
         .insertOnConflictUpdate(
-          ProjectEntriesCompanion.insert(
+          db.ProjectEntriesCompanion.insert(
             id: _buildObjectEntryId(object.id),
             name: object.title,
             climatePointId: 'object',
@@ -280,7 +282,7 @@ class DriftProjectRepository
     }
   }
 
-  Future<Project> _mapRowToProject(ProjectEntry row) async {
+  Future<Project> _mapRowToProject(db.ProjectEntry row) async {
     final decoded = jsonDecode(row.payloadJson);
     final project = Project.fromJson(Map<String, dynamic>.from(decoded as Map));
     final migrated = _migrationService.migrate(project);
@@ -293,7 +295,7 @@ class DriftProjectRepository
     return migrated.project;
   }
 
-  Future<ProjectEntry?> _getLibraryRow() async {
+  Future<db.ProjectEntry?> _getLibraryRow() async {
     final query = _database.select(_database.projectEntries)
       ..where((table) => table.id.equals(_constructionLibraryEntryId));
     return query.getSingleOrNull();
@@ -332,7 +334,7 @@ class DriftProjectRepository
     await _saveLibrary(merged);
   }
 
-  List<Construction> _decodeLibraryRow(ProjectEntry row) {
+  List<Construction> _decodeLibraryRow(db.ProjectEntry row) {
     final payload = Map<String, dynamic>.from(
       jsonDecode(row.payloadJson) as Map,
     );
@@ -350,7 +352,7 @@ class DriftProjectRepository
     await _database
         .into(_database.projectEntries)
         .insertOnConflictUpdate(
-          ProjectEntriesCompanion.insert(
+          db.ProjectEntriesCompanion.insert(
             id: _constructionLibraryEntryId,
             name: 'Construction library',
             climatePointId: 'library',
@@ -370,7 +372,7 @@ class DriftProjectRepository
         );
   }
 
-  DesignObject _decodeObjectRow(ProjectEntry row) {
+  DesignObject _decodeObjectRow(db.ProjectEntry row) {
     final payload = Map<String, dynamic>.from(
       jsonDecode(row.payloadJson) as Map,
     );
@@ -387,4 +389,41 @@ class DriftProjectRepository
 
   String _buildObjectEntryId(String objectId) =>
       '$_objectEntryIdPrefix$objectId';
+
+  @override
+  Future<List<OpeningCatalogEntry>> listEntries() async {
+    final rows = await (_database.select(_database.storedOpeningCatalogEntries)
+          ..orderBy([
+            (table) => OrderingTerm(
+              expression: table.updatedAtEpochMs,
+              mode: OrderingMode.desc,
+            ),
+          ]))
+        .get();
+    return rows
+        .map(
+          (row) => OpeningCatalogEntry.fromJson(
+            Map<String, dynamic>.from(jsonDecode(row.payloadJson) as Map),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> saveEntry(OpeningCatalogEntry entry) async {
+    await _database.into(_database.storedOpeningCatalogEntries).insertOnConflictUpdate(
+      db.StoredOpeningCatalogEntriesCompanion.insert(
+        id: entry.id,
+        payloadJson: jsonEncode(entry.toJson()),
+        updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+  }
+
+  @override
+  Future<void> deleteEntry(String id) async {
+    await (_database.delete(_database.storedOpeningCatalogEntries)
+          ..where((table) => table.id.equals(id)))
+        .go();
+  }
 }

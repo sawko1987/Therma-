@@ -240,6 +240,34 @@ const testCatalogSnapshot = CatalogSnapshot(
       ratedPowerWatts: 1200,
     ),
   ],
+  openingCatalog: [
+    OpeningCatalogEntry(
+      id: 'window-basic',
+      kind: OpeningKind.window,
+      title: 'Окно ПВХ 1200x1400',
+      subcategory: 'ПВХ окна',
+      manufacturer: 'REHAU',
+      widthMeters: 1.2,
+      heightMeters: 1.4,
+      heatTransferCoefficient: 1.0,
+      sourceUrl: 'https://window.rehau.com/uk-en/rehau-specifier-guide-download',
+      sourceLabel: 'REHAU Specifier Guide',
+      sourceCheckedAt: '2026-04-13',
+    ),
+    OpeningCatalogEntry(
+      id: 'door-basic',
+      kind: OpeningKind.door,
+      title: 'Стальная входная дверь 980x2050',
+      subcategory: 'Стальные входные двери',
+      manufacturer: 'Hormann',
+      widthMeters: 0.98,
+      heightMeters: 2.05,
+      heatTransferCoefficient: 1.4,
+      sourceUrl: 'https://www.hormann.co.uk/media-centre/preview/310523en/85828_Thermo65_46_23_12_EN_UK.pdf?20240416141953=',
+      sourceLabel: 'Hormann Thermo65 / Thermo46',
+      sourceCheckedAt: '2026-04-13',
+    ),
+  ],
   datasetVersion: 'test-moisture-v2',
 );
 
@@ -331,6 +359,7 @@ HouseEnvelopeElement buildEnvelopeElement({
   Construction? construction,
   ConstructionElementKind? elementKind,
   double areaSquareMeters = defaultHouseElementAreaSquareMeters,
+  WallOrientation? wallOrientation,
   EnvelopeWallPlacement? wallPlacement,
   String? sourceConstructionId,
   String? sourceConstructionTitle,
@@ -351,6 +380,12 @@ HouseEnvelopeElement buildEnvelopeElement({
         sourceConstructionId ?? effectiveConstruction.id,
     sourceConstructionTitle:
         sourceConstructionTitle ?? effectiveConstruction.title,
+    wallOrientation:
+        wallOrientation ??
+        ((elementKind ?? effectiveConstruction.elementKind) ==
+                ConstructionElementKind.wall
+            ? WallOrientation.north
+            : null),
     wallPlacement: wallPlacement,
   );
 }
@@ -425,7 +460,8 @@ class FakeProjectRepository
         ProjectRepository,
         ConstructionLibraryRepository,
         ObjectRepository,
-        FavoriteMaterialsRepository {
+        FavoriteMaterialsRepository,
+        OpeningCatalogRepository {
   FakeProjectRepository({List<Project>? projects})
     : _projects = projects ?? [buildTestProject()],
       _library = {
@@ -445,12 +481,17 @@ class FakeProjectRepository
             projectId: project.id,
             updatedAtEpochMs: 0,
           ),
-      };
+      } {
+    for (final entry in testCatalogSnapshot.openingCatalog) {
+      _openingCatalog[entry.id] = entry;
+    }
+  }
 
   final List<Project> _projects;
   final Map<String, Construction> _library;
   final Map<String, DesignObject> _objects;
   final Set<String> _favoriteMaterialIds = <String>{};
+  final Map<String, OpeningCatalogEntry> _openingCatalog = <String, OpeningCatalogEntry>{};
 
   @override
   Future<List<Project>> listProjects() async => List.unmodifiable(_projects);
@@ -559,6 +600,20 @@ class FakeProjectRepository
     _favoriteMaterialIds
       ..clear()
       ..addAll(ids);
+  }
+
+  @override
+  Future<List<OpeningCatalogEntry>> listEntries() async =>
+      List.unmodifiable(_openingCatalog.values);
+
+  @override
+  Future<void> saveEntry(OpeningCatalogEntry entry) async {
+    _openingCatalog[entry.id] = entry;
+  }
+
+  @override
+  Future<void> deleteEntry(String id) async {
+    _openingCatalog.remove(id);
   }
 }
 

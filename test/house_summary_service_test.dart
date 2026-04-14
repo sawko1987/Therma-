@@ -57,11 +57,11 @@ void main() {
       expect(summary.totalOpeningAreaSquareMeters, 4);
       expect(summary.totalOpaqueAreaSquareMeters, 16);
       expect(summary.totalOpeningCount, 1);
-      expect(summary.totalOpeningHeatLossWatts, closeTo(184, 2));
-      expect(summary.totalHeatLossWatts, closeTo(316.52, 3));
+      expect(summary.totalOpeningHeatLossWatts, closeTo(202.4, 2));
+      expect(summary.totalHeatLossWatts, closeTo(348.172, 3));
       expect(summary.totalHeatingDeviceCount, 1);
       expect(summary.totalInstalledHeatingPowerWatts, 450);
-      expect(summary.totalHeatingPowerDeltaWatts, closeTo(133.48, 3));
+      expect(summary.totalHeatingPowerDeltaWatts, closeTo(101.828, 3));
       expect(summary.roomResults.single.totalOpaqueAreaSquareMeters, 16);
       expect(summary.roomResults.single.installedHeatingPowerWatts, 450);
     },
@@ -119,6 +119,7 @@ void main() {
           RoomKindCondition(roomKindId: 'bedroom', insideTemperature: 18),
         ],
         heatingDevices: testCatalogSnapshot.heatingDevices,
+        openingCatalog: testCatalogSnapshot.openingCatalog,
         datasetVersion: testCatalogSnapshot.datasetVersion,
       );
       const service = NormativeBuildingHeatLossService(
