@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 15;
+const int currentProjectFormatVersion = 19;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
