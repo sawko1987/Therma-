@@ -886,6 +886,19 @@ final openingCatalogRepositoryProvider = Provider<OpeningCatalogRepository>((
   );
 });
 
+final appPreferencesRepositoryProvider = Provider<AppPreferencesRepository>((
+  ref,
+) {
+  final repository = ref.watch(projectRepositoryProvider);
+  if (repository is AppPreferencesRepository) {
+    return repository as AppPreferencesRepository;
+  }
+  return DriftProjectRepository(
+    ref.watch(appDatabaseProvider),
+    logger: ref.watch(appLoggerProvider),
+  );
+});
+
 final thermalCalculationEngineProvider = Provider<ThermalCalculationEngine>(
   (ref) => const NormativeThermalCalculationEngine(),
 );
@@ -965,6 +978,14 @@ final favoriteMaterialIdsProvider = FutureProvider<Set<String>>((ref) async {
   return ref
       .read(favoriteMaterialsRepositoryProvider)
       .listFavoriteMaterialIds();
+});
+
+final constructionPickerSwipeTutorialSeenProvider = FutureProvider<bool>((
+  ref,
+) async {
+  return ref
+      .read(appPreferencesRepositoryProvider)
+      .getConstructionPickerSwipeTutorialSeen();
 });
 
 final materialCatalogEntriesProvider =

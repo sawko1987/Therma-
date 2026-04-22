@@ -14,7 +14,6 @@ class ConstructionStepScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectAsync = ref.watch(selectedProjectProvider);
-    final libraryAsync = ref.watch(constructionLibraryProvider);
     final materialEntriesAsync = ref.watch(materialCatalogEntriesProvider);
 
     return Scaffold(
@@ -25,15 +24,9 @@ class ConstructionStepScreen extends ConsumerWidget {
             return const Center(child: Text('Активный проект не найден.'));
           }
           return materialEntriesAsync.when(
-            data: (materialEntries) => libraryAsync.when(
-              data: (library) => _ConstructionStepBody(
-                project: project,
-                library: library,
-                materialEntries: materialEntries,
-              ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) =>
-                  Center(child: Text('Ошибка загрузки библиотеки: $error')),
+            data: (materialEntries) => _ConstructionStepBody(
+              project: project,
+              materialEntries: materialEntries,
             ),
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) =>
@@ -51,12 +44,10 @@ class ConstructionStepScreen extends ConsumerWidget {
 class _ConstructionStepBody extends ConsumerStatefulWidget {
   const _ConstructionStepBody({
     required this.project,
-    required this.library,
     required this.materialEntries,
   });
 
   final Project project;
-  final List<Construction> library;
   final List<MaterialCatalogEntry> materialEntries;
 
   @override
@@ -255,7 +246,7 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
           right: 20,
           bottom: 20,
           child: FloatingActionButton.extended(
-            onPressed: () => _handleAddConstruction(context, materialMap),
+            onPressed: () => _handleAddConstruction(context),
             icon: const Icon(Icons.add),
             label: const Text('Добавить конструкцию'),
           ),
@@ -264,42 +255,8 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
     );
   }
 
-  Future<void> _handleAddConstruction(
-    BuildContext context,
-    Map<String, MaterialEntry> materialMap,
-  ) async {
-    final selected = await showConstructionPickerModal(
-      context,
-      constructions: widget.library,
-      materialEntries: widget.materialEntries,
-      materialMap: materialMap,
-    );
-    if (!context.mounted || selected == null) {
-      return;
-    }
-    try {
-      switch (selected.action) {
-        case ConstructionPickerAction.selectExisting:
-          await ref
-              .read(projectEditorProvider)
-              .selectConstructionForProject(selected.construction);
-        case ConstructionPickerAction.addProjectOnly:
-          await ref
-              .read(projectEditorProvider)
-              .addProjectOnlyConstruction(selected.construction);
-        case ConstructionPickerAction.saveToLibraryAndProject:
-          await ref
-              .read(projectEditorProvider)
-              .addConstruction(selected.construction);
-      }
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
-    }
+  Future<void> _handleAddConstruction(BuildContext context) async {
+    await showConstructionPickerModal(context);
   }
 }
 

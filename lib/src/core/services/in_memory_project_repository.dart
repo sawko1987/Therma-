@@ -8,7 +8,8 @@ class InMemoryProjectRepository
         ProjectRepository,
         ConstructionLibraryRepository,
         ObjectRepository,
-        FavoriteMaterialsRepository {
+        FavoriteMaterialsRepository,
+        AppPreferencesRepository {
   InMemoryProjectRepository({required List<Project> projects})
     : _projects = [...projects],
       _library = {
@@ -40,6 +41,7 @@ class InMemoryProjectRepository
   final Map<String, Construction> _library;
   final Map<String, DesignObject> _objects;
   final Set<String> _favoriteMaterialIds = <String>{};
+  bool _constructionPickerSwipeTutorialSeen = false;
   bool _hasSeededDemoProject;
   bool _hasSeededObjects;
   final ProjectMigrationService _migrationService =
@@ -175,5 +177,15 @@ class InMemoryProjectRepository
     _favoriteMaterialIds
       ..clear()
       ..addAll(ids);
+  }
+
+  @override
+  Future<bool> getConstructionPickerSwipeTutorialSeen() async {
+    return _constructionPickerSwipeTutorialSeen;
+  }
+
+  @override
+  Future<void> setConstructionPickerSwipeTutorialSeen(bool seen) async {
+    _constructionPickerSwipeTutorialSeen = seen;
   }
 }

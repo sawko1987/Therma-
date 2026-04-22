@@ -154,27 +154,33 @@ void main() {
     );
   });
 
-  test('seedDemoProjectIfEmpty marks seed state without inserting projects', () async {
-    await repository.seedDemoProjectIfEmpty();
-    final firstPass = await repository.listProjects();
+  test(
+    'seedDemoProjectIfEmpty marks seed state without inserting projects',
+    () async {
+      await repository.seedDemoProjectIfEmpty();
+      final firstPass = await repository.listProjects();
 
-    await repository.seedDemoProjectIfEmpty();
-    final secondPass = await repository.listProjects();
+      await repository.seedDemoProjectIfEmpty();
+      final secondPass = await repository.listProjects();
 
-    expect(firstPass, isEmpty);
-    expect(secondPass, isEmpty);
-  });
+      expect(firstPass, isEmpty);
+      expect(secondPass, isEmpty);
+    },
+  );
 
-  test('seedDemoProjectIfEmpty does not recreate demo after deletion', () async {
-    await repository.saveProject(buildTestProject());
-    await repository.seedDemoProjectIfEmpty();
-    await repository.deleteProject('demo');
+  test(
+    'seedDemoProjectIfEmpty does not recreate demo after deletion',
+    () async {
+      await repository.saveProject(buildTestProject());
+      await repository.seedDemoProjectIfEmpty();
+      await repository.deleteProject('demo');
 
-    await repository.seedDemoProjectIfEmpty();
-    final projects = await repository.listProjects();
+      await repository.seedDemoProjectIfEmpty();
+      final projects = await repository.listProjects();
 
-    expect(projects, isEmpty);
-  });
+      expect(projects, isEmpty);
+    },
+  );
 
   test('seedObjectsIfEmpty does not recreate object after deletion', () async {
     final project = buildTestProject();
@@ -406,6 +412,14 @@ void main() {
     final restored = await repository.listFavoriteMaterialIds();
 
     expect(restored, containsAll(['custom-material-1', 'aac_d500']));
+  });
+
+  test('construction picker tutorial flag is stored globally', () async {
+    expect(await repository.getConstructionPickerSwipeTutorialSeen(), isFalse);
+
+    await repository.setConstructionPickerSwipeTutorialSeen(true);
+
+    expect(await repository.getConstructionPickerSwipeTutorialSeen(), isTrue);
   });
 }
 

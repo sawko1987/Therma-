@@ -44,6 +44,11 @@ abstract interface class OpeningCatalogRepository {
   Future<void> deleteEntry(String id);
 }
 
+abstract interface class AppPreferencesRepository {
+  Future<bool> getConstructionPickerSwipeTutorialSeen();
+  Future<void> setConstructionPickerSwipeTutorialSeen(bool seen);
+}
+
 abstract interface class ThermalCalculationEngine {
   Future<CalculationResult> calculate({
     required CatalogSnapshot catalog,

@@ -250,7 +250,8 @@ const testCatalogSnapshot = CatalogSnapshot(
       widthMeters: 1.2,
       heightMeters: 1.4,
       heatTransferCoefficient: 1.0,
-      sourceUrl: 'https://window.rehau.com/uk-en/rehau-specifier-guide-download',
+      sourceUrl:
+          'https://window.rehau.com/uk-en/rehau-specifier-guide-download',
       sourceLabel: 'REHAU Specifier Guide',
       sourceCheckedAt: '2026-04-13',
     ),
@@ -263,7 +264,8 @@ const testCatalogSnapshot = CatalogSnapshot(
       widthMeters: 0.98,
       heightMeters: 2.05,
       heatTransferCoefficient: 1.4,
-      sourceUrl: 'https://www.hormann.co.uk/media-centre/preview/310523en/85828_Thermo65_46_23_12_EN_UK.pdf?20240416141953=',
+      sourceUrl:
+          'https://www.hormann.co.uk/media-centre/preview/310523en/85828_Thermo65_46_23_12_EN_UK.pdf?20240416141953=',
       sourceLabel: 'Hormann Thermo65 / Thermo46',
       sourceCheckedAt: '2026-04-13',
     ),
@@ -376,8 +378,7 @@ HouseEnvelopeElement buildEnvelopeElement({
     elementKind: elementKind ?? effectiveConstruction.elementKind,
     areaSquareMeters: areaSquareMeters,
     construction: effectiveConstruction,
-    sourceConstructionId:
-        sourceConstructionId ?? effectiveConstruction.id,
+    sourceConstructionId: sourceConstructionId ?? effectiveConstruction.id,
     sourceConstructionTitle:
         sourceConstructionTitle ?? effectiveConstruction.title,
     wallOrientation:
@@ -461,7 +462,8 @@ class FakeProjectRepository
         ConstructionLibraryRepository,
         ObjectRepository,
         FavoriteMaterialsRepository,
-        OpeningCatalogRepository {
+        OpeningCatalogRepository,
+        AppPreferencesRepository {
   FakeProjectRepository({List<Project>? projects})
     : _projects = projects ?? [buildTestProject()],
       _library = {
@@ -493,7 +495,9 @@ class FakeProjectRepository
   final Map<String, Construction> _library;
   final Map<String, DesignObject> _objects;
   final Set<String> _favoriteMaterialIds = <String>{};
-  final Map<String, OpeningCatalogEntry> _openingCatalog = <String, OpeningCatalogEntry>{};
+  final Map<String, OpeningCatalogEntry> _openingCatalog =
+      <String, OpeningCatalogEntry>{};
+  bool _constructionPickerSwipeTutorialSeen = false;
   bool _hasSeededDemoProject;
   bool _hasSeededObjects;
 
@@ -627,6 +631,16 @@ class FakeProjectRepository
   @override
   Future<void> deleteEntry(String id) async {
     _openingCatalog.remove(id);
+  }
+
+  @override
+  Future<bool> getConstructionPickerSwipeTutorialSeen() async {
+    return _constructionPickerSwipeTutorialSeen;
+  }
+
+  @override
+  Future<void> setConstructionPickerSwipeTutorialSeen(bool seen) async {
+    _constructionPickerSwipeTutorialSeen = seen;
   }
 }
 

@@ -21,6 +21,8 @@ const _objectSeedStateEntryId = '__object_seed_state__';
 const _objectSeedStatePayloadVersion = 1;
 const _objectEntryIdPrefix = '__object__';
 const _objectPayloadVersion = 1;
+const _appPreferencesEntryId = '__app_preferences__';
+const _appPreferencesPayloadVersion = 1;
 
 class DriftProjectRepository
     implements
@@ -28,7 +30,8 @@ class DriftProjectRepository
         ConstructionLibraryRepository,
         ObjectRepository,
         FavoriteMaterialsRepository,
-        OpeningCatalogRepository {
+        OpeningCatalogRepository,
+        AppPreferencesRepository {
   DriftProjectRepository(this._database, {AppLogger? logger})
     : _logger = logger;
 
@@ -266,6 +269,44 @@ class DriftProjectRepository
   }
 
   @override
+  Future<bool> getConstructionPickerSwipeTutorialSeen() async {
+    final query = _database.select(_database.projectEntries)
+      ..where((table) => table.id.equals(_appPreferencesEntryId));
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return false;
+    }
+    final payload = Map<String, dynamic>.from(
+      jsonDecode(row.payloadJson) as Map,
+    );
+    return payload['constructionPickerSwipeTutorialSeen'] == true;
+  }
+
+  @override
+  Future<void> setConstructionPickerSwipeTutorialSeen(bool seen) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _database
+        .into(_database.projectEntries)
+        .insertOnConflictUpdate(
+          db.ProjectEntriesCompanion.insert(
+            id: _appPreferencesEntryId,
+            name: 'App preferences',
+            climatePointId: 'preferences',
+            roomPreset: RoomPreset.livingRoom.storageKey,
+            payloadJson: jsonEncode({
+              'type': 'appPreferences',
+              'payloadVersion': _appPreferencesPayloadVersion,
+              'constructionPickerSwipeTutorialSeen': seen,
+            }),
+            projectFormatVersion: currentProjectFormatVersion,
+            datasetVersion: const Value(currentDatasetVersion),
+            migratedFromDatasetVersion: const Value(null),
+            updatedAtEpochMs: now,
+          ),
+        );
+  }
+
+  @override
   Future<List<DesignObject>> listObjects() async {
     _logger?.debug('List design objects', category: AppLogCategory.storage);
     final query = _database.select(_database.projectEntries)
@@ -350,14 +391,14 @@ class DriftProjectRepository
       return;
     }
 
-    final projectRows = await (_database.select(_database.projectEntries)
-          ..orderBy([
-            (table) => OrderingTerm(
-              expression: table.updatedAtEpochMs,
-              mode: OrderingMode.desc,
-            ),
-          ]))
-        .get();
+    final projectRows =
+        await (_database.select(_database.projectEntries)..orderBy([
+              (table) => OrderingTerm(
+                expression: table.updatedAtEpochMs,
+                mode: OrderingMode.desc,
+              ),
+            ]))
+            .get();
 
     for (final row in projectRows) {
       if (_isTechnicalEntry(row.id)) {
@@ -512,6 +553,7 @@ class DriftProjectRepository
 
   bool _isTechnicalEntry(String id) {
     return id == _constructionLibraryEntryId ||
+        id == _appPreferencesEntryId ||
         id == _demoSeedStateEntryId ||
         id == _objectSeedStateEntryId ||
         id == _favoriteMaterialsEntryId ||
