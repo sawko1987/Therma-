@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec /usr/lib/llvm-18/bin/llvm-ar "$@"

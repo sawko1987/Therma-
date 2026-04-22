@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/logging/app_logging.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
@@ -73,23 +74,27 @@ class ObjectStepScreen extends ConsumerWidget {
     if (!context.mounted || result == null) {
       return;
     }
-    try {
-      if (object == null) {
-        await ref
-            .read(projectEditorProvider)
-            .createObject(
-              title: result.title,
-              address: result.address,
-              description: result.description,
-              customerPhone: result.customerPhone,
-              climatePointId: result.climatePointId,
-            );
-        final createdObject = await ref.read(selectedObjectProvider.future);
-        if (!context.mounted || createdObject == null) {
-          return;
+    final reporter = ref.read(appErrorReporterProvider);
+    final completed = await reporter.runUiAction(
+      context: context,
+      action: () async {
+        if (object == null) {
+          await ref
+              .read(projectEditorProvider)
+              .createObject(
+                title: result.title,
+                address: result.address,
+                description: result.description,
+                customerPhone: result.customerPhone,
+                climatePointId: result.climatePointId,
+              );
+          final createdObject = await ref.read(selectedObjectProvider.future);
+          if (!context.mounted || createdObject == null) {
+            return false;
+          }
+          _openStep1ForObject(context, ref, createdObject);
+          return true;
         }
-        _openStep1ForObject(context, ref, createdObject);
-      } else {
         await ref
             .read(projectEditorProvider)
             .updateObject(
@@ -102,14 +107,25 @@ class ObjectStepScreen extends ConsumerWidget {
                 updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
               ),
             );
-      }
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
+        return true;
+      },
+      operation: object == null
+          ? 'Failed to create object'
+          : 'Failed to update object',
+      userMessage: object == null
+          ? 'Не удалось создать объект.'
+          : 'Не удалось обновить объект.',
+      category: AppLogCategory.ui,
+      contextData: {
+        'address': result.address,
+        'customerPhone': result.customerPhone,
+        'climatePointId': result.climatePointId,
+      },
+    );
+    if (completed == true && object != null && context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('$error')));
+      ).showSnackBar(const SnackBar(content: Text('Объект обновлен.')));
     }
   }
 

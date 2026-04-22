@@ -154,18 +154,44 @@ void main() {
     );
   });
 
-  test('seedDemoProjectIfEmpty inserts demo project only once', () async {
+  test('seedDemoProjectIfEmpty marks seed state without inserting projects', () async {
     await repository.seedDemoProjectIfEmpty();
     final firstPass = await repository.listProjects();
 
     await repository.seedDemoProjectIfEmpty();
     final secondPass = await repository.listProjects();
 
-    expect(firstPass, hasLength(1));
-    expect(secondPass, hasLength(1));
-    expect(secondPass.single.id, 'demo-project');
-    expect(secondPass.single.datasetVersion, currentDatasetVersion);
-    expect(secondPass.single.houseModel.elements, hasLength(1));
+    expect(firstPass, isEmpty);
+    expect(secondPass, isEmpty);
+  });
+
+  test('seedDemoProjectIfEmpty does not recreate demo after deletion', () async {
+    await repository.saveProject(buildTestProject());
+    await repository.seedDemoProjectIfEmpty();
+    await repository.deleteProject('demo');
+
+    await repository.seedDemoProjectIfEmpty();
+    final projects = await repository.listProjects();
+
+    expect(projects, isEmpty);
+  });
+
+  test('seedObjectsIfEmpty does not recreate object after deletion', () async {
+    final project = buildTestProject();
+    await repository.saveProject(project);
+    await repository.seedObjectsIfEmpty();
+
+    final objectsBeforeDeletion = await repository.listObjects();
+    expect(objectsBeforeDeletion, hasLength(1));
+    expect(objectsBeforeDeletion.single.projectId, project.id);
+
+    await repository.deleteObject(objectsBeforeDeletion.single.id);
+
+    await repository.seedObjectsIfEmpty();
+    final objectsAfterReseed = await repository.listObjects();
+
+    expect(objectsAfterReseed, isEmpty);
+    expect(await repository.getProject(project.id), isNotNull);
   });
 
   test(

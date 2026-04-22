@@ -1,7 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:talker_flutter/talker_flutter.dart';
 
+import 'logging/app_logging.dart';
 import 'models/building_heat_loss.dart';
 import 'models/calculation.dart';
 import 'models/catalog.dart';
@@ -71,23 +73,37 @@ class ProjectEditor {
   ProjectEditor(this._ref);
 
   final Ref _ref;
+  AppLogger get _logger => _ref.read(appLoggerProvider);
 
   Future<void> saveProject(Project project) async {
-    await _ref.read(projectRepositoryProvider).saveProject(project);
-    _ref.invalidate(catalogSnapshotProvider);
-    _ref.invalidate(openingCatalogEntriesProvider);
-    _ref.invalidate(materialCatalogEntriesProvider);
-    _ref.invalidate(projectListProvider);
-    _ref.invalidate(selectedProjectProvider);
-    _ref.invalidate(selectedEnvelopeElementProvider);
-    _ref.invalidate(selectedConstructionProvider);
-    _ref.invalidate(buildingHeatLossResultProvider);
-    _ref.invalidate(heatingEconomicsResultProvider);
-    _ref.invalidate(selectedGroundFloorCalculationProvider);
-    _ref.invalidate(groundFloorCalculationResultProvider);
-    _ref.invalidate(constructionLibraryProvider);
-    _ref.invalidate(objectListProvider);
-    _ref.invalidate(selectedObjectProvider);
+    await _logger.runLoggedAction(
+      action: 'Save project',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'projectName': project.name,
+        'climatePointId': project.climatePointId,
+      },
+      operation: () async {
+        await _ref.read(projectRepositoryProvider).saveProject(project);
+        _ref.invalidate(catalogSnapshotProvider);
+        _ref.invalidate(openingCatalogEntriesProvider);
+        _ref.invalidate(materialCatalogEntriesProvider);
+        _ref.invalidate(projectListProvider);
+        _ref.invalidate(selectedProjectProvider);
+        _ref.invalidate(selectedEnvelopeElementProvider);
+        _ref.invalidate(selectedConstructionProvider);
+        _ref.invalidate(buildingHeatLossResultProvider);
+        _ref.invalidate(heatingEconomicsResultProvider);
+        _ref.invalidate(selectedGroundFloorCalculationProvider);
+        _ref.invalidate(groundFloorCalculationResultProvider);
+        _ref.invalidate(constructionLibraryProvider);
+        _ref.invalidate(objectListProvider);
+        _ref.invalidate(selectedObjectProvider);
+      },
+      successMessage: 'Project saved',
+      logStart: false,
+    );
   }
 
   Future<void> createObject({
@@ -116,38 +132,65 @@ class ProjectEditor {
       projectId: project.id,
       updatedAtEpochMs: now,
     );
-    await _ref.read(projectRepositoryProvider).saveProject(project);
-    await _ref.read(objectRepositoryProvider).saveObject(object);
-    _ref.read(selectedObjectIdProvider.notifier).select(object.id);
-    _ref.read(selectedProjectIdProvider.notifier).select(project.id);
-    _ref.invalidate(projectListProvider);
-    _ref.invalidate(objectListProvider);
-    _ref.invalidate(selectedObjectProvider);
-    _ref.invalidate(selectedProjectProvider);
+    await _logger.runLoggedAction(
+      action: 'Create object',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'objectId': object.id,
+        'customerPhone': customerPhone,
+        'address': address,
+      },
+      operation: () async {
+        await _ref.read(projectRepositoryProvider).saveProject(project);
+        await _ref.read(objectRepositoryProvider).saveObject(object);
+        _ref.read(selectedObjectIdProvider.notifier).select(object.id);
+        _ref.read(selectedProjectIdProvider.notifier).select(project.id);
+        _ref.invalidate(projectListProvider);
+        _ref.invalidate(objectListProvider);
+        _ref.invalidate(selectedObjectProvider);
+        _ref.invalidate(selectedProjectProvider);
+      },
+      successMessage: 'Object created',
+    );
   }
 
   Future<void> updateObject(DesignObject object) async {
-    await _ref.read(objectRepositoryProvider).saveObject(object);
-    final project = await _ref
-        .read(projectRepositoryProvider)
-        .getProject(object.projectId);
-    if (project != null &&
-        (project.name != object.title ||
-            project.climatePointId != object.climatePointId)) {
-      await _ref
-          .read(projectRepositoryProvider)
-          .saveProject(
-            project.copyWith(
-              name: object.title,
-              climatePointId: object.climatePointId,
-            ),
-          );
-    }
-    _ref.invalidate(projectListProvider);
-    _ref.invalidate(objectListProvider);
-    _ref.invalidate(selectedObjectProvider);
-    _ref.invalidate(selectedProjectProvider);
-    _ref.invalidate(catalogSnapshotProvider);
+    await _logger.runLoggedAction(
+      action: 'Update object',
+      category: AppLogCategory.repository,
+      context: {
+        'objectId': object.id,
+        'projectId': object.projectId,
+        'customerPhone': object.customerPhone,
+        'address': object.address,
+      },
+      operation: () async {
+        await _ref.read(objectRepositoryProvider).saveObject(object);
+        final project = await _ref
+            .read(projectRepositoryProvider)
+            .getProject(object.projectId);
+        if (project != null &&
+            (project.name != object.title ||
+                project.climatePointId != object.climatePointId)) {
+          await _ref
+              .read(projectRepositoryProvider)
+              .saveProject(
+                project.copyWith(
+                  name: object.title,
+                  climatePointId: object.climatePointId,
+                ),
+              );
+        }
+        _ref.invalidate(projectListProvider);
+        _ref.invalidate(objectListProvider);
+        _ref.invalidate(selectedObjectProvider);
+        _ref.invalidate(selectedProjectProvider);
+        _ref.invalidate(catalogSnapshotProvider);
+      },
+      successMessage: 'Object updated',
+      logStart: false,
+    );
   }
 
   Future<void> deleteObject(String objectId) async {
@@ -155,20 +198,44 @@ class ProjectEditor {
         .read(objectRepositoryProvider)
         .getObject(objectId);
     if (object == null) {
+      _logger.warning(
+        'Delete object skipped: object not found',
+        category: AppLogCategory.repository,
+        context: {'objectId': objectId},
+      );
       return;
     }
-    await _ref.read(objectRepositoryProvider).deleteObject(objectId);
-    await _ref.read(projectRepositoryProvider).deleteProject(object.projectId);
-    _ref.read(selectedObjectIdProvider.notifier).select(null);
-    _ref.read(selectedProjectIdProvider.notifier).select(null);
-    _ref.invalidate(projectListProvider);
-    _ref.invalidate(objectListProvider);
-    _ref.invalidate(selectedObjectProvider);
-    _ref.invalidate(selectedProjectProvider);
+    await _logger.runLoggedAction(
+      action: 'Delete object',
+      category: AppLogCategory.repository,
+      context: {'objectId': objectId, 'projectId': object.projectId},
+      operation: () async {
+        await _ref.read(objectRepositoryProvider).deleteObject(objectId);
+        await _ref
+            .read(projectRepositoryProvider)
+            .deleteProject(object.projectId);
+        _ref.read(selectedObjectIdProvider.notifier).select(null);
+        _ref.read(selectedProjectIdProvider.notifier).select(null);
+        _ref.invalidate(projectListProvider);
+        _ref.invalidate(objectListProvider);
+        _ref.invalidate(selectedObjectProvider);
+        _ref.invalidate(selectedProjectProvider);
+      },
+      successMessage: 'Object deleted',
+    );
   }
 
   Future<void> addRoom(Room room) async {
     final project = await _requireProject();
+    _logger.debug(
+      'Add room',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'roomId': room.id,
+        'roomTitle': room.title,
+      },
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
         .addRoom(project, room);
@@ -177,6 +244,15 @@ class ProjectEditor {
 
   Future<void> updateRoom(Room room) async {
     final project = await _requireProject();
+    _logger.debug(
+      'Update room',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'roomId': room.id,
+        'roomTitle': room.title,
+      },
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
         .updateRoom(project, room);
@@ -185,6 +261,11 @@ class ProjectEditor {
 
   Future<void> deleteRoom(String roomId) async {
     final project = await _requireProject();
+    _logger.debug(
+      'Delete room',
+      category: AppLogCategory.repository,
+      context: {'projectId': project.id, 'roomId': roomId},
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
         .deleteRoom(project, roomId);
@@ -201,6 +282,15 @@ class ProjectEditor {
 
   Future<void> addEnvelopeElement(HouseEnvelopeElement element) async {
     final project = await _requireProject();
+    _logger.debug(
+      'Add envelope element',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'elementId': element.id,
+        'constructionId': element.construction.id,
+      },
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
         .addEnvelopeElement(project, element);
@@ -213,6 +303,15 @@ class ProjectEditor {
 
   Future<void> updateEnvelopeElement(HouseEnvelopeElement element) async {
     final project = await _requireProject();
+    _logger.debug(
+      'Update envelope element',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'elementId': element.id,
+        'constructionId': element.construction.id,
+      },
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
         .updateEnvelopeElement(project, element);
@@ -237,6 +336,11 @@ class ProjectEditor {
 
   Future<void> deleteEnvelopeElement(String elementId) async {
     final project = await _requireProject();
+    _logger.debug(
+      'Delete envelope element',
+      category: AppLogCategory.repository,
+      context: {'projectId': project.id, 'elementId': elementId},
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
         .deleteEnvelopeElement(project, elementId);
@@ -246,6 +350,15 @@ class ProjectEditor {
 
   Future<void> addOpening(EnvelopeOpening opening) async {
     final project = await _requireProject();
+    _logger.debug(
+      'Add opening',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'openingId': opening.id,
+        'elementId': opening.elementId,
+      },
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
         .addOpening(project, opening);
@@ -257,6 +370,15 @@ class ProjectEditor {
 
   Future<void> updateOpening(EnvelopeOpening opening) async {
     final project = await _requireProject();
+    _logger.debug(
+      'Update opening',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'openingId': opening.id,
+        'elementId': opening.elementId,
+      },
+    );
     final updated = _ref
         .read(projectEditingServiceProvider)
         .updateOpening(project, opening);
@@ -270,6 +392,15 @@ class ProjectEditor {
     final project = await _requireProject();
     final opening = project.houseModel.openings.firstWhere(
       (item) => item.id == openingId,
+    );
+    _logger.debug(
+      'Delete opening',
+      category: AppLogCategory.repository,
+      context: {
+        'projectId': project.id,
+        'openingId': openingId,
+        'elementId': opening.elementId,
+      },
     );
     final updated = _ref
         .read(projectEditingServiceProvider)
@@ -308,6 +439,11 @@ class ProjectEditor {
     HeatingEconomicsSettings settings,
   ) async {
     final project = await _requireProject();
+    _logger.info(
+      'Update heating economics settings',
+      category: AppLogCategory.repository,
+      context: {'projectId': project.id},
+    );
     await saveProject(project.copyWith(heatingEconomicsSettings: settings));
   }
 
@@ -480,15 +616,33 @@ class ProjectEditor {
   }
 
   Future<void> deleteConstructionFromLibrary(String constructionId) async {
+    final objects = await _ref.read(objectRepositoryProvider).listObjects();
+    final visibleProjectIds = objects.map((object) => object.projectId).toSet();
     final projects = await _ref.read(projectRepositoryProvider).listProjects();
-    final inUse = projects.any(
-      (project) =>
-          project.effectiveSelectedConstructionIds.contains(constructionId),
-    );
-    if (inUse) {
-      throw StateError(
-        'Нельзя удалить конструкцию из библиотеки, пока она выбрана в проекте.',
+    for (final project in projects) {
+      if (!visibleProjectIds.contains(project.id)) {
+        continue;
+      }
+      final usedByEnvelope = project.houseModel.elements.any(
+        (element) => element.constructionId == constructionId,
       );
+      if (usedByEnvelope) {
+        throw StateError(
+          'Нельзя удалить конструкцию из библиотеки, пока она используется в ограждающих конструкциях проекта "${project.name}".',
+        );
+      }
+      GroundFloorCalculation? groundFloorCalculation;
+      for (final calculation in project.groundFloorCalculations) {
+        if (calculation.constructionId == constructionId) {
+          groundFloorCalculation = calculation;
+          break;
+        }
+      }
+      if (groundFloorCalculation != null) {
+        throw StateError(
+          'Нельзя удалить конструкцию из библиотеки, пока она используется в расчете пола по грунту "${groundFloorCalculation.title}" проекта "${project.name}".',
+        );
+      }
     }
     await _ref
         .read(constructionLibraryRepositoryProvider)
@@ -511,6 +665,15 @@ class ProjectEditor {
     GroundFloorCalculation calculation,
   ) async {
     final project = await _requireProject();
+    _logger.info(
+      'Add ground floor calculation',
+      category: AppLogCategory.calculation,
+      context: {
+        'projectId': project.id,
+        'calculationId': calculation.id,
+        'constructionId': calculation.constructionId,
+      },
+    );
     final updated = project.copyWith(
       groundFloorCalculations: [
         ...project.groundFloorCalculations,
@@ -527,6 +690,15 @@ class ProjectEditor {
     GroundFloorCalculation calculation,
   ) async {
     final project = await _requireProject();
+    _logger.info(
+      'Update ground floor calculation',
+      category: AppLogCategory.calculation,
+      context: {
+        'projectId': project.id,
+        'calculationId': calculation.id,
+        'constructionId': calculation.constructionId,
+      },
+    );
     final updated = project.copyWith(
       groundFloorCalculations: [
         for (final item in project.groundFloorCalculations)
@@ -541,6 +713,11 @@ class ProjectEditor {
 
   Future<void> deleteGroundFloorCalculation(String calculationId) async {
     final project = await _requireProject();
+    _logger.info(
+      'Delete ground floor calculation',
+      category: AppLogCategory.calculation,
+      context: {'projectId': project.id, 'calculationId': calculationId},
+    );
     final updated = project.copyWith(
       groundFloorCalculations: [
         for (final item in project.groundFloorCalculations)
@@ -574,6 +751,7 @@ class ReportExportController extends AsyncNotifier<SavedReport?> {
   Future<SavedReport> exportCurrentCalculation() async {
     state = const AsyncLoading();
     final savedReport = await AsyncValue.guard(() async {
+      final logger = ref.read(appLoggerProvider);
       final catalog = await ref.read(catalogSnapshotProvider.future);
       final project = await ref.read(selectedProjectProvider.future);
       final construction = await ref.read(selectedConstructionProvider.future);
@@ -582,6 +760,15 @@ class ReportExportController extends AsyncNotifier<SavedReport?> {
         throw StateError('Недостаточно данных для экспорта отчета.');
       }
 
+      logger.info(
+        'Start PDF export',
+        category: AppLogCategory.report,
+        context: {
+          'projectId': project.id,
+          'constructionId': construction.id,
+          'constructionTitle': construction.title,
+        },
+      );
       final content = ref
           .read(reportContentBuilderProvider)
           .buildContent(
@@ -594,7 +781,20 @@ class ReportExportController extends AsyncNotifier<SavedReport?> {
           .read(reportServiceProvider)
           .buildReport(content: content);
 
-      return ref.read(reportFileStoreProvider).saveReport(document);
+      final savedReport = await ref
+          .read(reportFileStoreProvider)
+          .saveReport(document);
+      logger.info(
+        'PDF export completed',
+        category: AppLogCategory.report,
+        context: {
+          'projectId': project.id,
+          'constructionId': construction.id,
+          'fileName': savedReport.fileName,
+          'filePath': savedReport.filePath,
+        },
+      );
+      return savedReport;
     });
 
     state = savedReport;
@@ -609,14 +809,33 @@ final catalogRepositoryProvider = Provider<CatalogRepository>(
   (ref) => AssetCatalogRepository(rootBundle),
 );
 
+final logHistoryStoreProvider = Provider<LogHistoryStore>(
+  (ref) => LogHistoryStore(),
+);
+
+final talkerProvider = Provider<Talker>(
+  (ref) => buildTalker(logHistoryStore: ref.watch(logHistoryStoreProvider)),
+);
+
+final appLoggerProvider = Provider<AppLogger>(
+  (ref) => AppLogger(ref.watch(talkerProvider)),
+);
+
+final appErrorReporterProvider = Provider<AppErrorReporter>(
+  (ref) => AppErrorReporter(ref.watch(appLoggerProvider)),
+);
+
 final appDatabaseProvider = Provider<db.AppDatabase>((ref) {
-  final database = db.AppDatabase();
+  final database = db.AppDatabase(logger: ref.watch(appLoggerProvider));
   ref.onDispose(database.close);
   return database;
 });
 
 final projectRepositoryProvider = Provider<ProjectRepository>(
-  (ref) => DriftProjectRepository(ref.watch(appDatabaseProvider)),
+  (ref) => DriftProjectRepository(
+    ref.watch(appDatabaseProvider),
+    logger: ref.watch(appLoggerProvider),
+  ),
 );
 
 final objectRepositoryProvider = Provider<ObjectRepository>((ref) {
@@ -624,7 +843,10 @@ final objectRepositoryProvider = Provider<ObjectRepository>((ref) {
   if (repository is ObjectRepository) {
     return repository as ObjectRepository;
   }
-  return DriftProjectRepository(ref.watch(appDatabaseProvider));
+  return DriftProjectRepository(
+    ref.watch(appDatabaseProvider),
+    logger: ref.watch(appLoggerProvider),
+  );
 });
 
 final constructionLibraryRepositoryProvider =
@@ -633,7 +855,10 @@ final constructionLibraryRepositoryProvider =
       if (repository is ConstructionLibraryRepository) {
         return repository as ConstructionLibraryRepository;
       }
-      return DriftProjectRepository(ref.watch(appDatabaseProvider));
+      return DriftProjectRepository(
+        ref.watch(appDatabaseProvider),
+        logger: ref.watch(appLoggerProvider),
+      );
     });
 
 final favoriteMaterialsRepositoryProvider =
@@ -642,7 +867,10 @@ final favoriteMaterialsRepositoryProvider =
       if (repository is FavoriteMaterialsRepository) {
         return repository as FavoriteMaterialsRepository;
       }
-      return DriftProjectRepository(ref.watch(appDatabaseProvider));
+      return DriftProjectRepository(
+        ref.watch(appDatabaseProvider),
+        logger: ref.watch(appLoggerProvider),
+      );
     });
 
 final openingCatalogRepositoryProvider = Provider<OpeningCatalogRepository>((
@@ -652,7 +880,10 @@ final openingCatalogRepositoryProvider = Provider<OpeningCatalogRepository>((
   if (repository is OpeningCatalogRepository) {
     return repository as OpeningCatalogRepository;
   }
-  return DriftProjectRepository(ref.watch(appDatabaseProvider));
+  return DriftProjectRepository(
+    ref.watch(appDatabaseProvider),
+    logger: ref.watch(appLoggerProvider),
+  );
 });
 
 final thermalCalculationEngineProvider = Provider<ThermalCalculationEngine>(
@@ -693,7 +924,7 @@ final reportServiceProvider = Provider<ReportService>(
 );
 
 final reportFileStoreProvider = Provider<ReportFileStore>(
-  (ref) => LocalReportFileStore(),
+  (ref) => LocalReportFileStore(logger: ref.watch(appLoggerProvider)),
 );
 
 final reportExportControllerProvider =
@@ -724,10 +955,11 @@ final catalogSnapshotProvider = FutureProvider<CatalogSnapshot>((ref) async {
   );
 });
 
-final openingCatalogEntriesProvider =
-    FutureProvider<List<OpeningCatalogEntry>>((ref) async {
-      return ref.read(openingCatalogRepositoryProvider).listEntries();
-    });
+final openingCatalogEntriesProvider = FutureProvider<List<OpeningCatalogEntry>>(
+  (ref) async {
+    return ref.read(openingCatalogRepositoryProvider).listEntries();
+  },
+);
 
 final favoriteMaterialIdsProvider = FutureProvider<Set<String>>((ref) async {
   return ref
@@ -1081,13 +1313,24 @@ final calculationResultForConstructionProvider =
       if (project == null || construction == null) {
         return null;
       }
-      return ref
-          .read(thermalCalculationEngineProvider)
-          .calculate(
-            catalog: catalog,
-            project: project,
-            construction: construction,
-          );
+      final logger = ref.read(appLoggerProvider);
+      return logger.runLoggedAction(
+        action: 'Construction calculation',
+        category: AppLogCategory.calculation,
+        context: {
+          'projectId': project.id,
+          'constructionId': construction.id,
+          'constructionTitle': construction.title,
+        },
+        operation: () => ref
+            .read(thermalCalculationEngineProvider)
+            .calculate(
+              catalog: catalog,
+              project: project,
+              construction: construction,
+            ),
+        successMessage: 'Construction calculation completed',
+      );
     });
 
 String _buildDuplicateConstructionId(String sourceId) {
@@ -1126,9 +1369,16 @@ final buildingHeatLossResultProvider = FutureProvider<BuildingHeatLossResult?>((
   if (project == null) {
     return null;
   }
-  return ref
-      .read(buildingHeatLossServiceProvider)
-      .calculate(catalog: catalog, project: project);
+  final logger = ref.read(appLoggerProvider);
+  return logger.runLoggedAction(
+    action: 'Building heat loss calculation',
+    category: AppLogCategory.calculation,
+    context: {'projectId': project.id},
+    operation: () => ref
+        .read(buildingHeatLossServiceProvider)
+        .calculate(catalog: catalog, project: project),
+    successMessage: 'Building heat loss calculation completed',
+  );
 });
 
 final heatingEconomicsResultProvider = FutureProvider<HeatingEconomicsResult?>((
@@ -1142,13 +1392,20 @@ final heatingEconomicsResultProvider = FutureProvider<HeatingEconomicsResult?>((
   if (project == null || buildingHeatLoss == null) {
     return null;
   }
-  return ref
-      .read(heatingEconomicsServiceProvider)
-      .calculate(
-        catalog: catalog,
-        project: project,
-        buildingHeatLoss: buildingHeatLoss,
-      );
+  final logger = ref.read(appLoggerProvider);
+  return logger.runLoggedAction(
+    action: 'Heating economics calculation',
+    category: AppLogCategory.calculation,
+    context: {'projectId': project.id},
+    operation: () => ref
+        .read(heatingEconomicsServiceProvider)
+        .calculate(
+          catalog: catalog,
+          project: project,
+          buildingHeatLoss: buildingHeatLoss,
+        ),
+    successMessage: 'Heating economics calculation completed',
+  );
 });
 
 final groundFloorCalculationResultProvider =
@@ -1161,13 +1418,24 @@ final groundFloorCalculationResultProvider =
       if (project == null || calculation == null) {
         return null;
       }
-      return ref
-          .read(groundFloorCalculationServiceProvider)
-          .calculate(
-            catalog: catalog,
-            project: project,
-            calculation: calculation,
-          );
+      final logger = ref.read(appLoggerProvider);
+      return logger.runLoggedAction(
+        action: 'Ground floor calculation',
+        category: AppLogCategory.calculation,
+        context: {
+          'projectId': project.id,
+          'calculationId': calculation.id,
+          'constructionId': calculation.constructionId,
+        },
+        operation: () => ref
+            .read(groundFloorCalculationServiceProvider)
+            .calculate(
+              catalog: catalog,
+              project: project,
+              calculation: calculation,
+            ),
+        successMessage: 'Ground floor calculation completed',
+      );
     });
 
 final calculationResultProvider = FutureProvider<CalculationResult?>((
@@ -1179,11 +1447,22 @@ final calculationResultProvider = FutureProvider<CalculationResult?>((
   if (project == null || construction == null) {
     return null;
   }
-  return ref
-      .read(thermalCalculationEngineProvider)
-      .calculate(
-        catalog: catalog,
-        project: project,
-        construction: construction,
-      );
+  final logger = ref.read(appLoggerProvider);
+  return logger.runLoggedAction(
+    action: 'Selected construction calculation',
+    category: AppLogCategory.calculation,
+    context: {
+      'projectId': project.id,
+      'constructionId': construction.id,
+      'constructionTitle': construction.title,
+    },
+    operation: () => ref
+        .read(thermalCalculationEngineProvider)
+        .calculate(
+          catalog: catalog,
+          project: project,
+          construction: construction,
+        ),
+    successMessage: 'Selected construction calculation completed',
+  );
 });

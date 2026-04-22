@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../logging/app_logging.dart';
 import '../models/versioning.dart';
 
 part 'app_database.g.dart';
@@ -35,9 +36,11 @@ class StoredOpeningCatalogEntries extends Table {
 
 @DriftDatabase(tables: [ProjectEntries, StoredOpeningCatalogEntries])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase({AppLogger? logger}) : _logger = logger, super(_openConnection());
 
-  AppDatabase.forTesting(super.e);
+  AppDatabase.forTesting(super.e, {AppLogger? logger}) : _logger = logger;
+
+  final AppLogger? _logger;
 
   @override
   int get schemaVersion => 3;
@@ -46,11 +49,13 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
     onUpgrade: (migrator, from, to) async {
+      _logger?.info(
+        'Run drift migration',
+        category: AppLogCategory.storage,
+        context: {'from': from, 'to': to},
+      );
       if (from < 2) {
-        await migrator.addColumn(
-          projectEntries,
-          projectEntries.datasetVersion,
-        );
+        await migrator.addColumn(projectEntries, projectEntries.datasetVersion);
         await migrator.addColumn(
           projectEntries,
           projectEntries.migratedFromDatasetVersion,
@@ -59,6 +64,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         await migrator.createTable(storedOpeningCatalogEntries);
       }
+      _logger?.info(
+        'Drift migration completed',
+        category: AppLogCategory.storage,
+        context: {'from': from, 'to': to},
+      );
     },
   );
 }

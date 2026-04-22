@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/logging/app_logging.dart';
 import '../../../core/models/building_heat_loss.dart';
 import '../../../core/models/heating_economics.dart';
 import '../../../core/models/project.dart';
@@ -145,28 +146,34 @@ class _HeatingEconomicsScreenState
       return;
     }
 
-    try {
-      await ref
-          .read(projectEditorProvider)
-          .updateHeatingEconomicsSettings(
-            project.heatingEconomicsSettings.copyWith(
-              electricityPricePerKwh: electricityPrice,
-              gasPricePerCubicMeter: gasPrice,
-            ),
-          );
-      if (!mounted) {
-        return;
-      }
+    final result = await ref
+        .read(appErrorReporterProvider)
+        .runUiAction(
+          context: context,
+          action: () async {
+            await ref
+                .read(projectEditorProvider)
+                .updateHeatingEconomicsSettings(
+                  project.heatingEconomicsSettings.copyWith(
+                    electricityPricePerKwh: electricityPrice,
+                    gasPricePerCubicMeter: gasPrice,
+                  ),
+                );
+            return true;
+          },
+          operation: 'Failed to save heating tariffs',
+          userMessage: 'Не удалось сохранить тарифы.',
+          category: AppLogCategory.ui,
+          contextData: {
+            'projectId': project.id,
+            'electricityPrice': electricityPrice,
+            'gasPrice': gasPrice,
+          },
+        );
+    if (result == true && mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Тарифы сохранены.')));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$error')));
     }
   }
 }

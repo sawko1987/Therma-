@@ -28,7 +28,9 @@ class InMemoryProjectRepository
             projectId: project.id,
             updatedAtEpochMs: 0,
           ),
-      };
+      },
+      _hasSeededDemoProject = projects.isNotEmpty,
+      _hasSeededObjects = projects.isNotEmpty;
 
   factory InMemoryProjectRepository.demo() {
     return InMemoryProjectRepository(projects: demoProjects);
@@ -38,6 +40,8 @@ class InMemoryProjectRepository
   final Map<String, Construction> _library;
   final Map<String, DesignObject> _objects;
   final Set<String> _favoriteMaterialIds = <String>{};
+  bool _hasSeededDemoProject;
+  bool _hasSeededObjects;
   final ProjectMigrationService _migrationService =
       const ProjectMigrationService();
 
@@ -87,15 +91,18 @@ class InMemoryProjectRepository
 
   @override
   Future<void> seedDemoProjectIfEmpty() async {
-    if (_projects.isNotEmpty) {
+    if (_hasSeededDemoProject) {
       return;
     }
-    _projects.addAll(demoProjects);
-    for (final project in demoProjects) {
-      for (final construction in project.constructions) {
-        _library[construction.id] = construction;
+    if (_projects.isEmpty) {
+      _projects.addAll(demoProjects);
+      for (final project in demoProjects) {
+        for (final construction in project.constructions) {
+          _library[construction.id] = construction;
+        }
       }
     }
+    _hasSeededDemoProject = true;
   }
 
   @override
@@ -136,7 +143,11 @@ class InMemoryProjectRepository
 
   @override
   Future<void> seedObjectsIfEmpty() async {
+    if (_hasSeededObjects) {
+      return;
+    }
     if (_objects.isNotEmpty) {
+      _hasSeededObjects = true;
       return;
     }
     for (final project in _projects) {
@@ -151,6 +162,7 @@ class InMemoryProjectRepository
         updatedAtEpochMs: 0,
       );
     }
+    _hasSeededObjects = true;
   }
 
   @override

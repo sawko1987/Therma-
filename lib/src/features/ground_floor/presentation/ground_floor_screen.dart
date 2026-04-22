@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/logging/app_logging.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/ground_floor_calculation.dart';
 import '../../../core/models/project.dart';
@@ -196,57 +197,68 @@ class _GroundFloorScreenState extends ConsumerState<GroundFloorScreen> {
       edgeInsulationResistance: 1.5,
     );
 
-    try {
-      await ref
-          .read(projectEditorProvider)
-          .addGroundFloorCalculation(calculation);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$error')));
-    }
+    await ref
+        .read(appErrorReporterProvider)
+        .runUiAction(
+          context: context,
+          action: () async {
+            await ref
+                .read(projectEditorProvider)
+                .addGroundFloorCalculation(calculation);
+            return true;
+          },
+          operation: 'Failed to create ground floor calculation',
+          userMessage: 'Не удалось создать расчет пола по грунту.',
+          category: AppLogCategory.ui,
+          contextData: {
+            'calculationId': calculation.id,
+            'constructionId': calculation.constructionId,
+          },
+        );
   }
 
   Future<void> _handleSave(GroundFloorCalculation current) async {
-    try {
-      final updated = current.copyWith(
-        title: _titleController.text.trim(),
-        kind: _selectedKind,
-        constructionId: _selectedConstructionId ?? current.constructionId,
-        areaSquareMeters: double.parse(_areaController.text.trim()),
-        perimeterMeters: double.parse(_perimeterController.text.trim()),
-        slabWidthMeters: double.parse(_widthController.text.trim()),
-        slabLengthMeters: double.parse(_lengthController.text.trim()),
-        edgeInsulationWidthMeters: double.parse(
-          _edgeWidthController.text.trim(),
-        ),
-        edgeInsulationResistance: double.parse(
-          _edgeResistanceController.text.trim(),
-        ),
-        notes: _notesController.text.trim().isEmpty
-            ? null
-            : _notesController.text.trim(),
-        clearNotes: _notesController.text.trim().isEmpty,
-      );
-      await ref
-          .read(projectEditorProvider)
-          .updateGroundFloorCalculation(updated);
-      if (!mounted) {
-        return;
-      }
+    final result = await ref
+        .read(appErrorReporterProvider)
+        .runUiAction(
+          context: context,
+          action: () async {
+            final updated = current.copyWith(
+              title: _titleController.text.trim(),
+              kind: _selectedKind,
+              constructionId: _selectedConstructionId ?? current.constructionId,
+              areaSquareMeters: double.parse(_areaController.text.trim()),
+              perimeterMeters: double.parse(_perimeterController.text.trim()),
+              slabWidthMeters: double.parse(_widthController.text.trim()),
+              slabLengthMeters: double.parse(_lengthController.text.trim()),
+              edgeInsulationWidthMeters: double.parse(
+                _edgeWidthController.text.trim(),
+              ),
+              edgeInsulationResistance: double.parse(
+                _edgeResistanceController.text.trim(),
+              ),
+              notes: _notesController.text.trim().isEmpty
+                  ? null
+                  : _notesController.text.trim(),
+              clearNotes: _notesController.text.trim().isEmpty,
+            );
+            await ref
+                .read(projectEditorProvider)
+                .updateGroundFloorCalculation(updated);
+            return true;
+          },
+          operation: 'Failed to save ground floor calculation',
+          userMessage: 'Не удалось сохранить расчет пола по грунту.',
+          category: AppLogCategory.ui,
+          contextData: {
+            'calculationId': current.id,
+            'constructionId': current.constructionId,
+          },
+        );
+    if (result == true && mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Расчет сохранен.')));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Не удалось сохранить: $error')));
     }
   }
 

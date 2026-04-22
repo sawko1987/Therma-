@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/logging/app_logging.dart';
 import '../../../core/models/calculation.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
@@ -19,28 +20,27 @@ class ThermocalcScreen extends ConsumerWidget {
   final bool showElementContext;
 
   Future<void> _handleExport(BuildContext context, WidgetRef ref) async {
-    try {
-      final savedReport = await ref
-          .read(reportExportControllerProvider.notifier)
-          .exportCurrentCalculation();
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'PDF сохранен: ${savedReport.fileName}\n${savedReport.filePath}',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось экспортировать PDF: $error')),
-      );
+    final savedReport = await ref
+        .read(appErrorReporterProvider)
+        .runUiAction(
+          context: context,
+          action: () => ref
+              .read(reportExportControllerProvider.notifier)
+              .exportCurrentCalculation(),
+          operation: 'Failed to export PDF report',
+          userMessage: 'Не удалось экспортировать PDF.',
+          category: AppLogCategory.ui,
+        );
+    if (!context.mounted || savedReport == null) {
+      return;
     }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'PDF сохранен: ${savedReport.fileName}\n${savedReport.filePath}',
+        ),
+      ),
+    );
   }
 
   @override
@@ -54,7 +54,9 @@ class ThermocalcScreen extends ConsumerWidget {
         ? ref.watch(selectedEnvelopeElementProvider)
         : const AsyncData<HouseEnvelopeElement?>(null);
     final calculationAsync = switch (constructionId) {
-      final String id => ref.watch(calculationResultForConstructionProvider(id)),
+      final String id => ref.watch(
+        calculationResultForConstructionProvider(id),
+      ),
       null => ref.watch(calculationResultProvider),
     };
     final catalogAsync = ref.watch(catalogSnapshotProvider);
@@ -194,7 +196,9 @@ class _ProjectSummary extends StatelessWidget {
                           Text(project?.name ?? 'Нет проекта'),
                           const SizedBox(height: 6),
                           Text('Климат: ${climate?.displayName ?? '—'}'),
-                          Text('Помещение для норм: ${project?.roomPreset.label ?? '—'}'),
+                          Text(
+                            'Помещение для норм: ${project?.roomPreset.label ?? '—'}',
+                          ),
                           if (showElementContext)
                             Text('Ограждение: ${element?.title ?? '—'}'),
                           if (showElementContext)
@@ -355,9 +359,9 @@ class _CalculationBody extends StatelessWidget {
                 children: [
                   Text(
                     'Сезонный влагорежим',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(calculation.moistureCheck.summary),
@@ -406,7 +410,8 @@ class _CalculationBody extends StatelessWidget {
                             indicator: indicator,
                             norm: catalog.norms
                                 .where(
-                                  (norm) => norm.id == indicator.normReferenceId,
+                                  (norm) =>
+                                      norm.id == indicator.normReferenceId,
                                 )
                                 .firstOrNull,
                           ),
@@ -502,236 +507,236 @@ class _CalculationBody extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Сезонный баланс влаги',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                ...calculation.moistureCheck.seasonalPeriods.map(
-                  (period) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                period.label,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Сезонный баланс влаги',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...calculation.moistureCheck.seasonalPeriods.map(
+                    (period) => Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  period.label,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${period.durationDays} дн., tнар ${period.outsideTemperature.toStringAsFixed(0)} °C, φнар ${(period.outsideRelativeHumidity * 100).toStringAsFixed(0)}%',
-                              ),
-                              Text(
-                                'Конденсация ${period.condensateKgPerSquareMeter.toStringAsFixed(3)} кг/м², высыхание ${period.dryingPotentialKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Σ ${period.endAccumulationKgPerSquareMeter.toStringAsFixed(3)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-          const SizedBox(height: 16),
-          Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Профиль паросопротивления',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Минимум для помещения: ${calculation.moistureCheck.minimumRecommendedVaporResistance.toStringAsFixed(2)} м²·ч·Па/мг',
-                ),
-                Text(
-                  'Максимальный ratio наружного/внутреннего слоя: ${calculation.moistureCheck.maximumRecommendedOutwardDryingRatio.toStringAsFixed(2)}',
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 180,
-                  child: CustomPaint(
-                    painter: LineChartPainter(
-                      lines: [
-                        ChartLine(
-                          series:
-                              calculation.moistureCheck.vaporResistanceSeries,
-                          color: const Color(0xFF8B5E34),
-                        ),
-                      ],
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-          const SizedBox(height: 16),
-          Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Температурный профиль',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Температура внутренней поверхности: ${calculation.insideSurfaceTemperature.toStringAsFixed(1)} °C',
-                ),
-                Text(
-                  'Температура наружной поверхности: ${calculation.outsideSurfaceTemperature.toStringAsFixed(1)} °C',
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 180,
-                  child: CustomPaint(
-                    painter: LineChartPainter(
-                      lines: [
-                        ChartLine(
-                          series: calculation.temperatureSeries,
-                          color: const Color(0xFF006D77),
-                        ),
-                      ],
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-          const SizedBox(height: 16),
-          Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Послойное паросопротивление',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                ...calculation.moistureCheck.layerRows.map(
-                  (row) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                row.title,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${period.durationDays} дн., tнар ${period.outsideTemperature.toStringAsFixed(0)} °C, φнар ${(period.outsideRelativeHumidity * 100).toStringAsFixed(0)}%',
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${row.thicknessMm.toStringAsFixed(0)} мм, δ ${row.vaporPermeability.toStringAsFixed(2)}, Z ${row.vaporResistance.toStringAsFixed(2)}',
-                              ),
-                            ],
+                                Text(
+                                  'Конденсация ${period.condensateKgPerSquareMeter.toStringAsFixed(3)} кг/м², высыхание ${period.dryingPotentialKgPerSquareMeter.toStringAsFixed(3)} кг/м²',
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Σ ${row.cumulativeVaporResistance.toStringAsFixed(2)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                          const SizedBox(width: 12),
+                          Text(
+                            'Σ ${period.endAccumulationKgPerSquareMeter.toStringAsFixed(3)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
           const SizedBox(height: 16),
           Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Послойный расчёт',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                ...calculation.layerRows.map(
-                  (row) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                row.title,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${row.thicknessMm.toStringAsFixed(0)} мм, λ ${row.thermalConductivity.toStringAsFixed(3)}, R ${row.resistance.toStringAsFixed(2)}',
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          '${row.tempStart.toStringAsFixed(1)} → ${row.tempEnd.toStringAsFixed(1)} °C',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Профиль паросопротивления',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'Минимум для помещения: ${calculation.moistureCheck.minimumRecommendedVaporResistance.toStringAsFixed(2)} м²·ч·Па/мг',
+                  ),
+                  Text(
+                    'Максимальный ratio наружного/внутреннего слоя: ${calculation.moistureCheck.maximumRecommendedOutwardDryingRatio.toStringAsFixed(2)}',
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 180,
+                    child: CustomPaint(
+                      painter: LineChartPainter(
+                        lines: [
+                          ChartLine(
+                            series:
+                                calculation.moistureCheck.vaporResistanceSeries,
+                            color: const Color(0xFF8B5E34),
+                          ),
+                        ],
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Температурный профиль',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Температура внутренней поверхности: ${calculation.insideSurfaceTemperature.toStringAsFixed(1)} °C',
+                  ),
+                  Text(
+                    'Температура наружной поверхности: ${calculation.outsideSurfaceTemperature.toStringAsFixed(1)} °C',
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 180,
+                    child: CustomPaint(
+                      painter: LineChartPainter(
+                        lines: [
+                          ChartLine(
+                            series: calculation.temperatureSeries,
+                            color: const Color(0xFF006D77),
+                          ),
+                        ],
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Послойное паросопротивление',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...calculation.moistureCheck.layerRows.map(
+                    (row) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  row.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${row.thicknessMm.toStringAsFixed(0)} мм, δ ${row.vaporPermeability.toStringAsFixed(2)}, Z ${row.vaporResistance.toStringAsFixed(2)}',
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Σ ${row.cumulativeVaporResistance.toStringAsFixed(2)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Послойный расчёт',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...calculation.layerRows.map(
+                    (row) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  row.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${row.thicknessMm.toStringAsFixed(0)} мм, λ ${row.thermalConductivity.toStringAsFixed(3)}, R ${row.resistance.toStringAsFixed(2)}',
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            '${row.tempStart.toStringAsFixed(1)} → ${row.tempEnd.toStringAsFixed(1)} °C',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
         const SizedBox(height: 16),
         Card(

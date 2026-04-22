@@ -481,7 +481,9 @@ class FakeProjectRepository
             projectId: project.id,
             updatedAtEpochMs: 0,
           ),
-      } {
+      },
+      _hasSeededDemoProject = (projects ?? [buildTestProject()]).isNotEmpty,
+      _hasSeededObjects = (projects ?? [buildTestProject()]).isNotEmpty {
     for (final entry in testCatalogSnapshot.openingCatalog) {
       _openingCatalog[entry.id] = entry;
     }
@@ -492,6 +494,8 @@ class FakeProjectRepository
   final Map<String, DesignObject> _objects;
   final Set<String> _favoriteMaterialIds = <String>{};
   final Map<String, OpeningCatalogEntry> _openingCatalog = <String, OpeningCatalogEntry>{};
+  bool _hasSeededDemoProject;
+  bool _hasSeededObjects;
 
   @override
   Future<List<Project>> listProjects() async => List.unmodifiable(_projects);
@@ -526,6 +530,9 @@ class FakeProjectRepository
 
   @override
   Future<void> seedDemoProjectIfEmpty() async {
+    if (_hasSeededDemoProject) {
+      return;
+    }
     if (_projects.isEmpty) {
       final project = buildTestProject();
       _projects.add(project);
@@ -533,6 +540,7 @@ class FakeProjectRepository
         _library[construction.id] = construction;
       }
     }
+    _hasSeededDemoProject = true;
   }
 
   @override
@@ -573,7 +581,11 @@ class FakeProjectRepository
 
   @override
   Future<void> seedObjectsIfEmpty() async {
+    if (_hasSeededObjects) {
+      return;
+    }
     if (_objects.isNotEmpty) {
+      _hasSeededObjects = true;
       return;
     }
     for (final project in _projects) {
@@ -588,6 +600,7 @@ class FakeProjectRepository
         updatedAtEpochMs: 0,
       );
     }
+    _hasSeededObjects = true;
   }
 
   @override

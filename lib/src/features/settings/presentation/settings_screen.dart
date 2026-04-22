@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../construction_library/presentation/construction_directory_screen.dart';
 import '../../construction_library/presentation/material_management_screen.dart';
+import 'diagnostics_logs_screen.dart';
 import 'opening_directory_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -61,11 +62,28 @@ class SettingsScreen extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.window_outlined),
                     title: const Text('Справочник проёмов'),
-                    subtitle: const Text('Окна, двери и пользовательские шаблоны'),
+                    subtitle: const Text(
+                      'Окна, двери и пользовательские шаблоны',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const OpeningDirectoryScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.health_and_safety_outlined),
+                    title: const Text('Диагностика и логи'),
+                    subtitle: const Text(
+                      'Консоль, история логов и экспорт файла',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const DiagnosticsLogsScreen(),
                       ),
                     ),
                   ),

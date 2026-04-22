@@ -148,4 +148,189 @@ void main() {
     expect(library.any((item) => item.id == 'template-wall'), isTrue);
     expect(library.any((item) => item.id == 'wall'), isTrue);
   });
+
+  test('deleting last object keeps selected project empty', () async {
+    final repository = FakeProjectRepository(projects: [buildTestProject()]);
+    final container = ProviderContainer(
+      overrides: [
+        projectRepositoryProvider.overrideWithValue(repository),
+        constructionLibraryRepositoryProvider.overrideWithValue(repository),
+        objectRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final object = await container.read(selectedObjectProvider.future);
+    expect(object, isNotNull);
+
+    await container.read(projectEditorProvider).deleteObject(object!.id);
+
+    final selectedObject = await container.read(selectedObjectProvider.future);
+    final selectedProject = await container.read(selectedProjectProvider.future);
+
+    expect(selectedObject, isNull);
+    expect(selectedProject, isNull);
+  });
+
+  test(
+    'library construction deletion succeeds after deleting last object and project',
+    () async {
+      final repository = FakeProjectRepository(projects: [buildTestProject()]);
+      final container = ProviderContainer(
+        overrides: [
+          projectRepositoryProvider.overrideWithValue(repository),
+          constructionLibraryRepositoryProvider.overrideWithValue(repository),
+          objectRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final object = await container.read(selectedObjectProvider.future);
+      await container.read(projectEditorProvider).deleteObject(object!.id);
+
+      await expectLater(
+        container
+            .read(projectEditorProvider)
+            .deleteConstructionFromLibrary('wall'),
+        completes,
+      );
+    },
+  );
+
+  test(
+    'library construction deletion ignores hidden orphan project without object',
+    () async {
+      final repository = FakeProjectRepository(projects: [buildTestProject()]);
+      await repository.deleteObject('object-demo');
+      final container = ProviderContainer(
+        overrides: [
+          projectRepositoryProvider.overrideWithValue(repository),
+          constructionLibraryRepositoryProvider.overrideWithValue(repository),
+          objectRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(projectEditorProvider)
+            .deleteConstructionFromLibrary('wall'),
+        completes,
+      );
+    },
+  );
+
+  test(
+    'library construction deletion succeeds when construction is only selected in project',
+    () async {
+      final wall = buildWallConstruction();
+      final project = buildTestProject(
+        construction: wall,
+        houseModel: buildHouseModel(constructions: [wall]).copyWith(
+          elements: const [],
+        ),
+      ).copyWith(
+        selectedConstructionIds: const ['wall'],
+      );
+      final repository = FakeProjectRepository(projects: [project]);
+      final container = ProviderContainer(
+        overrides: [
+          projectRepositoryProvider.overrideWithValue(repository),
+          constructionLibraryRepositoryProvider.overrideWithValue(repository),
+          objectRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(projectEditorProvider)
+            .deleteConstructionFromLibrary('wall'),
+        completes,
+      );
+    },
+  );
+
+  test(
+    'library construction deletion rejects when construction is used by envelope element',
+    () async {
+      final repository = FakeProjectRepository(projects: [buildTestProject()]);
+      final container = ProviderContainer(
+        overrides: [
+          projectRepositoryProvider.overrideWithValue(repository),
+          constructionLibraryRepositoryProvider.overrideWithValue(repository),
+          objectRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(projectEditorProvider)
+            .deleteConstructionFromLibrary('wall'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'Нельзя удалить конструкцию из библиотеки, пока она используется в ограждающих конструкциях проекта "Demo project".',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'library construction deletion rejects when construction is used by ground floor calculation',
+    () async {
+      final floor = Construction(
+        id: 'floor',
+        title: 'Пол',
+        elementKind: ConstructionElementKind.floor,
+        floorConstructionType: FloorConstructionType.onGround,
+        layers: buildWallConstruction().layers,
+      );
+      final project = buildTestProject(
+        constructions: [floor],
+        houseModel: buildHouseModel(constructions: [floor]).copyWith(
+          elements: const [],
+        ),
+        groundFloorCalculations: const [
+          GroundFloorCalculation(
+            id: 'floor-calc',
+            title: 'Пол',
+            kind: GroundFloorCalculationKind.slabOnGround,
+            constructionId: 'floor',
+            areaSquareMeters: 25,
+            perimeterMeters: 20,
+            slabWidthMeters: 5,
+            slabLengthMeters: 5,
+            edgeInsulationWidthMeters: 0.6,
+            edgeInsulationResistance: 1.5,
+          ),
+        ],
+      );
+      final repository = FakeProjectRepository(projects: [project]);
+      final container = ProviderContainer(
+        overrides: [
+          projectRepositoryProvider.overrideWithValue(repository),
+          constructionLibraryRepositoryProvider.overrideWithValue(repository),
+          objectRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await expectLater(
+        container
+            .read(projectEditorProvider)
+            .deleteConstructionFromLibrary('floor'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'Нельзя удалить конструкцию из библиотеки, пока она используется в расчете пола по грунту "Пол" проекта "Demo project".',
+          ),
+        ),
+      );
+    },
+  );
 }

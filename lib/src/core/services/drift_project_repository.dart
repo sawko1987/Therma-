@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../logging/app_logging.dart';
 import '../models/catalog.dart';
 import '../models/project.dart';
 import '../models/versioning.dart';
@@ -14,6 +15,10 @@ const _constructionLibraryEntryId = '__construction_library__';
 const _constructionLibraryPayloadVersion = 1;
 const _favoriteMaterialsEntryId = '__favorite_materials__';
 const _favoriteMaterialsPayloadVersion = 1;
+const _demoSeedStateEntryId = '__demo_seed_state__';
+const _demoSeedStatePayloadVersion = 1;
+const _objectSeedStateEntryId = '__object_seed_state__';
+const _objectSeedStatePayloadVersion = 1;
 const _objectEntryIdPrefix = '__object__';
 const _objectPayloadVersion = 1;
 
@@ -24,14 +29,17 @@ class DriftProjectRepository
         ObjectRepository,
         FavoriteMaterialsRepository,
         OpeningCatalogRepository {
-  DriftProjectRepository(this._database);
+  DriftProjectRepository(this._database, {AppLogger? logger})
+    : _logger = logger;
 
   final db.AppDatabase _database;
+  final AppLogger? _logger;
   final ProjectMigrationService _migrationService =
       const ProjectMigrationService();
 
   @override
   Future<List<Project>> listProjects() async {
+    _logger?.debug('List projects', category: AppLogCategory.storage);
     final query = _database.select(_database.projectEntries)
       ..orderBy([
         (table) => OrderingTerm(
@@ -69,6 +77,14 @@ class DriftProjectRepository
   @override
   Future<void> saveProject(Project project) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    _logger?.debug(
+      'Persist project entry',
+      category: AppLogCategory.storage,
+      context: {
+        'projectId': project.id,
+        'payloadJson': jsonEncode(project.toJson()),
+      },
+    );
     await _upsertProject(project, updatedAtEpochMs: now);
     await _mergeProjectConstructionsIntoLibrary(project.constructions);
   }
@@ -78,6 +94,11 @@ class DriftProjectRepository
     if (_isTechnicalEntry(id)) {
       return;
     }
+    _logger?.info(
+      'Delete project entry',
+      category: AppLogCategory.storage,
+      context: {'projectId': id},
+    );
     final query = _database.delete(_database.projectEntries)
       ..where((table) => table.id.equals(id));
     await query.go();
@@ -110,15 +131,49 @@ class DriftProjectRepository
 
   @override
   Future<void> seedDemoProjectIfEmpty() async {
-    final existing = (await listProjects()).length;
-
-    if (existing > 0) {
+    final existingSeedState = await _getDemoSeedStateRow();
+    if (existingSeedState != null) {
       return;
     }
 
-    for (final project in demoProjects) {
-      await saveProject(project);
+    final existing = (await listProjects()).length;
+
+    if (existing == 0) {
+      for (final project in demoProjects) {
+        await saveProject(project);
+      }
     }
+
+    await _saveDemoSeedState();
+  }
+
+  Future<db.ProjectEntry?> _getDemoSeedStateRow() async {
+    final query = _database.select(_database.projectEntries)
+      ..where((table) => table.id.equals(_demoSeedStateEntryId));
+    return query.getSingleOrNull();
+  }
+
+  Future<void> _saveDemoSeedState() async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _database
+        .into(_database.projectEntries)
+        .insertOnConflictUpdate(
+          db.ProjectEntriesCompanion.insert(
+            id: _demoSeedStateEntryId,
+            name: 'Demo seed state',
+            climatePointId: 'system',
+            roomPreset: RoomPreset.livingRoom.storageKey,
+            payloadJson: jsonEncode({
+              'type': 'demoSeedState',
+              'payloadVersion': _demoSeedStatePayloadVersion,
+              'seededAtEpochMs': now,
+            }),
+            projectFormatVersion: currentProjectFormatVersion,
+            datasetVersion: const Value(currentDatasetVersion),
+            migratedFromDatasetVersion: const Value(null),
+            updatedAtEpochMs: now,
+          ),
+        );
   }
 
   @override
@@ -141,6 +196,11 @@ class DriftProjectRepository
 
   @override
   Future<void> saveConstruction(Construction construction) async {
+    _logger?.info(
+      'Save construction in library store',
+      category: AppLogCategory.storage,
+      context: {'constructionId': construction.id, 'title': construction.title},
+    );
     final constructions = await listConstructions();
     final updated = [
       for (final item in constructions)
@@ -153,6 +213,11 @@ class DriftProjectRepository
 
   @override
   Future<void> deleteConstruction(String id) async {
+    _logger?.info(
+      'Delete construction from library store',
+      category: AppLogCategory.storage,
+      context: {'constructionId': id},
+    );
     final constructions = await listConstructions();
     await _saveLibrary([
       for (final item in constructions)
@@ -202,7 +267,7 @@ class DriftProjectRepository
 
   @override
   Future<List<DesignObject>> listObjects() async {
-    await seedObjectsIfEmpty();
+    _logger?.debug('List design objects', category: AppLogCategory.storage);
     final query = _database.select(_database.projectEntries)
       ..orderBy([
         (table) => OrderingTerm(
@@ -227,6 +292,16 @@ class DriftProjectRepository
 
   @override
   Future<void> saveObject(DesignObject object) async {
+    _logger?.info(
+      'Save design object',
+      category: AppLogCategory.storage,
+      context: {
+        'objectId': object.id,
+        'projectId': object.projectId,
+        'customerPhone': object.customerPhone,
+        'address': object.address,
+      },
+    );
     await _database
         .into(_database.projectEntries)
         .insertOnConflictUpdate(
@@ -250,6 +325,11 @@ class DriftProjectRepository
 
   @override
   Future<void> deleteObject(String id) async {
+    _logger?.info(
+      'Delete design object',
+      category: AppLogCategory.storage,
+      context: {'objectId': id},
+    );
     final query = _database.delete(_database.projectEntries)
       ..where((table) => table.id.equals(_buildObjectEntryId(id)));
     await query.go();
@@ -257,15 +337,33 @@ class DriftProjectRepository
 
   @override
   Future<void> seedObjectsIfEmpty() async {
-    final existing = await listProjects();
+    final existingSeedState = await _getObjectSeedStateRow();
+    if (existingSeedState != null) {
+      return;
+    }
+
     final existingObjectsQuery = _database.select(_database.projectEntries)
       ..where((table) => table.id.like('$_objectEntryIdPrefix%'));
     final existingObjects = await existingObjectsQuery.get();
     if (existingObjects.isNotEmpty) {
+      await _saveObjectSeedState();
       return;
     }
 
-    for (final project in existing) {
+    final projectRows = await (_database.select(_database.projectEntries)
+          ..orderBy([
+            (table) => OrderingTerm(
+              expression: table.updatedAtEpochMs,
+              mode: OrderingMode.desc,
+            ),
+          ]))
+        .get();
+
+    for (final row in projectRows) {
+      if (_isTechnicalEntry(row.id)) {
+        continue;
+      }
+      final project = await _mapRowToProject(row);
       final now = DateTime.now().millisecondsSinceEpoch;
       await saveObject(
         DesignObject(
@@ -280,6 +378,8 @@ class DriftProjectRepository
         ),
       );
     }
+
+    await _saveObjectSeedState();
   }
 
   Future<Project> _mapRowToProject(db.ProjectEntry row) async {
@@ -299,6 +399,35 @@ class DriftProjectRepository
     final query = _database.select(_database.projectEntries)
       ..where((table) => table.id.equals(_constructionLibraryEntryId));
     return query.getSingleOrNull();
+  }
+
+  Future<db.ProjectEntry?> _getObjectSeedStateRow() async {
+    final query = _database.select(_database.projectEntries)
+      ..where((table) => table.id.equals(_objectSeedStateEntryId));
+    return query.getSingleOrNull();
+  }
+
+  Future<void> _saveObjectSeedState() async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _database
+        .into(_database.projectEntries)
+        .insertOnConflictUpdate(
+          db.ProjectEntriesCompanion.insert(
+            id: _objectSeedStateEntryId,
+            name: 'Object seed state',
+            climatePointId: 'system',
+            roomPreset: RoomPreset.livingRoom.storageKey,
+            payloadJson: jsonEncode({
+              'type': 'objectSeedState',
+              'payloadVersion': _objectSeedStatePayloadVersion,
+              'seededAtEpochMs': now,
+            }),
+            projectFormatVersion: currentProjectFormatVersion,
+            datasetVersion: const Value(currentDatasetVersion),
+            migratedFromDatasetVersion: const Value(null),
+            updatedAtEpochMs: now,
+          ),
+        );
   }
 
   Future<void> _ensureLibrarySeeded() async {
@@ -383,6 +512,8 @@ class DriftProjectRepository
 
   bool _isTechnicalEntry(String id) {
     return id == _constructionLibraryEntryId ||
+        id == _demoSeedStateEntryId ||
+        id == _objectSeedStateEntryId ||
         id == _favoriteMaterialsEntryId ||
         id.startsWith(_objectEntryIdPrefix);
   }
@@ -392,14 +523,19 @@ class DriftProjectRepository
 
   @override
   Future<List<OpeningCatalogEntry>> listEntries() async {
-    final rows = await (_database.select(_database.storedOpeningCatalogEntries)
-          ..orderBy([
-            (table) => OrderingTerm(
-              expression: table.updatedAtEpochMs,
-              mode: OrderingMode.desc,
-            ),
-          ]))
-        .get();
+    _logger?.debug(
+      'Load opening catalog entries from store',
+      category: AppLogCategory.storage,
+    );
+    final rows =
+        await (_database.select(_database.storedOpeningCatalogEntries)
+              ..orderBy([
+                (table) => OrderingTerm(
+                  expression: table.updatedAtEpochMs,
+                  mode: OrderingMode.desc,
+                ),
+              ]))
+            .get();
     return rows
         .map(
           (row) => OpeningCatalogEntry.fromJson(
@@ -411,19 +547,31 @@ class DriftProjectRepository
 
   @override
   Future<void> saveEntry(OpeningCatalogEntry entry) async {
-    await _database.into(_database.storedOpeningCatalogEntries).insertOnConflictUpdate(
-      db.StoredOpeningCatalogEntriesCompanion.insert(
-        id: entry.id,
-        payloadJson: jsonEncode(entry.toJson()),
-        updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
-      ),
+    _logger?.info(
+      'Save opening catalog entry',
+      category: AppLogCategory.storage,
+      context: {'entryId': entry.id, 'title': entry.title},
     );
+    await _database
+        .into(_database.storedOpeningCatalogEntries)
+        .insertOnConflictUpdate(
+          db.StoredOpeningCatalogEntriesCompanion.insert(
+            id: entry.id,
+            payloadJson: jsonEncode(entry.toJson()),
+            updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
   }
 
   @override
   Future<void> deleteEntry(String id) async {
-    await (_database.delete(_database.storedOpeningCatalogEntries)
-          ..where((table) => table.id.equals(id)))
-        .go();
+    _logger?.info(
+      'Delete opening catalog entry',
+      category: AppLogCategory.storage,
+      context: {'entryId': id},
+    );
+    await (_database.delete(
+      _database.storedOpeningCatalogEntries,
+    )..where((table) => table.id.equals(id))).go();
   }
 }

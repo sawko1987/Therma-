@@ -1,0 +1,5 @@
+{"timestamp":"2026-04-21T21:11:02.492191","level":"debug","category":"ui","message":"[ui] Debug event","context":null,"error":null,"stackTrace":null}
+{"timestamp":"2026-04-21T21:11:02.555460","level":"info","category":"report","message":"[report] Info event","context":null,"error":null,"stackTrace":null}
+{"timestamp":"2026-04-21T21:11:02.563362","level":"warning","category":"storage","message":"[storage] Warning event","context":null,"error":null,"stackTrace":null}
+{"timestamp":"2026-04-21T21:11:02.566332","level":"error","category":"repository","message":"[repository] Error event","context":null,"error":null,"stackTrace":null}
+{"timestamp":"2026-04-21T21:11:02.572546","level":"critical","category":"calculation","message":"[calculation] Critical event","context":null,"error":null,"stackTrace":null}
