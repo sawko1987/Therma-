@@ -334,6 +334,18 @@ class ProjectEditor {
     _ref.read(selectedEnvelopeElementIdProvider.notifier).select(elementId);
   }
 
+  Future<void> updateEnvelopeWallArea(
+    String elementId,
+    double areaSquareMeters,
+  ) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateEnvelopeWallArea(project, elementId, areaSquareMeters);
+    await saveProject(updated);
+    _ref.read(selectedEnvelopeElementIdProvider.notifier).select(elementId);
+  }
+
   Future<void> deleteEnvelopeElement(String elementId) async {
     final project = await _requireProject();
     _logger.debug(
@@ -513,7 +525,7 @@ class ProjectEditor {
     await saveProject(project.copyWith(customMaterials: updatedMaterials));
   }
 
-  Future<void> saveOpeningCatalogEntry(OpeningCatalogEntry entry) async {
+  Future<void> saveOpeningCatalogEntry(OpeningTypeEntry entry) async {
     await _ref.read(openingCatalogRepositoryProvider).saveEntry(entry);
     _ref.invalidate(catalogSnapshotProvider);
     _ref.invalidate(openingCatalogEntriesProvider);
@@ -977,11 +989,11 @@ final catalogSnapshotProvider = FutureProvider<CatalogSnapshot>((ref) async {
   );
 });
 
-final openingCatalogEntriesProvider = FutureProvider<List<OpeningCatalogEntry>>(
-  (ref) async {
-    return ref.read(openingCatalogRepositoryProvider).listEntries();
-  },
-);
+final openingCatalogEntriesProvider = FutureProvider<List<OpeningTypeEntry>>((
+  ref,
+) async {
+  return ref.read(openingCatalogRepositoryProvider).listEntries();
+});
 
 final favoriteMaterialIdsProvider = FutureProvider<Set<String>>((ref) async {
   return ref
@@ -1000,7 +1012,9 @@ final constructionPickerSwipeTutorialSeenProvider = FutureProvider<bool>((
 final materialCatalogEntriesProvider =
     FutureProvider<List<MaterialCatalogEntry>>((ref) async {
       final catalog = await ref.watch(catalogSnapshotProvider.future);
-      final baseCatalog = await ref.read(catalogRepositoryProvider).loadSnapshot();
+      final baseCatalog = await ref
+          .read(catalogRepositoryProvider)
+          .loadSnapshot();
       final project = await ref.watch(selectedProjectProvider.future);
       final favorites = await ref.watch(favoriteMaterialIdsProvider.future);
       final customIds = {
@@ -1131,11 +1145,11 @@ List<Construction> _mergeConstructions(
   return merged.values.toList(growable: false);
 }
 
-List<OpeningCatalogEntry> _mergeOpenings(
-  List<OpeningCatalogEntry> seeded,
-  List<OpeningCatalogEntry> custom,
+List<OpeningTypeEntry> _mergeOpenings(
+  List<OpeningTypeEntry> seeded,
+  List<OpeningTypeEntry> custom,
 ) {
-  final merged = <String, OpeningCatalogEntry>{
+  final merged = <String, OpeningTypeEntry>{
     for (final item in seeded) item.id: item,
   };
   for (final item in custom) {

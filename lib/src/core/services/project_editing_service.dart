@@ -109,9 +109,29 @@ class ProjectEditingService {
     final element = project.houseModel.elements.firstWhere(
       (item) => item.id == elementId,
     );
+    final room = project.houseModel.rooms.firstWhere(
+      (item) => item.id == element.roomId,
+    );
     return updateEnvelopeElement(
       project,
-      element.copyWith(wallPlacement: wallPlacement),
+      element.copyWith(
+        wallPlacement: wallPlacement,
+        areaSquareMeters: wallPlacement.lengthMeters * room.heightMeters,
+      ),
+    );
+  }
+
+  Project updateEnvelopeWallArea(
+    Project project,
+    String elementId,
+    double areaSquareMeters,
+  ) {
+    final element = project.houseModel.elements.firstWhere(
+      (item) => item.id == elementId,
+    );
+    return updateEnvelopeElement(
+      project,
+      element.copyWith(areaSquareMeters: areaSquareMeters),
     );
   }
 
@@ -371,17 +391,91 @@ class ProjectEditingService {
     if (element.areaSquareMeters <= 0) {
       throw StateError('Площадь стены должна быть больше нуля.');
     }
-    final placement = element.wallPlacement;
-    if (placement != null) {
-      _ensureWallPlacementFitsRoom(room, placement);
-    }
+    final placement = _normalizeWallPlacement(room, element);
     return element.copyWith(
       construction: construction.copyWith(elementKind: effectiveKind),
       elementKind: effectiveKind,
-      areaSquareMeters: element.areaSquareMeters,
+      areaSquareMeters: placement.lengthMeters * room.heightMeters,
       wallOrientation: element.wallOrientation,
       wallPlacement: placement,
     );
+  }
+
+  EnvelopeWallPlacement _normalizeWallPlacement(
+    Room room,
+    HouseEnvelopeElement element,
+  ) {
+    final placement = element.wallPlacement;
+    if (placement != null) {
+      final impliedArea = placement.lengthMeters * room.heightMeters;
+      if ((impliedArea - element.areaSquareMeters).abs() < 0.0001) {
+        _ensureWallPlacementFitsRoom(room, placement);
+        return placement;
+      }
+      return _buildPlacementFromArea(
+        room: room,
+        basePlacement: placement,
+        areaSquareMeters: element.areaSquareMeters,
+      );
+    }
+    return _buildPlacementFromArea(
+      room: room,
+      basePlacement: EnvelopeWallPlacement(
+        side: RoomSide.top,
+        offsetMeters: 0,
+        lengthMeters: room.layout.widthMeters,
+      ),
+      areaSquareMeters: element.areaSquareMeters,
+    );
+  }
+
+  EnvelopeWallPlacement _buildPlacementFromArea({
+    required Room room,
+    required EnvelopeWallPlacement basePlacement,
+    required double areaSquareMeters,
+  }) {
+    final sideLength = room.layout.sideLength(basePlacement.side);
+    final requestedLength = areaSquareMeters / room.heightMeters;
+    final normalized = _snapWallPlacement(
+      basePlacement.copyWith(lengthMeters: requestedLength),
+      sideLength: sideLength,
+    );
+    _ensureWallPlacementFitsRoom(room, normalized);
+    return normalized;
+  }
+
+  EnvelopeWallPlacement _snapWallPlacement(
+    EnvelopeWallPlacement placement, {
+    required double sideLength,
+  }) {
+    final maxOffset = (sideLength - minimumRoomLayoutDimensionMeters).clamp(
+      0.0,
+      sideLength,
+    );
+    final snappedOffset = _snapMeters(
+      placement.offsetMeters.clamp(0.0, maxOffset),
+    );
+    final rawLength = placement.lengthMeters.clamp(
+      minimumRoomLayoutDimensionMeters,
+      sideLength,
+    );
+    final snappedLength = _snapMeters(rawLength);
+    final maxLength = (sideLength - snappedOffset).clamp(
+      minimumRoomLayoutDimensionMeters,
+      sideLength,
+    );
+    return placement.copyWith(
+      offsetMeters: snappedOffset,
+      lengthMeters: snappedLength.clamp(
+        minimumRoomLayoutDimensionMeters,
+        maxLength,
+      ),
+    );
+  }
+
+  double _snapMeters(double value) {
+    final steps = (value / roomLayoutSnapStepMeters).round();
+    return steps * roomLayoutSnapStepMeters;
   }
 
   void _validateRoomLayout(List<Room> rooms, Room room, {String? roomId}) {

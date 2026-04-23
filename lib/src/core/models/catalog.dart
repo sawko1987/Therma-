@@ -380,16 +380,16 @@ class HeatingDeviceCatalogEntry {
   final double ratedPowerWatts;
 }
 
-class OpeningCatalogEntry {
-  const OpeningCatalogEntry({
+class OpeningTypeEntry {
+  const OpeningTypeEntry({
     required this.id,
     required this.kind,
     required this.title,
     required this.subcategory,
     required this.manufacturer,
-    required this.widthMeters,
-    required this.heightMeters,
     required this.heatTransferCoefficient,
+    this.defaultWidthMeters,
+    this.defaultHeightMeters,
     required this.sourceUrl,
     required this.sourceLabel,
     required this.sourceCheckedAt,
@@ -398,17 +398,21 @@ class OpeningCatalogEntry {
     this.isCustom = false,
   });
 
-  factory OpeningCatalogEntry.fromJson(Map<String, dynamic> json) =>
-      OpeningCatalogEntry(
+  factory OpeningTypeEntry.fromJson(Map<String, dynamic> json) =>
+      OpeningTypeEntry(
         id: json['id'] as String,
         kind: parseOpeningKind(json['kind'] as String),
         title: json['title'] as String,
         subcategory: json['subcategory'] as String,
         manufacturer: json['manufacturer'] as String,
-        widthMeters: (json['widthMeters'] as num).toDouble(),
-        heightMeters: (json['heightMeters'] as num).toDouble(),
-        heatTransferCoefficient:
-            (json['heatTransferCoefficient'] as num).toDouble(),
+        defaultWidthMeters:
+            (json['defaultWidthMeters'] as num?)?.toDouble() ??
+            (json['widthMeters'] as num?)?.toDouble(),
+        defaultHeightMeters:
+            (json['defaultHeightMeters'] as num?)?.toDouble() ??
+            (json['heightMeters'] as num?)?.toDouble(),
+        heatTransferCoefficient: (json['heatTransferCoefficient'] as num)
+            .toDouble(),
         imageAssetPath: json['imageAssetPath'] as String?,
         localImagePath: json['localImagePath'] as String?,
         sourceUrl: json['sourceUrl'] as String,
@@ -422,8 +426,8 @@ class OpeningCatalogEntry {
   final String title;
   final String subcategory;
   final String manufacturer;
-  final double widthMeters;
-  final double heightMeters;
+  final double? defaultWidthMeters;
+  final double? defaultHeightMeters;
   final double heatTransferCoefficient;
   final String? imageAssetPath;
   final String? localImagePath;
@@ -432,16 +436,14 @@ class OpeningCatalogEntry {
   final String sourceCheckedAt;
   final bool isCustom;
 
-  double get areaSquareMeters => widthMeters * heightMeters;
-
-  OpeningCatalogEntry copyWith({
+  OpeningTypeEntry copyWith({
     String? id,
     OpeningKind? kind,
     String? title,
     String? subcategory,
     String? manufacturer,
-    double? widthMeters,
-    double? heightMeters,
+    double? defaultWidthMeters,
+    double? defaultHeightMeters,
     double? heatTransferCoefficient,
     String? imageAssetPath,
     String? localImagePath,
@@ -452,14 +454,14 @@ class OpeningCatalogEntry {
     bool clearImageAssetPath = false,
     bool clearLocalImagePath = false,
   }) {
-    return OpeningCatalogEntry(
+    return OpeningTypeEntry(
       id: id ?? this.id,
       kind: kind ?? this.kind,
       title: title ?? this.title,
       subcategory: subcategory ?? this.subcategory,
       manufacturer: manufacturer ?? this.manufacturer,
-      widthMeters: widthMeters ?? this.widthMeters,
-      heightMeters: heightMeters ?? this.heightMeters,
+      defaultWidthMeters: defaultWidthMeters ?? this.defaultWidthMeters,
+      defaultHeightMeters: defaultHeightMeters ?? this.defaultHeightMeters,
       heatTransferCoefficient:
           heatTransferCoefficient ?? this.heatTransferCoefficient,
       imageAssetPath: clearImageAssetPath
@@ -481,8 +483,8 @@ class OpeningCatalogEntry {
     'title': title,
     'subcategory': subcategory,
     'manufacturer': manufacturer,
-    'widthMeters': widthMeters,
-    'heightMeters': heightMeters,
+    'defaultWidthMeters': defaultWidthMeters,
+    'defaultHeightMeters': defaultHeightMeters,
     'heatTransferCoefficient': heatTransferCoefficient,
     'imageAssetPath': imageAssetPath,
     'localImagePath': localImagePath,
@@ -513,6 +515,6 @@ class CatalogSnapshot {
   final MoistureRuleSet moistureRules;
   final List<RoomKindCondition> roomKindConditions;
   final List<HeatingDeviceCatalogEntry> heatingDevices;
-  final List<OpeningCatalogEntry> openingCatalog;
+  final List<OpeningTypeEntry> openingCatalog;
   final String datasetVersion;
 }

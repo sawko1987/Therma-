@@ -350,7 +350,7 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
     final opening = await _showOpeningEditor(
       context,
       catalog: catalog,
-      elementId: element.id,
+      element: element,
     );
     if (!context.mounted) {
       return;
@@ -375,10 +375,17 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
     if (!context.mounted) {
       return;
     }
+    final project = await ref.read(selectedProjectProvider.future);
+    if (!context.mounted || project == null) {
+      return;
+    }
+    final element = project.houseModel.elements.firstWhere(
+      (item) => item.id == opening.elementId,
+    );
     final updated = await _showOpeningEditor(
       context,
       catalog: catalog,
-      elementId: opening.elementId,
+      element: element,
       opening: opening,
     );
     if (!context.mounted) {
@@ -1797,13 +1804,12 @@ Future<Room?> _showRoomEditor(
     text: (room?.heightMeters ?? defaultRoomHeightMeters).toString(),
   );
   final comfortTemperatureController = TextEditingController(
-    text:
-        (room?.comfortTemperatureC ?? defaultRoomComfortTemperatureC).toString(),
+    text: (room?.comfortTemperatureC ?? defaultRoomComfortTemperatureC)
+        .toString(),
   );
   final ventilationController = TextEditingController(
-    text:
-        (room?.ventilationSupplyM3h ?? defaultRoomVentilationSupplyM3h)
-            .toString(),
+    text: (room?.ventilationSupplyM3h ?? defaultRoomVentilationSupplyM3h)
+        .toString(),
   );
   var selectedKind = room?.kind ?? RoomKind.livingRoom;
   final effectiveLayout =
@@ -1875,9 +1881,7 @@ Future<Room?> _showRoomEditor(
                 const SizedBox(height: 12),
                 TextField(
                   controller: comfortTemperatureController,
-                  decoration: const InputDecoration(
-                    labelText: 'Комфорт, °C',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Комфорт, °C'),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -1941,11 +1945,7 @@ Future<Room?> showRoomEditorSheet(
   Room? room,
   RoomLayoutRect? initialLayout,
 }) {
-  return _showRoomEditor(
-    context,
-    room: room,
-    initialLayout: initialLayout,
-  );
+  return _showRoomEditor(context, room: room, initialLayout: initialLayout);
 }
 
 Future<HouseEnvelopeElement?> _showElementEditor(
@@ -2215,14 +2215,14 @@ Future<Construction?> _showConstructionEditor(
 Future<EnvelopeOpening?> _showOpeningEditor(
   BuildContext context, {
   required CatalogSnapshot catalog,
-  required String elementId,
+  required HouseEnvelopeElement element,
   OpeningKind? initialKind,
   EnvelopeOpening? opening,
 }) {
   return editor_helpers.showOpeningEditorSheet(
     context,
     catalog: catalog,
-    elementId: elementId,
+    element: element,
     initialKind: initialKind,
     opening: opening,
   );
@@ -2231,14 +2231,14 @@ Future<EnvelopeOpening?> _showOpeningEditor(
 Future<EnvelopeOpening?> showOpeningEditorSheet(
   BuildContext context, {
   required CatalogSnapshot catalog,
-  required String elementId,
+  required HouseEnvelopeElement element,
   OpeningKind? initialKind,
   EnvelopeOpening? opening,
 }) {
   return _showOpeningEditor(
     context,
     catalog: catalog,
-    elementId: elementId,
+    element: element,
     initialKind: initialKind,
     opening: opening,
   );

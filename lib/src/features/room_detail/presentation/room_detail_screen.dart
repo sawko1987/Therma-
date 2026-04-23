@@ -23,7 +23,9 @@ class RoomDetailScreen extends ConsumerWidget {
 
     return projectAsync.when(
       data: (project) {
-        final currentRoom = project == null ? null : _findRoom(project, room.id);
+        final currentRoom = project == null
+            ? null
+            : _findRoom(project, room.id);
         return Scaffold(
           appBar: AppBar(
             title: Text(
@@ -57,7 +59,9 @@ class RoomDetailScreen extends ConsumerWidget {
             data: (catalog) => heatLossAsync.when(
               data: (heatLoss) {
                 if (project == null) {
-                  return const Center(child: Text('Активный проект не найден.'));
+                  return const Center(
+                    child: Text('Активный проект не найден.'),
+                  );
                 }
                 if (currentRoom == null) {
                   return const Center(
@@ -155,11 +159,9 @@ class RoomDetailScreen extends ConsumerWidget {
     HouseEnvelopeElement element,
   ) {
     ref.read(projectEditorProvider).selectEnvelopeElement(element);
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const ThermocalcScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ThermocalcScreen()));
   }
 
   Room? _findRoom(Project project, String roomId) {
@@ -282,10 +284,7 @@ class _HeatBalanceCard extends StatelessWidget {
 }
 
 class _ElementsSection extends ConsumerWidget {
-  const _ElementsSection({
-    required this.room,
-    required this.data,
-  });
+  const _ElementsSection({required this.room, required this.data});
 
   final Room room;
   final _RoomDetailData data;
@@ -329,11 +328,11 @@ class _ElementsSection extends ConsumerWidget {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _ElementCard(
                     room: room,
-                     element: element,
-                     construction: element.construction,
-                     openings: data.openingsByElementId[element.id] ?? const [],
-                     elementResult: data.elementResultsById[element.id],
-                   ),
+                    element: element,
+                    construction: element.construction,
+                    openings: data.openingsByElementId[element.id] ?? const [],
+                    elementResult: data.elementResultsById[element.id],
+                  ),
                 );
               }),
             if (data.missingConstructionElements.isNotEmpty) ...[
@@ -458,7 +457,9 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
                         if (widget.element.elementKind ==
                                 ConstructionElementKind.wall &&
                             widget.element.wallPlacement != null)
-                          Text(_wallPlacementLabel(widget.element.wallPlacement!)),
+                          Text(
+                            _wallPlacementLabel(widget.element.wallPlacement!),
+                          ),
                         if (widget.elementResult != null)
                           Text(
                             'Потери ${widget.elementResult!.totalHeatLossWatts.toStringAsFixed(0)} Вт • '
@@ -483,9 +484,7 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
                       PopupMenuItem(value: 'delete', child: Text('Удалить')),
                     ],
                   ),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                  ),
+                  Icon(_expanded ? Icons.expand_less : Icons.expand_more),
                 ],
               ),
             ),
@@ -522,7 +521,8 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
                         child: _OpeningTile(
                           opening: opening,
                           onEdit: () => _handleEditOpening(context, opening),
-                          onDelete: () => _handleDeleteOpening(context, opening),
+                          onDelete: () =>
+                              _handleDeleteOpening(context, opening),
                         ),
                       );
                     }),
@@ -595,7 +595,7 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
       final created = await showOpeningEditorSheet(
         context,
         catalog: catalog,
-        elementId: widget.element.id,
+        element: widget.element,
         initialKind: OpeningKind.window,
       );
       if (!context.mounted || created == null) {
@@ -625,7 +625,7 @@ class _ElementCardState extends ConsumerState<_ElementCard> {
       final updated = await showOpeningEditorSheet(
         context,
         catalog: catalog,
-        elementId: widget.element.id,
+        element: widget.element,
         opening: opening,
       );
       if (!context.mounted || updated == null) {
@@ -746,8 +746,10 @@ class _CalculationTableCard extends StatelessWidget {
                   resistance: result == null
                       ? '—'
                       : result.totalResistance.toStringAsFixed(2),
-                  area: (result?.elementAreaSquareMeters ?? element.areaSquareMeters)
-                      .toStringAsFixed(1),
+                  area:
+                      (result?.elementAreaSquareMeters ??
+                              element.areaSquareMeters)
+                          .toStringAsFixed(1),
                   heatLoss: result == null
                       ? '—'
                       : result.totalHeatLossWatts.toStringAsFixed(0),
@@ -813,11 +815,12 @@ class _WallSchemeCard extends StatelessWidget {
     if (sideLength <= 0) {
       return const [];
     }
-    final sorted = [...elements]..sort((a, b) {
-      final left = a.wallPlacement?.offsetMeters ?? 0;
-      final right = b.wallPlacement?.offsetMeters ?? 0;
-      return left.compareTo(right);
-    });
+    final sorted = [...elements]
+      ..sort((a, b) {
+        final left = a.wallPlacement?.offsetMeters ?? 0;
+        final right = b.wallPlacement?.offsetMeters ?? 0;
+        return left.compareTo(right);
+      });
     final segments = <_WallVisualSegment>[];
     var cursor = 0.0;
     for (final element in sorted) {
@@ -923,50 +926,55 @@ class _WallSideRow extends StatelessWidget {
         SizedBox(
           height: 44,
           child: Row(
-            children: segments.map((segment) {
-              final flex = math.max(1, (segment.lengthMeters * 100).round());
-              final isElement = segment.element != null;
-              final child = Container(
-                margin: const EdgeInsets.only(right: 4),
-                decoration: BoxDecoration(
-                  color: isElement
-                      ? colorScheme.primaryContainer
-                      : colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: isElement
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: List.generate(
-                            math.min(segment.openingCount, 3),
-                            (_) => Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 1,
+            children: segments
+                .map((segment) {
+                  final flex = math.max(
+                    1,
+                    (segment.lengthMeters * 100).round(),
+                  );
+                  final isElement = segment.element != null;
+                  final child = Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      color: isElement
+                          ? colorScheme.primaryContainer
+                          : colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: isElement
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(
+                                math.min(segment.openingCount, 3),
+                                (_) => Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 1,
+                                  ),
+                                  child: Icon(
+                                    Icons.crop_square_outlined,
+                                    size: 14,
+                                    color: colorScheme.onPrimaryContainer,
+                                  ),
+                                ),
                               ),
-                              child: Icon(
-                                Icons.crop_square_outlined,
-                                size: 14,
-                                color: colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        )
-                      : null,
-                ),
-              );
-              return Expanded(
-                flex: flex,
-                child: isElement
-                    ? InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () => onTapElement(segment.element!),
-                        child: child,
-                      )
-                    : child,
-              );
-            }).toList(growable: false),
+                            )
+                          : null,
+                    ),
+                  );
+                  return Expanded(
+                    flex: flex,
+                    child: isElement
+                        ? InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => onTapElement(segment.element!),
+                            child: child,
+                          )
+                        : child,
+                  );
+                })
+                .toList(growable: false),
           ),
         ),
       ],
@@ -1075,28 +1083,19 @@ class _MetricTile extends StatelessWidget {
 }
 
 class _SectionActionButton extends StatelessWidget {
-  const _SectionActionButton({
-    required this.label,
-    required this.onPressed,
-  });
+  const _SectionActionButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.tonal(
-      onPressed: onPressed,
-      child: Text(label),
-    );
+    return FilledButton.tonal(onPressed: onPressed, child: Text(label));
   }
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.title,
-    required this.message,
-  });
+  const _EmptyState({required this.title, required this.message});
 
   final String title;
   final String message;
@@ -1186,12 +1185,16 @@ class _RoomDetailData {
       openingsByElementId.putIfAbsent(opening.elementId, () => []).add(opening);
     }
     final constructionById = {
-      for (final construction in project.constructions) construction.id: construction,
+      for (final construction in project.constructions)
+        construction.id: construction,
       for (final element in elements)
-        (element.sourceConstructionId ?? element.construction.id): element.construction,
+        (element.sourceConstructionId ?? element.construction.id):
+            element.construction,
     };
     final elementResultsById = {
-      for (final result in roomResult?.elementResults ?? const <BuildingElementHeatLossResult>[])
+      for (final result
+          in roomResult?.elementResults ??
+              const <BuildingElementHeatLossResult>[])
         result.element.id: result,
     };
     final wallElementsBySide = <RoomSide, List<HouseEnvelopeElement>>{};

@@ -19,23 +19,33 @@ String requireEditorText(String value, {required String fallback}) {
 Future<EnvelopeOpening?> showOpeningEditorSheet(
   BuildContext context, {
   required CatalogSnapshot catalog,
-  required String elementId,
+  required HouseEnvelopeElement element,
   OpeningKind? initialKind,
   EnvelopeOpening? opening,
 }) async {
-  final titleController = TextEditingController(text: opening?.title ?? '');
-  final areaController = TextEditingController(
-    text: (opening?.areaSquareMeters ?? 2.0).toString(),
+  final widthController = TextEditingController(
+    text:
+        (opening?.widthMeters ??
+                (opening?.kind ?? initialKind ?? OpeningKind.window)
+                    .defaultOpeningWidthMeters)
+            .toStringAsFixed(2),
+  );
+  final heightController = TextEditingController(
+    text:
+        (opening?.heightMeters ??
+                (opening?.kind ?? initialKind ?? OpeningKind.window)
+                    .defaultOpeningHeightMeters)
+            .toStringAsFixed(2),
   );
   final coefficientController = TextEditingController(
     text:
         (opening?.heatTransferCoefficient ??
                 (opening?.kind ?? initialKind ?? OpeningKind.window)
                     .defaultHeatTransferCoefficient)
-            .toString(),
+            .toStringAsFixed(2),
   );
   var selectedKind = opening?.kind ?? initialKind ?? OpeningKind.window;
-  String? selectedCatalogId;
+  String? selectedCatalogId = opening?.catalogTypeId;
 
   final result = await showModalBottomSheet<EnvelopeOpening>(
     context: context,
@@ -46,10 +56,28 @@ Future<EnvelopeOpening?> showOpeningEditorSheet(
           final catalogEntries = catalog.openingCatalog
               .where((item) => item.kind == selectedKind)
               .toList(growable: false);
+          OpeningTypeEntry? selectedCatalogEntry;
+          if (selectedCatalogId != null) {
+            for (final item in catalogEntries) {
+              if (item.id == selectedCatalogId) {
+                selectedCatalogEntry = item;
+                break;
+              }
+            }
+          }
           if (selectedCatalogId != null &&
               !catalogEntries.any((item) => item.id == selectedCatalogId)) {
             selectedCatalogId = null;
           }
+          final widthMeters = parseEditorDouble(
+            widthController.text,
+            fallback: selectedKind.defaultOpeningWidthMeters,
+          );
+          final heightMeters = parseEditorDouble(
+            heightController.text,
+            fallback: selectedKind.defaultOpeningHeightMeters,
+          );
+          final areaSquareMeters = widthMeters * heightMeters;
           return Padding(
             padding: EdgeInsets.fromLTRB(
               20,
@@ -85,9 +113,13 @@ Future<EnvelopeOpening?> showOpeningEditorSheet(
                       setState(() {
                         selectedKind = value;
                         selectedCatalogId = null;
+                        widthController.text = value.defaultOpeningWidthMeters
+                            .toStringAsFixed(2);
+                        heightController.text = value.defaultOpeningHeightMeters
+                            .toStringAsFixed(2);
                         coefficientController.text = value
                             .defaultHeatTransferCoefficient
-                            .toString();
+                            .toStringAsFixed(2);
                       });
                     }
                   },
@@ -109,7 +141,7 @@ Future<EnvelopeOpening?> showOpeningEditorSheet(
                         (item) => DropdownMenuItem<String?>(
                           value: item.id,
                           child: Text(
-                            '${item.title} • ${item.widthMeters.toStringAsFixed(2)}×${item.heightMeters.toStringAsFixed(2)} м • U ${item.heatTransferCoefficient.toStringAsFixed(2)}',
+                            '${item.title} • U ${item.heatTransferCoefficient.toStringAsFixed(2)}',
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -119,14 +151,28 @@ Future<EnvelopeOpening?> showOpeningEditorSheet(
                       setState(() {
                         selectedCatalogId = value;
                         if (value == null) {
+                          widthController.text = selectedKind
+                              .defaultOpeningWidthMeters
+                              .toStringAsFixed(2);
+                          heightController.text = selectedKind
+                              .defaultOpeningHeightMeters
+                              .toStringAsFixed(2);
+                          coefficientController.text = selectedKind
+                              .defaultHeatTransferCoefficient
+                              .toStringAsFixed(2);
                           return;
                         }
                         final selected = catalogEntries.firstWhere(
                           (item) => item.id == value,
                         );
-                        titleController.text = selected.title;
-                        areaController.text = selected.areaSquareMeters
-                            .toStringAsFixed(2);
+                        if (selected.defaultWidthMeters != null) {
+                          widthController.text = selected.defaultWidthMeters!
+                              .toStringAsFixed(2);
+                        }
+                        if (selected.defaultHeightMeters != null) {
+                          heightController.text = selected.defaultHeightMeters!
+                              .toStringAsFixed(2);
+                        }
                         coefficientController.text = selected
                             .heatTransferCoefficient
                             .toStringAsFixed(2);
@@ -135,17 +181,41 @@ Future<EnvelopeOpening?> showOpeningEditorSheet(
                   ),
                 ],
                 const SizedBox(height: 12),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Название'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: widthController,
+                        decoration: const InputDecoration(
+                          labelText: 'Ширина, м',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: heightController,
+                        decoration: const InputDecoration(
+                          labelText: 'Высота, м',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: areaController,
-                  decoration: const InputDecoration(labelText: 'Площадь, м²'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+                const SizedBox(height: 16),
+                Text(
+                  'Площадь: ${areaSquareMeters.toStringAsFixed(2)} м²',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -155,26 +225,28 @@ Future<EnvelopeOpening?> showOpeningEditorSheet(
                     decimal: true,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Ограждение: ${element.title} • максимум ${element.areaSquareMeters.toStringAsFixed(2)} м²',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () {
                     Navigator.of(context).pop(
                       EnvelopeOpening(
                         id: opening?.id ?? buildEditorId('opening'),
-                        elementId: elementId,
-                        title: requireEditorText(
-                          titleController.text,
-                          fallback: selectedKind.label,
-                        ),
+                        elementId: element.id,
+                        title:
+                            selectedCatalogEntry?.title ?? selectedKind.label,
                         kind: selectedKind,
-                        areaSquareMeters: parseEditorDouble(
-                          areaController.text,
-                          fallback: 2.0,
-                        ),
+                        widthMeters: widthMeters,
+                        heightMeters: heightMeters,
                         heatTransferCoefficient: parseEditorDouble(
                           coefficientController.text,
                           fallback: selectedKind.defaultHeatTransferCoefficient,
                         ),
+                        catalogTypeId: selectedCatalogEntry?.id,
                       ),
                     );
                   },
@@ -188,8 +260,8 @@ Future<EnvelopeOpening?> showOpeningEditorSheet(
     },
   );
 
-  titleController.dispose();
-  areaController.dispose();
+  widthController.dispose();
+  heightController.dispose();
   coefficientController.dispose();
   return result;
 }

@@ -254,12 +254,12 @@ void main() {
               ),
             ],
             openings: [
-              EnvelopeOpening(
+              buildOpening(
                 id: 'opening-1',
                 elementId: 'element-wall',
                 title: 'Окно 1',
-                kind: OpeningKind.window,
-                areaSquareMeters: 1.5,
+                widthMeters: 1.0,
+                heightMeters: 1.5,
                 heatTransferCoefficient: 1.0,
               ),
             ],

@@ -241,28 +241,28 @@ const testCatalogSnapshot = CatalogSnapshot(
     ),
   ],
   openingCatalog: [
-    OpeningCatalogEntry(
+    OpeningTypeEntry(
       id: 'window-basic',
       kind: OpeningKind.window,
-      title: 'Окно ПВХ 1200x1400',
+      title: 'Окно ПВХ',
       subcategory: 'ПВХ окна',
       manufacturer: 'REHAU',
-      widthMeters: 1.2,
-      heightMeters: 1.4,
+      defaultWidthMeters: 1.2,
+      defaultHeightMeters: 1.4,
       heatTransferCoefficient: 1.0,
       sourceUrl:
           'https://window.rehau.com/uk-en/rehau-specifier-guide-download',
       sourceLabel: 'REHAU Specifier Guide',
       sourceCheckedAt: '2026-04-13',
     ),
-    OpeningCatalogEntry(
+    OpeningTypeEntry(
       id: 'door-basic',
       kind: OpeningKind.door,
-      title: 'Стальная входная дверь 980x2050',
+      title: 'Стальная входная дверь',
       subcategory: 'Стальные входные двери',
       manufacturer: 'Hormann',
-      widthMeters: 0.98,
-      heightMeters: 2.05,
+      defaultWidthMeters: 0.98,
+      defaultHeightMeters: 2.05,
       heatTransferCoefficient: 1.4,
       sourceUrl:
           'https://www.hormann.co.uk/media-centre/preview/310523en/85828_Thermo65_46_23_12_EN_UK.pdf?20240416141953=',
@@ -391,6 +391,29 @@ HouseEnvelopeElement buildEnvelopeElement({
   );
 }
 
+EnvelopeOpening buildOpening({
+  String id = 'opening-main',
+  String elementId = 'element-main',
+  String title = 'Окно',
+  OpeningKind kind = OpeningKind.window,
+  double widthMeters = 1.2,
+  double heightMeters = 1.4,
+  double? heatTransferCoefficient,
+  String? catalogTypeId,
+}) {
+  return EnvelopeOpening(
+    id: id,
+    elementId: elementId,
+    title: title,
+    kind: kind,
+    widthMeters: widthMeters,
+    heightMeters: heightMeters,
+    heatTransferCoefficient:
+        heatTransferCoefficient ?? kind.defaultHeatTransferCoefficient,
+    catalogTypeId: catalogTypeId,
+  );
+}
+
 HouseModel buildHouseModel({
   List<Construction>? constructions,
   List<EnvelopeOpening>? openings,
@@ -495,8 +518,8 @@ class FakeProjectRepository
   final Map<String, Construction> _library;
   final Map<String, DesignObject> _objects;
   final Set<String> _favoriteMaterialIds = <String>{};
-  final Map<String, OpeningCatalogEntry> _openingCatalog =
-      <String, OpeningCatalogEntry>{};
+  final Map<String, OpeningTypeEntry> _openingCatalog =
+      <String, OpeningTypeEntry>{};
   bool _constructionPickerSwipeTutorialSeen = false;
   bool _hasSeededDemoProject;
   bool _hasSeededObjects;
@@ -620,11 +643,11 @@ class FakeProjectRepository
   }
 
   @override
-  Future<List<OpeningCatalogEntry>> listEntries() async =>
+  Future<List<OpeningTypeEntry>> listEntries() async =>
       List.unmodifiable(_openingCatalog.values);
 
   @override
-  Future<void> saveEntry(OpeningCatalogEntry entry) async {
+  Future<void> saveEntry(OpeningTypeEntry entry) async {
     _openingCatalog[entry.id] = entry;
   }
 

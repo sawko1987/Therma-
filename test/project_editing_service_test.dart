@@ -119,16 +119,16 @@ void main() {
               ),
             ),
           ],
-            elements: [
-              buildEnvelopeElement(
-                id: 'element-wall',
-                roomId: 'room-living',
-                title: 'Стена гостиной',
-                areaSquareMeters: 10.8,
-                construction: firstConstruction,
-                wallPlacement: buildWallPlacement(lengthMeters: 4),
-              ),
-            ],
+          elements: [
+            buildEnvelopeElement(
+              id: 'element-wall',
+              roomId: 'room-living',
+              title: 'Стена гостиной',
+              areaSquareMeters: 10.8,
+              construction: firstConstruction,
+              wallPlacement: buildWallPlacement(lengthMeters: 4),
+            ),
+          ],
           openings: const [],
         ),
       ).copyWith(constructions: [firstConstruction, secondConstruction]);
@@ -174,37 +174,43 @@ void main() {
     expect(updated.houseModel.rooms.single.areaSquareMeters, 30);
   });
 
-  test('updateRoom preserves manually entered wall area', () {
-    final project = buildTestProject();
+  test(
+    'updateRoom recomputes wall area from stored segment after height change',
+    () {
+      final project = buildTestProject();
 
-    final updated = service.updateRoom(
-      project,
-      project.houseModel.rooms.single.copyWith(heightMeters: 3.1),
-    );
+      final updated = service.updateRoom(
+        project,
+        project.houseModel.rooms.single.copyWith(heightMeters: 3.1),
+      );
 
-    expect(updated.houseModel.elements.single.areaSquareMeters, 10.8);
-  });
+      expect(updated.houseModel.elements.single.areaSquareMeters, 10.85);
+    },
+  );
 
-  test('updateEnvelopeWallPlacement preserves manual area and changes placement', () {
-    final project = buildTestProject();
+  test(
+    'updateEnvelopeWallPlacement updates derived wall area and changes placement',
+    () {
+      final project = buildTestProject();
 
-    final updated = service.updateEnvelopeWallPlacement(
-      project,
-      project.houseModel.elements.single.id,
-      buildWallPlacement(
-        side: RoomSide.right,
-        offsetMeters: 1,
-        lengthMeters: 2.5,
-      ),
-    );
+      final updated = service.updateEnvelopeWallPlacement(
+        project,
+        project.houseModel.elements.single.id,
+        buildWallPlacement(
+          side: RoomSide.right,
+          offsetMeters: 1,
+          lengthMeters: 2.5,
+        ),
+      );
 
-    expect(
-      updated.houseModel.elements.single.wallPlacement?.side,
-      RoomSide.right,
-    );
-    expect(updated.houseModel.elements.single.wallPlacement?.offsetMeters, 1);
-    expect(updated.houseModel.elements.single.areaSquareMeters, 10.8);
-  });
+      expect(
+        updated.houseModel.elements.single.wallPlacement?.side,
+        RoomSide.right,
+      );
+      expect(updated.houseModel.elements.single.wallPlacement?.offsetMeters, 1);
+      expect(updated.houseModel.elements.single.areaSquareMeters, 6.75);
+    },
+  );
 
   test('updateRoomLayout rejects when wall no longer fits side', () {
     final project = buildTestProject();
@@ -247,13 +253,13 @@ void main() {
             wallPlacement: buildWallPlacement(lengthMeters: 4),
           ),
         ],
-        openings: const [
-          EnvelopeOpening(
+        openings: [
+          buildOpening(
             id: 'opening-window',
             elementId: 'element-wall',
             title: 'Окно',
-            kind: OpeningKind.window,
-            areaSquareMeters: 2,
+            widthMeters: 1,
+            heightMeters: 2,
             heatTransferCoefficient: 1.0,
           ),
         ],
@@ -290,12 +296,12 @@ void main() {
     expect(
       () => service.addOpening(
         project,
-        const EnvelopeOpening(
+        buildOpening(
           id: 'opening-window',
           elementId: 'element-wall',
           title: 'Панорамное окно',
-          kind: OpeningKind.window,
-          areaSquareMeters: 6,
+          widthMeters: 2,
+          heightMeters: 3,
           heatTransferCoefficient: 1.0,
         ),
       ),
@@ -303,7 +309,9 @@ void main() {
     );
   });
 
-  test('updateEnvelopeElement rejects shrinking wall area below linked openings', () {
+  test(
+    'updateEnvelopeElement rejects shrinking wall area below linked openings',
+    () {
       final project = buildTestProject(
         houseModel: HouseModel(
           id: 'house-model',
@@ -320,13 +328,13 @@ void main() {
               ),
             ),
           ],
-          openings: const [
-            EnvelopeOpening(
+          openings: [
+            buildOpening(
               id: 'opening-window',
               elementId: 'element-wall',
               title: 'Окно',
-              kind: OpeningKind.window,
-              areaSquareMeters: 4,
+              widthMeters: 2,
+              heightMeters: 2.1,
               heatTransferCoefficient: 1.0,
             ),
           ],
@@ -336,13 +344,12 @@ void main() {
       expect(
         () => service.updateEnvelopeElement(
           project,
-          project.houseModel.elements.single.copyWith(
-            areaSquareMeters: 3.5,
-          ),
+          project.houseModel.elements.single.copyWith(areaSquareMeters: 3.5),
         ),
         throwsStateError,
       );
-    });
+    },
+  );
 
   test('updateEnvelopeWallPlacement rejects segment outside room side', () {
     final project = buildTestProject();
@@ -390,9 +397,7 @@ void main() {
         ],
         elements: const [],
         openings: const [],
-        heatingDevices: [
-          buildHeatingDevice(id: 'device-a', roomId: 'room-a'),
-        ],
+        heatingDevices: [buildHeatingDevice(id: 'device-a', roomId: 'room-a')],
       ),
     );
 

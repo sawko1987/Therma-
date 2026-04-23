@@ -10,23 +10,23 @@ import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 
-class OpeningDirectoryScreen extends ConsumerStatefulWidget {
-  const OpeningDirectoryScreen({super.key});
+class OpeningTypeDirectoryScreen extends ConsumerStatefulWidget {
+  const OpeningTypeDirectoryScreen({super.key});
 
   @override
-  ConsumerState<OpeningDirectoryScreen> createState() =>
-      _OpeningDirectoryScreenState();
+  ConsumerState<OpeningTypeDirectoryScreen> createState() =>
+      _OpeningTypeDirectoryScreenState();
 }
 
-class _OpeningDirectoryScreenState
-    extends ConsumerState<OpeningDirectoryScreen> {
+class _OpeningTypeDirectoryScreenState
+    extends ConsumerState<OpeningTypeDirectoryScreen> {
   OpeningKind? _filterKind;
 
   @override
   Widget build(BuildContext context) {
     final catalogAsync = ref.watch(catalogSnapshotProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Справочник проёмов')),
+      appBar: AppBar(title: const Text('Справочник типов проёмов')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(context),
         icon: const Icon(Icons.add),
@@ -35,9 +35,7 @@ class _OpeningDirectoryScreenState
       body: catalogAsync.when(
         data: (catalog) {
           final entries = catalog.openingCatalog
-              .where(
-                (item) => _filterKind == null || item.kind == _filterKind,
-              )
+              .where((item) => _filterKind == null || item.kind == _filterKind)
               .toList(growable: false);
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
@@ -67,7 +65,9 @@ class _OpeningDirectoryScreenState
                     leading: _OpeningPreview(entry: entry),
                     title: Text(entry.title),
                     subtitle: Text(
-                      '${entry.kind.label} • ${entry.subcategory} • ${entry.widthMeters.toStringAsFixed(2)}×${entry.heightMeters.toStringAsFixed(2)} м • U ${entry.heatTransferCoefficient.toStringAsFixed(2)}',
+                      '${entry.kind.label} • ${entry.subcategory} • '
+                      '${entry.manufacturer} • U '
+                      '${entry.heatTransferCoefficient.toStringAsFixed(2)}',
                     ),
                     trailing: PopupMenuButton<String>(
                       onSelected: (value) async {
@@ -105,9 +105,9 @@ class _OpeningDirectoryScreenState
 
   Future<void> _openEditor(
     BuildContext context, {
-    OpeningCatalogEntry? entry,
+    OpeningTypeEntry? entry,
   }) async {
-    final edited = await showOpeningCatalogEditorSheet(context, entry: entry);
+    final edited = await showOpeningTypeEditorSheet(context, entry: entry);
     if (!mounted || edited == null) {
       return;
     }
@@ -118,7 +118,7 @@ class _OpeningDirectoryScreenState
 class _OpeningPreview extends StatelessWidget {
   const _OpeningPreview({required this.entry});
 
-  final OpeningCatalogEntry entry;
+  final OpeningTypeEntry entry;
 
   @override
   Widget build(BuildContext context) {
@@ -150,9 +150,9 @@ class _OpeningPreview extends StatelessWidget {
   }
 }
 
-Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
+Future<OpeningTypeEntry?> showOpeningTypeEditorSheet(
   BuildContext context, {
-  OpeningCatalogEntry? entry,
+  OpeningTypeEntry? entry,
 }) async {
   final titleController = TextEditingController(text: entry?.title ?? '');
   final subcategoryController = TextEditingController(
@@ -161,11 +161,11 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
   final manufacturerController = TextEditingController(
     text: entry?.manufacturer ?? '',
   );
-  final widthController = TextEditingController(
-    text: (entry?.widthMeters ?? 1.2).toString(),
+  final defaultWidthController = TextEditingController(
+    text: entry?.defaultWidthMeters?.toString() ?? '',
   );
-  final heightController = TextEditingController(
-    text: (entry?.heightMeters ?? 1.4).toString(),
+  final defaultHeightController = TextEditingController(
+    text: entry?.defaultHeightMeters?.toString() ?? '',
   );
   final coefficientController = TextEditingController(
     text: (entry?.heatTransferCoefficient ?? 1.0).toString(),
@@ -177,12 +177,14 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
     text: entry?.sourceLabel ?? '',
   );
   final sourceCheckedAtController = TextEditingController(
-    text: entry?.sourceCheckedAt ?? DateTime.now().toIso8601String().split('T').first,
+    text:
+        entry?.sourceCheckedAt ??
+        DateTime.now().toIso8601String().split('T').first,
   );
   var selectedKind = entry?.kind ?? OpeningKind.window;
   String? localImagePath = entry?.localImagePath;
 
-  final result = await showModalBottomSheet<OpeningCatalogEntry>(
+  final result = await showModalBottomSheet<OpeningTypeEntry>(
     context: context,
     isScrollControlled: true,
     builder: (context) {
@@ -202,8 +204,8 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
                 children: [
                   Text(
                     entry == null
-                        ? 'Новый шаблон проёма'
-                        : 'Редактирование шаблона',
+                        ? 'Новый тип проёма'
+                        : 'Редактирование типа проёма',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -211,7 +213,7 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
                   const SizedBox(height: 16),
                   DropdownButtonFormField<OpeningKind>(
                     initialValue: selectedKind,
-                    decoration: const InputDecoration(labelText: 'Тип'),
+                    decoration: const InputDecoration(labelText: 'Вид'),
                     items: OpeningKind.values
                         .map(
                           (kind) => DropdownMenuItem(
@@ -234,30 +236,57 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
                   const SizedBox(height: 12),
                   TextField(
                     controller: subcategoryController,
-                    decoration: const InputDecoration(labelText: 'Подкатегория'),
+                    decoration: const InputDecoration(
+                      labelText: 'Подкатегория',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: manufacturerController,
-                    decoration: const InputDecoration(labelText: 'Производитель'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: widthController,
-                    decoration: const InputDecoration(labelText: 'Ширина, м'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: heightController,
-                    decoration: const InputDecoration(labelText: 'Высота, м'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Производитель',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: coefficientController,
                     decoration: const InputDecoration(labelText: 'U, Вт/м²·°C'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: defaultWidthController,
+                          decoration: const InputDecoration(
+                            labelText: 'Ширина по умолчанию, м',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: defaultHeightController,
+                          decoration: const InputDecoration(
+                            labelText: 'Высота по умолчанию, м',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Подсказка размеров используется только для автозаполнения '
+                    'при создании экземпляра в проекте.',
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -267,7 +296,9 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
                   const SizedBox(height: 12),
                   TextField(
                     controller: sourceUrlController,
-                    decoration: const InputDecoration(labelText: 'Ссылка на источник'),
+                    decoration: const InputDecoration(
+                      labelText: 'Ссылка на источник',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -307,7 +338,8 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
                       if (localImagePath != null) ...[
                         const SizedBox(width: 8),
                         TextButton(
-                          onPressed: () => setState(() => localImagePath = null),
+                          onPressed: () =>
+                              setState(() => localImagePath = null),
                           child: const Text('Убрать'),
                         ),
                       ],
@@ -316,14 +348,14 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
                   if (localImagePath != null) ...[
                     const SizedBox(height: 12),
                     _OpeningPreview(
-                      entry: OpeningCatalogEntry(
+                      entry: OpeningTypeEntry(
                         id: entry?.id ?? 'preview',
                         kind: selectedKind,
                         title: titleController.text,
                         subcategory: subcategoryController.text,
                         manufacturer: manufacturerController.text,
-                        widthMeters: 1,
-                        heightMeters: 1,
+                        defaultWidthMeters: 1.2,
+                        defaultHeightMeters: 1.4,
                         heatTransferCoefficient: 1,
                         localImagePath: localImagePath,
                         sourceUrl: sourceUrlController.text,
@@ -337,7 +369,7 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
                   FilledButton(
                     onPressed: () {
                       Navigator.of(context).pop(
-                        OpeningCatalogEntry(
+                        OpeningTypeEntry(
                           id:
                               entry?.id ??
                               'custom-opening-${DateTime.now().millisecondsSinceEpoch}',
@@ -348,21 +380,28 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
                           subcategory: subcategoryController.text.trim().isEmpty
                               ? 'Пользовательские'
                               : subcategoryController.text.trim(),
-                          manufacturer: manufacturerController.text.trim().isEmpty
+                          manufacturer:
+                              manufacturerController.text.trim().isEmpty
                               ? 'Пользователь'
                               : manufacturerController.text.trim(),
-                          widthMeters: double.tryParse(widthController.text) ?? 1.2,
-                          heightMeters: double.tryParse(heightController.text) ?? 1.4,
+                          defaultWidthMeters: _tryParseOptional(
+                            defaultWidthController.text,
+                          ),
+                          defaultHeightMeters: _tryParseOptional(
+                            defaultHeightController.text,
+                          ),
                           heatTransferCoefficient:
-                              double.tryParse(coefficientController.text) ?? 1.0,
+                              double.tryParse(coefficientController.text) ??
+                              1.0,
                           localImagePath: localImagePath,
                           sourceUrl: sourceUrlController.text.trim().isEmpty
                               ? 'local://custom'
                               : sourceUrlController.text.trim(),
                           sourceLabel: sourceLabelController.text.trim().isEmpty
-                              ? 'Пользовательский шаблон'
+                              ? 'Пользовательский тип'
                               : sourceLabelController.text.trim(),
-                          sourceCheckedAt: sourceCheckedAtController.text.trim(),
+                          sourceCheckedAt: sourceCheckedAtController.text
+                              .trim(),
                           isCustom: true,
                         ),
                       );
@@ -381,11 +420,19 @@ Future<OpeningCatalogEntry?> showOpeningCatalogEditorSheet(
   titleController.dispose();
   subcategoryController.dispose();
   manufacturerController.dispose();
-  widthController.dispose();
-  heightController.dispose();
+  defaultWidthController.dispose();
+  defaultHeightController.dispose();
   coefficientController.dispose();
   sourceUrlController.dispose();
   sourceLabelController.dispose();
   sourceCheckedAtController.dispose();
   return result;
+}
+
+double? _tryParseOptional(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+  return double.tryParse(trimmed.replaceAll(',', '.'));
 }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../models/ground_floor_calculation.dart';
 import '../models/project.dart';
 import '../models/versioning.dart';
@@ -115,9 +117,12 @@ class ProjectMigrationService {
       );
     }
     final elementIds = elements.map((item) => item.id).toSet();
-    final openings = houseModel.openings
-        .where((item) => elementIds.contains(item.elementId))
-        .toList(growable: false);
+    final openings = _migrateOpenings(
+      project: project,
+      openings: houseModel.openings
+          .where((item) => elementIds.contains(item.elementId))
+          .toList(growable: false),
+    );
     final heatingDevices = houseModel.heatingDevices
         .where((item) => roomIds.contains(item.roomId))
         .toList(growable: false);
@@ -186,7 +191,8 @@ class ProjectMigrationService {
     required List<HouseEnvelopeElement> elements,
   }) {
     final constructionMap = {
-      for (final construction in project.constructions) construction.id: construction,
+      for (final construction in project.constructions)
+        construction.id: construction,
     };
     return elements
         .map((element) {
@@ -202,6 +208,31 @@ class ProjectMigrationService {
             sourceConstructionId: sourceConstruction.id,
             sourceConstructionTitle: sourceConstruction.title,
             elementKind: sourceConstruction.elementKind,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  List<EnvelopeOpening> _migrateOpenings({
+    required Project project,
+    required List<EnvelopeOpening> openings,
+  }) {
+    if (project.sourceProjectFormatVersion >= 20) {
+      return openings;
+    }
+    return openings
+        .map((opening) {
+          final fallbackSide = opening.areaSquareMeters > 0
+              ? math.sqrt(opening.areaSquareMeters)
+              : 1.0;
+          return opening.copyWith(
+            widthMeters: opening.widthMeters > 0
+                ? opening.widthMeters
+                : fallbackSide,
+            heightMeters: opening.heightMeters > 0
+                ? opening.heightMeters
+                : fallbackSide,
+            clearCatalogTypeId: true,
           );
         })
         .toList(growable: false);

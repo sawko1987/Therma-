@@ -23,13 +23,13 @@ void main() {
               construction: buildWallConstruction(),
             ),
           ],
-          openings: const [
-            EnvelopeOpening(
+          openings: [
+            buildOpening(
               id: 'opening-window',
               elementId: 'element-wall',
               title: 'Окно',
-              kind: OpeningKind.window,
-              areaSquareMeters: 4,
+              widthMeters: 2,
+              heightMeters: 2,
               heatTransferCoefficient: 1.0,
             ),
           ],

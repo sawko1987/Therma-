@@ -564,7 +564,7 @@ class DriftProjectRepository
       '$_objectEntryIdPrefix$objectId';
 
   @override
-  Future<List<OpeningCatalogEntry>> listEntries() async {
+  Future<List<OpeningTypeEntry>> listEntries() async {
     _logger?.debug(
       'Load opening catalog entries from store',
       category: AppLogCategory.storage,
@@ -580,7 +580,7 @@ class DriftProjectRepository
             .get();
     return rows
         .map(
-          (row) => OpeningCatalogEntry.fromJson(
+          (row) => OpeningTypeEntry.fromJson(
             Map<String, dynamic>.from(jsonDecode(row.payloadJson) as Map),
           ),
         )
@@ -588,7 +588,7 @@ class DriftProjectRepository
   }
 
   @override
-  Future<void> saveEntry(OpeningCatalogEntry entry) async {
+  Future<void> saveEntry(OpeningTypeEntry entry) async {
     _logger?.info(
       'Save opening catalog entry',
       category: AppLogCategory.storage,

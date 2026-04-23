@@ -39,8 +39,8 @@ abstract interface class FavoriteMaterialsRepository {
 }
 
 abstract interface class OpeningCatalogRepository {
-  Future<List<OpeningCatalogEntry>> listEntries();
-  Future<void> saveEntry(OpeningCatalogEntry entry);
+  Future<List<OpeningTypeEntry>> listEntries();
+  Future<void> saveEntry(OpeningTypeEntry entry);
   Future<void> deleteEntry(String id);
 }
 

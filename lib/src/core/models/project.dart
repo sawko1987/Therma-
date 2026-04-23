@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 19;
+const int currentProjectFormatVersion = 20;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -112,6 +112,16 @@ extension OpeningKindX on OpeningKind {
   double get defaultHeatTransferCoefficient => switch (this) {
     OpeningKind.window => 1.0,
     OpeningKind.door => 1.5,
+  };
+
+  double get defaultOpeningWidthMeters => switch (this) {
+    OpeningKind.window => 1.2,
+    OpeningKind.door => 0.9,
+  };
+
+  double get defaultOpeningHeightMeters => switch (this) {
+    OpeningKind.window => 1.4,
+    OpeningKind.door => 2.1,
   };
 }
 
@@ -695,29 +705,27 @@ class HouseEnvelopeElement {
   factory HouseEnvelopeElement.fromJson(
     Map<String, dynamic> json, {
     List<Construction> availableConstructions = const [],
-  }) =>
-      HouseEnvelopeElement(
-        id: json['id'] as String,
-        roomId: (json['roomId'] as String?) ?? defaultRoomId,
-        title: json['title'] as String,
-        elementKind: parseConstructionElementKind(
-          json['elementKind'] as String,
-        ),
-        areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
-        construction: _resolveElementConstruction(
-          json,
-          availableConstructions: availableConstructions,
-        ),
-        sourceConstructionId: json['sourceConstructionId'] as String? ??
-            json['constructionId'] as String?,
-        sourceConstructionTitle: json['sourceConstructionTitle'] as String?,
-        wallOrientation: (json['wallOrientation'] as String?) == null
-            ? null
-            : parseWallOrientation(json['wallOrientation'] as String),
-        wallPlacement: json['wallPlacement'] == null
-            ? null
-            : EnvelopeWallPlacement.fromJson(_asJsonMap(json['wallPlacement'])),
-      );
+  }) => HouseEnvelopeElement(
+    id: json['id'] as String,
+    roomId: (json['roomId'] as String?) ?? defaultRoomId,
+    title: json['title'] as String,
+    elementKind: parseConstructionElementKind(json['elementKind'] as String),
+    areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
+    construction: _resolveElementConstruction(
+      json,
+      availableConstructions: availableConstructions,
+    ),
+    sourceConstructionId:
+        json['sourceConstructionId'] as String? ??
+        json['constructionId'] as String?,
+    sourceConstructionTitle: json['sourceConstructionTitle'] as String?,
+    wallOrientation: (json['wallOrientation'] as String?) == null
+        ? null
+        : parseWallOrientation(json['wallOrientation'] as String),
+    wallPlacement: json['wallPlacement'] == null
+        ? null
+        : EnvelopeWallPlacement.fromJson(_asJsonMap(json['wallPlacement'])),
+  );
 
   factory HouseEnvelopeElement.fromConstruction(
     Construction construction, {
@@ -817,47 +825,70 @@ class EnvelopeOpening {
     required this.elementId,
     required this.title,
     required this.kind,
-    required this.areaSquareMeters,
+    required this.widthMeters,
+    required this.heightMeters,
     required this.heatTransferCoefficient,
+    this.catalogTypeId,
   });
 
-  factory EnvelopeOpening.fromJson(Map<String, dynamic> json) =>
-      EnvelopeOpening(
-        id: json['id'] as String,
-        elementId: json['elementId'] as String,
-        title: json['title'] as String,
-        kind: parseOpeningKind(json['kind'] as String),
-        areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
-        heatTransferCoefficient:
-            (json['heatTransferCoefficient'] as num?)?.toDouble() ??
-            parseOpeningKind(
-              json['kind'] as String,
-            ).defaultHeatTransferCoefficient,
-      );
+  factory EnvelopeOpening.fromJson(Map<String, dynamic> json) {
+    final legacyAreaSquareMeters =
+        (json['areaSquareMeters'] as num?)?.toDouble() ?? 0;
+    final legacySideMeters = legacyAreaSquareMeters > 0
+        ? math.sqrt(legacyAreaSquareMeters)
+        : 1.0;
+    return EnvelopeOpening(
+      id: json['id'] as String,
+      elementId: json['elementId'] as String,
+      title: json['title'] as String,
+      kind: parseOpeningKind(json['kind'] as String),
+      widthMeters:
+          (json['widthMeters'] as num?)?.toDouble() ?? legacySideMeters,
+      heightMeters:
+          (json['heightMeters'] as num?)?.toDouble() ?? legacySideMeters,
+      heatTransferCoefficient:
+          (json['heatTransferCoefficient'] as num?)?.toDouble() ??
+          parseOpeningKind(
+            json['kind'] as String,
+          ).defaultHeatTransferCoefficient,
+      catalogTypeId: json['catalogTypeId'] as String?,
+    );
+  }
 
   final String id;
   final String elementId;
   final String title;
   final OpeningKind kind;
-  final double areaSquareMeters;
+  final double widthMeters;
+  final double heightMeters;
   final double heatTransferCoefficient;
+  final String? catalogTypeId;
+
+  double get areaSquareMeters => widthMeters * heightMeters;
 
   EnvelopeOpening copyWith({
     String? id,
     String? elementId,
     String? title,
     OpeningKind? kind,
-    double? areaSquareMeters,
+    double? widthMeters,
+    double? heightMeters,
     double? heatTransferCoefficient,
+    String? catalogTypeId,
+    bool clearCatalogTypeId = false,
   }) {
     return EnvelopeOpening(
       id: id ?? this.id,
       elementId: elementId ?? this.elementId,
       title: title ?? this.title,
       kind: kind ?? this.kind,
-      areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
+      widthMeters: widthMeters ?? this.widthMeters,
+      heightMeters: heightMeters ?? this.heightMeters,
       heatTransferCoefficient:
           heatTransferCoefficient ?? this.heatTransferCoefficient,
+      catalogTypeId: clearCatalogTypeId
+          ? null
+          : catalogTypeId ?? this.catalogTypeId,
     );
   }
 
@@ -866,8 +897,11 @@ class EnvelopeOpening {
     'elementId': elementId,
     'title': title,
     'kind': kind.storageKey,
+    'widthMeters': widthMeters,
+    'heightMeters': heightMeters,
     'areaSquareMeters': areaSquareMeters,
     'heatTransferCoefficient': heatTransferCoefficient,
+    'catalogTypeId': catalogTypeId,
   };
 }
 
@@ -1435,7 +1469,8 @@ Construction _resolveElementConstruction(
     return Construction.fromJson(_asJsonMap(constructionJson));
   }
 
-  final sourceConstructionId = json['sourceConstructionId'] as String? ??
+  final sourceConstructionId =
+      json['sourceConstructionId'] as String? ??
       json['constructionId'] as String?;
   if (sourceConstructionId != null) {
     for (final item in availableConstructions) {
@@ -1447,7 +1482,8 @@ Construction _resolveElementConstruction(
 
   return Construction(
     id: sourceConstructionId ?? 'missing-construction',
-    title: json['sourceConstructionTitle'] as String? ??
+    title:
+        json['sourceConstructionTitle'] as String? ??
         json['title'] as String? ??
         'Конструкция не найдена',
     elementKind: parseConstructionElementKind(json['elementKind'] as String),
