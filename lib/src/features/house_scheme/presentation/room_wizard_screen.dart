@@ -101,7 +101,10 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
       return;
     }
     final normalized = _titleController.text.trim();
-    final autoTitles = {_defaultTitle, for (final kind in RoomKind.values) kind.label};
+    final autoTitles = {
+      _defaultTitle,
+      for (final kind in RoomKind.values) kind.label,
+    };
     if (!_titleEditedManually && !autoTitles.contains(normalized)) {
       _titleEditedManually = true;
     }
@@ -181,9 +184,7 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Отменить создание?'),
-        content: const Text(
-          'Введённые данные будут потеряны. Закрыть мастер?',
-        ),
+        content: const Text('Введённые данные будут потеряны. Закрыть мастер?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -228,9 +229,9 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
         final element = draft.element.copyWith(roomId: room.id);
         await ref.read(projectEditorProvider).addEnvelopeElement(element);
         for (final opening in draft.openings) {
-          await ref.read(projectEditorProvider).addOpening(
-            opening.copyWith(elementId: element.id),
-          );
+          await ref
+              .read(projectEditorProvider)
+              .addOpening(opening.copyWith(elementId: element.id));
         }
       }
       if (!mounted) {
@@ -291,12 +292,13 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
             final beginOffset = _currentStep >= _previousStep
                 ? const Offset(0.12, 0)
                 : const Offset(-0.12, 0);
-            final offsetAnimation = Tween<Offset>(
-              begin: beginOffset,
-              end: Offset.zero,
-            ).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-            );
+            final offsetAnimation =
+                Tween<Offset>(begin: beginOffset, end: Offset.zero).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                );
             return SlideTransition(position: offsetAnimation, child: child);
           },
           child: KeyedSubtree(
@@ -404,7 +406,9 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
         TextField(
           key: const ValueKey('room-wizard-comfort-field'),
           controller: _comfortController,
-          decoration: const InputDecoration(labelText: 'Комфортная температура, °C'),
+          decoration: const InputDecoration(
+            labelText: 'Комфортная температура, °C',
+          ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
         const SizedBox(height: 12),
@@ -523,10 +527,8 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
           decoration: const InputDecoration(labelText: 'Тип помещения'),
           items: RoomKind.values
               .map(
-                (kind) => DropdownMenuItem(
-                  value: kind,
-                  child: Text(kind.label),
-                ),
+                (kind) =>
+                    DropdownMenuItem(value: kind, child: Text(kind.label)),
               )
               .toList(),
           onChanged: (value) {
@@ -539,7 +541,9 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
         TextField(
           key: const ValueKey('room-wizard-review-comfort-field'),
           controller: _comfortController,
-          decoration: const InputDecoration(labelText: 'Комфортная температура, °C'),
+          decoration: const InputDecoration(
+            labelText: 'Комфортная температура, °C',
+          ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
         const SizedBox(height: 12),
@@ -586,9 +590,7 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
                       '${draft.element.elementKind.label} • ${draft.element.areaSquareMeters.toStringAsFixed(2)} м²',
                     ),
                     if (draft.element.wallOrientation != null)
-                      Text(
-                        '${draft.element.wallOrientation!.label} • ${draft.element.wallPlacement?.side.label ?? '—'}',
-                      ),
+                      Text(draft.element.wallOrientation!.label),
                   ],
                 ),
               ),
@@ -623,7 +625,8 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
               ),
               _PreviewLine(
                 label: 'На вентиляцию',
-                value: '${preview.ventilationHeatLossWatts.toStringAsFixed(0)} Вт',
+                value:
+                    '${preview.ventilationHeatLossWatts.toStringAsFixed(0)} Вт',
               ),
               _PreviewLine(
                 label: 'Итого',
@@ -664,7 +667,9 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
     final climate = catalog.climatePoints.firstWhere(
       (point) => point.id == project.climatePointId,
     );
-    final materialsById = {for (final material in catalog.materials) material.id: material};
+    final materialsById = {
+      for (final material in catalog.materials) material.id: material,
+    };
     final deltaT = room.comfortTemperatureC - climate.designTemperature;
     var envelopeHeatLoss = 0.0;
     var openingHeatLoss = 0.0;
@@ -674,7 +679,10 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
         0,
         (sum, opening) => sum + opening.areaSquareMeters,
       );
-      final opaqueArea = math.max(0, draft.element.areaSquareMeters - openingArea);
+      final opaqueArea = math.max(
+        0,
+        draft.element.areaSquareMeters - openingArea,
+      );
       var resistance = 0.0;
       for (final layer in draft.element.construction.layers) {
         if (!layer.enabled) {
@@ -704,10 +712,7 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
 }
 
 class _DraftEnvelope {
-  const _DraftEnvelope({
-    required this.element,
-    required this.openings,
-  });
+  const _DraftEnvelope({required this.element, required this.openings});
 
   final HouseEnvelopeElement element;
   final List<EnvelopeOpening> openings;
@@ -762,7 +767,10 @@ class _RoomKindCard extends StatelessWidget {
           children: [
             Icon(_iconForRoomKind(kind), color: colorScheme.primary),
             const SizedBox(height: 12),
-            Text(kind.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(
+              kind.label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ],
         ),
       ),
@@ -783,17 +791,13 @@ class _RoomKindCard extends StatelessWidget {
 }
 
 class _EnvelopePreviewCard extends StatelessWidget {
-  const _EnvelopePreviewCard({
-    required this.draft,
-    required this.onDelete,
-  });
+  const _EnvelopePreviewCard({required this.draft, required this.onDelete});
 
   final _DraftEnvelope draft;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final wallPlacement = draft.element.wallPlacement;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -818,10 +822,8 @@ class _EnvelopePreviewCard extends StatelessWidget {
                 Text(
                   '${draft.element.elementKind.label} • ${draft.element.areaSquareMeters.toStringAsFixed(2)} м²',
                 ),
-                if (draft.element.wallOrientation != null && wallPlacement != null)
-                  Text(
-                    '${draft.element.wallOrientation!.label} • ${wallPlacement.side.label} • ${wallPlacement.lengthMeters.toStringAsFixed(1)} м',
-                  ),
+                if (draft.element.wallOrientation != null)
+                  Text(draft.element.wallOrientation!.label),
                 Text('Проёмы: ${draft.openings.length}'),
               ],
             ),
@@ -838,10 +840,7 @@ class _EnvelopePreviewCard extends StatelessWidget {
 }
 
 class _PreviewLine extends StatelessWidget {
-  const _PreviewLine({
-    required this.label,
-    required this.value,
-  });
+  const _PreviewLine({required this.label, required this.value});
 
   final String label;
   final String value;

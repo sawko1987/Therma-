@@ -8,6 +8,17 @@ import '../../../core/providers.dart';
 import '../../construction_library/presentation/construction_step_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 
+Future<ObjectEditorResult?> showObjectEditorSheet(
+  BuildContext context, {
+  DesignObject? object,
+}) {
+  return showModalBottomSheet<ObjectEditorResult>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => ObjectEditorSheet(object: object),
+  );
+}
+
 class ObjectStepScreen extends ConsumerWidget {
   const ObjectStepScreen({super.key});
 
@@ -66,11 +77,7 @@ class ObjectStepScreen extends ConsumerWidget {
     WidgetRef ref, {
     DesignObject? object,
   }) async {
-    final result = await showModalBottomSheet<_ObjectEditorResult>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => _ObjectEditorSheet(object: object),
-    );
+    final result = await showObjectEditorSheet(context, object: object);
     if (!context.mounted || result == null) {
       return;
     }
@@ -255,12 +262,11 @@ class _ObjectListCard extends ConsumerWidget {
                         switch (value) {
                           case 'select':
                             onSelectObject(object);
+                            break;
                           case 'edit':
-                            await showModalBottomSheet<_ObjectEditorResult>(
-                              context: context,
-                              isScrollControlled: true,
-                              builder: (context) =>
-                                  _ObjectEditorSheet(object: object),
+                            await showObjectEditorSheet(
+                              context,
+                              object: object,
                             ).then((result) async {
                               if (result == null) {
                                 return;
@@ -279,10 +285,12 @@ class _ObjectListCard extends ConsumerWidget {
                                     ),
                                   );
                             });
+                            break;
                           case 'delete':
                             await ref
                                 .read(projectEditorProvider)
                                 .deleteObject(object.id);
+                            break;
                         }
                       },
                       itemBuilder: (context) => const [
@@ -308,8 +316,8 @@ class _ObjectListCard extends ConsumerWidget {
   }
 }
 
-class _ObjectEditorResult {
-  const _ObjectEditorResult({
+class ObjectEditorResult {
+  const ObjectEditorResult({
     required this.title,
     required this.address,
     required this.description,
@@ -324,16 +332,16 @@ class _ObjectEditorResult {
   final String climatePointId;
 }
 
-class _ObjectEditorSheet extends ConsumerStatefulWidget {
-  const _ObjectEditorSheet({this.object});
+class ObjectEditorSheet extends ConsumerStatefulWidget {
+  const ObjectEditorSheet({super.key, this.object});
 
   final DesignObject? object;
 
   @override
-  ConsumerState<_ObjectEditorSheet> createState() => _ObjectEditorSheetState();
+  ConsumerState<ObjectEditorSheet> createState() => _ObjectEditorSheetState();
 }
 
-class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
+class _ObjectEditorSheetState extends ConsumerState<ObjectEditorSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _addressController;
   late final TextEditingController _descriptionController;
@@ -478,7 +486,7 @@ class _ObjectEditorSheetState extends ConsumerState<_ObjectEditorSheet> {
             FilledButton(
               onPressed: () {
                 Navigator.of(context).pop(
-                  _ObjectEditorResult(
+                  ObjectEditorResult(
                     title: _normalizeRequired(_titleController.text, 'Объект'),
                     address: _addressController.text.trim(),
                     description: _descriptionController.text.trim(),

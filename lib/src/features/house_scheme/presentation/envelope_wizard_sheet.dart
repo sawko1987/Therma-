@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
-import 'floor_plan_geometry.dart';
 import 'house_scheme_editor_helpers.dart';
 
 class EnvelopeWizardResult {
@@ -45,9 +44,6 @@ class EnvelopeWizardSheet extends StatefulWidget {
 }
 
 class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
-  final TextEditingController _lengthController = TextEditingController(
-    text: defaultRoomLayoutWidthMeters.toStringAsFixed(1),
-  );
   final TextEditingController _areaController = TextEditingController(
     text: defaultHouseElementAreaSquareMeters.toStringAsFixed(1),
   );
@@ -55,13 +51,11 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
   int _step = 0;
   ConstructionElementKind _kind = ConstructionElementKind.wall;
   WallOrientation _orientation = WallOrientation.north;
-  RoomSide _roomSide = RoomSide.top;
   late String? _selectedConstructionId = _initialConstructionId();
   final List<EnvelopeOpening> _openings = <EnvelopeOpening>[];
 
   @override
   void dispose() {
-    _lengthController.dispose();
     _areaController.dispose();
     super.dispose();
   }
@@ -90,29 +84,10 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
     return null;
   }
 
-  double get _wallLength {
-    final fallback = widget.room.layout.sideLength(_roomSide);
-    final raw = parseEditorDouble(_lengthController.text, fallback: fallback);
-    final placement = snapWallPlacement(
-      EnvelopeWallPlacement(
-        side: _roomSide,
-        offsetMeters: 0,
-        lengthMeters: raw,
-      ),
-      sideLength: widget.room.layout.sideLength(_roomSide),
-    );
-    return placement.lengthMeters;
-  }
-
-  double get _area {
-    if (_kind == ConstructionElementKind.wall) {
-      return _wallLength * widget.room.heightMeters;
-    }
-    return parseEditorDouble(
-      _areaController.text,
-      fallback: defaultHouseElementAreaSquareMeters,
-    );
-  }
+  double get _area => parseEditorDouble(
+    _areaController.text,
+    fallback: defaultHouseElementAreaSquareMeters,
+  );
 
   Future<void> _handleAddOpening() async {
     final draftElement = _buildDraftElement();
@@ -144,16 +119,7 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
       wallOrientation: construction.elementKind == ConstructionElementKind.wall
           ? _orientation
           : null,
-      wallPlacement: construction.elementKind == ConstructionElementKind.wall
-          ? snapWallPlacement(
-              EnvelopeWallPlacement(
-                side: _roomSide,
-                offsetMeters: 0,
-                lengthMeters: _wallLength,
-              ),
-              sideLength: widget.room.layout.sideLength(_roomSide),
-            )
-          : null,
+      wallPlacement: null,
     );
   }
 
@@ -246,10 +212,26 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
                       .map(
                         (construction) => DropdownMenuItem(
                           value: construction.id,
-                          child: Text(construction.title),
+                          child: Text(
+                            construction.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                       .toList(),
+                  selectedItemBuilder: (context) => _availableConstructions
+                      .map(
+                        (construction) => Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(
+                            construction.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
                   onChanged: (value) {
                     if (value != null) {
                       setState(() => _selectedConstructionId = value);
@@ -280,46 +262,16 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<RoomSide>(
-                    key: const ValueKey('envelope-room-side-field'),
-                    initialValue: _roomSide,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Сторона помещения',
-                    ),
-                    items: RoomSide.values
-                        .map(
-                          (side) => DropdownMenuItem(
-                            value: side,
-                            child: Text(side.label),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _roomSide = value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
                   TextField(
-                    key: const ValueKey('envelope-length-field'),
-                    controller: _lengthController,
+                    key: const ValueKey('envelope-area-field'),
+                    controller: _areaController,
                     decoration: const InputDecoration(
-                      labelText: 'Длина сегмента, м',
+                      labelText: 'Площадь стены, м²',
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
                     onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Площадь: ${_area.toStringAsFixed(2)} м²',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: colorScheme.primary,
-                    ),
                   ),
                 ] else ...[
                   TextField(
@@ -352,9 +304,7 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
                       const SizedBox(height: 4),
                       Text('${_kind.label} • ${_area.toStringAsFixed(2)} м²'),
                       if (_kind == ConstructionElementKind.wall)
-                        Text(
-                          '${_orientation.label} • ${_roomSide.label} • сегмент ${_wallLength.toStringAsFixed(1)} м',
-                        ),
+                        Text(_orientation.label),
                     ],
                   ),
                 ),

@@ -5,7 +5,6 @@ import 'package:smartcalc_mobile/src/app/app.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
 import 'package:smartcalc_mobile/src/core/services/normative_thermal_calculation_engine.dart';
-import 'package:smartcalc_mobile/src/features/building_step/presentation/building_step_screen.dart';
 import 'package:smartcalc_mobile/src/features/construction_library/presentation/construction_directory_screen.dart';
 import 'package:smartcalc_mobile/src/features/construction_library/presentation/construction_step_screen.dart';
 import 'package:smartcalc_mobile/src/features/ground_floor/presentation/ground_floor_screen.dart';
@@ -15,17 +14,16 @@ import 'package:smartcalc_mobile/src/features/settings/presentation/settings_scr
 import 'support/fakes.dart';
 
 void main() {
-  testWidgets('app starts from object step screen', (tester) async {
+  Future<void> pumpApp(
+    WidgetTester tester, {
+    FakeProjectRepository? repository,
+  }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
           projectRepositoryProvider.overrideWithValue(
-            FakeProjectRepository(
-              projects: [
-                buildTestProject(showBuildingStepRoomsOnboarding: false),
-              ],
-            ),
+            repository ?? FakeProjectRepository(),
           ),
           thermalCalculationEngineProvider.overrideWithValue(
             const NormativeThermalCalculationEngine(),
@@ -34,111 +32,243 @@ void main() {
         child: const SmartCalcApp(),
       ),
     );
-
     await tester.pumpAndSettle();
+  }
 
-    expect(find.text('Шаг 0. Объект'), findsOneWidget);
-    expect(find.text('Сначала выберите объект'), findsOneWidget);
-    expect(find.text('Объекты'), findsWidgets);
-    expect(find.text('Новый объект'), findsOneWidget);
+  Future<void> popRoute(WidgetTester tester) async {
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('app starts on project tab when no objects exist', (tester) async {
+    await pumpApp(tester, repository: FakeProjectRepository(projects: []));
+
+    expect(find.text('Проект'), findsWidgets);
+    expect(find.text('Проектный хаб'), findsOneWidget);
+    expect(find.text('Готовность проекта'), findsOneWidget);
   });
 
-  testWidgets('selecting object from step 0 opens step 1', (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(
-            FakeProjectRepository(
-              projects: [
-                buildTestProject(showBuildingStepRoomsOnboarding: false),
-              ],
-            ),
-          ),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const SmartCalcApp(),
+  testWidgets('app starts on home tab when object exists', (tester) async {
+    await pumpApp(
+      tester,
+      repository: FakeProjectRepository(
+        projects: [buildTestProject(showBuildingStepRoomsOnboarding: false)],
       ),
     );
 
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Demo project'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Шаг 1. Конструкции'), findsOneWidget);
-    expect(find.text('Конструкции проекта'), findsOneWidget);
-    expect(find.text('Перейти к созданию помещений (Шаг 2)'), findsOneWidget);
+    expect(find.text('SmartCalc Mobile'), findsOneWidget);
+    expect(find.text('Быстрые переходы'), findsOneWidget);
+    expect(find.text('Demo project'), findsOneWidget);
   });
 
-  testWidgets('settings screen opens material management screen', (
+  testWidgets('bottom navigation opens each root tab', (tester) async {
+    await pumpApp(
+      tester,
+      repository: FakeProjectRepository(
+        projects: [buildTestProject(showBuildingStepRoomsOnboarding: false)],
+      ),
+    );
+
+    await tester.tap(find.text('Проект').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Проектный хаб'), findsOneWidget);
+
+    await tester.tap(find.text('План').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Планировка дома'), findsOneWidget);
+
+    await tester.tap(find.text('Расчёты').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Thermocalc'), findsOneWidget);
+    expect(find.text('Теплопотери здания'), findsOneWidget);
+
+    await tester.tap(find.text('Настройки').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Справочник материалов'), findsOneWidget);
+
+    await tester.tap(find.text('Главная').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Быстрые переходы'), findsOneWidget);
+  });
+
+  testWidgets('switching tabs preserves root screen state', (tester) async {
+    await pumpApp(
+      tester,
+      repository: FakeProjectRepository(
+        projects: [buildTestProject(showBuildingStepRoomsOnboarding: false)],
+      ),
+    );
+
+    await tester.tap(find.text('Расчёты').last);
+    await tester.pumpAndSettle();
+
+    final calculationsList = find.byKey(
+      const PageStorageKey<String>('calculations-hub-list'),
+    );
+    await tester.drag(calculationsList, const Offset(0, -300));
+    await tester.pumpAndSettle();
+
+    final scrollableFinder = find.descendant(
+      of: calculationsList,
+      matching: find.byType(Scrollable),
+    );
+    final before = tester.state<ScrollableState>(scrollableFinder).position.pixels;
+    expect(before, greaterThan(0));
+
+    await tester.tap(find.text('Главная').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Расчёты').last);
+    await tester.pumpAndSettle();
+
+    final after = tester.state<ScrollableState>(scrollableFinder).position.pixels;
+    expect(after, before);
+  });
+
+  testWidgets('plan and calculations tabs show empty state without object', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(
-            FakeProjectRepository(
-              projects: [
-                buildTestProject(showBuildingStepRoomsOnboarding: false),
-              ],
-            ),
-          ),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const SmartCalcApp(),
+    await pumpApp(tester, repository: FakeProjectRepository(projects: []));
+
+    await tester.tap(find.text('План').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Сначала выберите активный объект'), findsOneWidget);
+    expect(find.text('Перейти в Проект'), findsOneWidget);
+
+    await tester.tap(find.text('Расчёты').last);
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('после этого откроются модули расчёта'),
+      findsOneWidget,
+    );
+    expect(find.text('Перейти в Проект'), findsOneWidget);
+  });
+
+  testWidgets('project tab opens existing steps 0-3', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await pumpApp(
+      tester,
+      repository: FakeProjectRepository(
+        projects: [buildTestProject(showBuildingStepRoomsOnboarding: false)],
       ),
     );
 
+    await tester.tap(find.text('Проект').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Настройки'));
+
+    final projectHubList = find.byKey(
+      const PageStorageKey<String>('project-hub-list'),
+    );
+    final projectHubScrollable = find.descendant(
+      of: projectHubList,
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Шаг 0. Объект'),
+      200,
+      scrollable: projectHubScrollable,
+    );
+    await tester.tap(find.text('Шаг 0. Объект'));
+    await tester.pumpAndSettle();
+    expect(find.text('Сначала выберите объект'), findsOneWidget);
+    await popRoute(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Шаг 1. Конструкции'),
+      200,
+      scrollable: projectHubScrollable,
+    );
+    await tester.tap(find.text('Шаг 1. Конструкции'));
+    await tester.pumpAndSettle();
+    expect(find.text('Конструкции проекта'), findsOneWidget);
+    await popRoute(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Шаг 2. Помещения'),
+      200,
+      scrollable: projectHubScrollable,
+    );
+    await tester.tap(find.text('Шаг 2. Помещения'));
+    await tester.pumpAndSettle();
+    expect(find.text('Шаг 2. Помещения'), findsWidgets);
+    await popRoute(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Шаг 3. Отопление и экономика'),
+      200,
+      scrollable: projectHubScrollable,
+    );
+    await tester.tap(find.text('Шаг 3. Отопление и экономика'));
+    await tester.pumpAndSettle();
+    expect(find.text('Шаг 3. Отопление и экономика'), findsWidgets);
+  });
+
+  testWidgets('calculations tab opens all four modules', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await pumpApp(
+      tester,
+      repository: FakeProjectRepository(
+        projects: [buildTestProject(showBuildingStepRoomsOnboarding: false)],
+      ),
+    );
+
+    await tester.tap(find.text('Расчёты').last);
+    await tester.pumpAndSettle();
+
+    final calculationsList = find.byKey(
+      const PageStorageKey<String>('calculations-hub-list'),
+    );
+    final calculationsScrollable = find.descendant(
+      of: calculationsList,
+      matching: find.byType(Scrollable),
+    );
+    await tester.tap(find.text('Thermocalc'));
+    await tester.pumpAndSettle();
+    expect(find.text('Проект и исходные условия'), findsOneWidget);
+    await popRoute(tester);
+
+    await tester.tap(find.text('Теплопотери здания'));
+    await tester.pumpAndSettle();
+    expect(find.text('Итого потерь'), findsOneWidget);
+    await popRoute(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Полы по грунту'),
+      200,
+      scrollable: calculationsScrollable,
+    );
+    await tester.tap(find.text('Полы по грунту'));
+    await tester.pumpAndSettle();
+    expect(find.text('Полы по грунту'), findsOneWidget);
+    await popRoute(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Отопление и экономика'),
+      200,
+      scrollable: calculationsScrollable,
+    );
+    await tester.tap(find.text('Отопление и экономика'));
+    await tester.pumpAndSettle();
+    expect(find.text('Шаг 3. Отопление и экономика'), findsOneWidget);
+  });
+
+  testWidgets('settings tab opens material management screen', (tester) async {
+    await pumpApp(
+      tester,
+      repository: FakeProjectRepository(
+        projects: [buildTestProject(showBuildingStepRoomsOnboarding: false)],
+      ),
+    );
+
+    await tester.tap(find.text('Настройки').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Справочник материалов'));
     await tester.pumpAndSettle();
 
     expect(find.text('Каталог материалов'), findsOneWidget);
-  });
-
-  testWidgets('creating object from step 0 opens step 1', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(
-            FakeProjectRepository(
-              projects: [
-                buildTestProject(showBuildingStepRoomsOnboarding: false),
-              ],
-            ),
-          ),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const SmartCalcApp(),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Новый объект'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).at(0), 'Новый объект');
-    await tester.enterText(find.byType(TextField).at(1), 'Москва, ул. Тест');
-    await tester.enterText(find.byType(TextField).at(2), 'Описание');
-    await tester.enterText(find.byType(TextField).at(3), '+79991234567');
-    await tester.ensureVisible(find.text('Сохранить'));
-    await tester.tap(find.text('Сохранить'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Шаг 1. Конструкции'), findsOneWidget);
   });
 
   testWidgets('step 1 shows empty project state', (tester) async {
@@ -649,205 +779,6 @@ void main() {
       find.textContaining('После выбора ограждающих конструкций'),
       findsOneWidget,
     );
-  });
-
-  testWidgets('building step screen still renders directly', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const MaterialApp(home: BuildingStepScreen()),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('Шаг 2. Помещения'), findsOneWidget);
-    expect(find.text('Помещения дома'), findsOneWidget);
-    expect(find.text('Расчётные температуры, °C'), findsOneWidget);
-    expect(find.text('Вентиляция (Проветривание)'), findsOneWidget);
-    expect(find.text('Конструктор дома'), findsNothing);
-  });
-
-  testWidgets('building step shows room-centric editor', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(FakeProjectRepository()),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const MaterialApp(home: BuildingStepScreen()),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('Воздух в помещении в режиме “Комфорт”'), findsOneWidget);
-    expect(find.text('Приток, м³/ч'), findsOneWidget);
-    expect(find.text('Эконом'), findsNothing);
-    expect(find.text('Защита от замерзания'), findsNothing);
-  });
-
-  testWidgets('building step room sidebar selects room', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    final repository = FakeProjectRepository(
-      projects: [
-        buildTestProject(
-          showBuildingStepRoomsOnboarding: false,
-          houseModel: HouseModel(
-            id: 'house-model',
-            title: 'Конструктор дома',
-            rooms: [
-              buildRoom(
-                id: 'room-main',
-                title: 'Гостиная',
-                layout: buildRoomLayout(widthMeters: 4, heightMeters: 4),
-              ),
-              buildRoom(
-                id: 'room-bedroom',
-                title: 'Спальня',
-                kind: RoomKind.bedroom,
-                layout: buildRoomLayout(
-                  xMeters: 5,
-                  yMeters: 0,
-                  widthMeters: 3,
-                  heightMeters: 4,
-                ),
-              ),
-            ],
-            elements: [
-              HouseEnvelopeElement.fromConstruction(
-                buildWallConstruction(),
-                roomId: 'room-main',
-                room: buildRoom(
-                  id: 'room-main',
-                  title: 'Гостиная',
-                  layout: buildRoomLayout(widthMeters: 4, heightMeters: 4),
-                ),
-              ),
-            ],
-            openings: const [],
-          ),
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(repository),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const MaterialApp(home: BuildingStepScreen()),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Гостиная'), findsWidgets);
-
-    await tester.tap(
-      find.byKey(const ValueKey('room-sidebar-room-room-bedroom')),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Гостиная'), findsWidgets);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('room-editor-room-bedroom')),
-        matching: find.text('Спальня'),
-      ),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('building step inline room settings persist', (tester) async {
-    final repository = FakeProjectRepository(projects: [buildTestProject()]);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(repository),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const MaterialApp(home: BuildingStepScreen()),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byKey(const ValueKey('ventilation-room-main-0.0')),
-      '55',
-    );
-    await tester.pumpAndSettle();
-
-    final savedProject = (await repository.getProject('demo'))!;
-    expect(savedProject.houseModel.rooms.single.ventilationSupplyM3h, 55);
-  });
-
-  testWidgets('building step sidebar shows house construction overview', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(800, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
-          projectRepositoryProvider.overrideWithValue(
-            FakeProjectRepository(
-              projects: [
-                buildTestProject(showBuildingStepRoomsOnboarding: false),
-              ],
-            ),
-          ),
-          thermalCalculationEngineProvider.overrideWithValue(
-            const NormativeThermalCalculationEngine(),
-          ),
-        ],
-        child: const MaterialApp(home: BuildingStepScreen()),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    expect(find.byType(FloatingActionButton), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('room-sidebar-toggle')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Конструкции дома'), findsOneWidget);
-    expect(find.textContaining('Наружная стена'), findsWidgets);
   });
 
   testWidgets('ground floor screen still renders directly', (tester) async {

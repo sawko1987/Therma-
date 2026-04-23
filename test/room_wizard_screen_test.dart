@@ -15,11 +15,7 @@ void main() {
     final repository = FakeProjectRepository();
     final project = (await repository.getProject('demo'))!;
 
-    await _pumpWizard(
-      tester,
-      repository: repository,
-      project: project,
-    );
+    await _pumpWizard(tester, repository: repository, project: project);
 
     expect(
       find.descendant(
@@ -61,11 +57,7 @@ void main() {
     final repository = FakeProjectRepository();
     final project = (await repository.getProject('demo'))!;
 
-    await _pumpWizard(
-      tester,
-      repository: repository,
-      project: project,
-    );
+    await _pumpWizard(tester, repository: repository, project: project);
 
     await _completeStepOne(tester);
     await tester.enterText(
@@ -95,22 +87,73 @@ void main() {
     expect(room.areaSquareMeters, 30);
   });
 
-  testWidgets('wizard saves draft envelope and opening with room', (tester) async {
+  testWidgets(
+    'wall envelope sheet uses area input on narrow width without overflow',
+    (tester) async {
+      final project = buildTestProject(
+        constructions: [
+          buildWallConstruction().copyWith(
+            id: 'wall-long',
+            title:
+                'Наружная стена с очень длинным названием конструкции для проверки переполнения строки',
+          ),
+        ],
+      );
+      final repository = FakeProjectRepository(projects: [project]);
+
+      await _pumpWizard(
+        tester,
+        repository: repository,
+        project: project,
+        surfaceSize: const Size(390, 844),
+      );
+
+      await _completeStepOne(tester);
+      await tester.tap(find.byKey(const ValueKey('room-wizard-next-step2')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('room-wizard-add-envelope-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('envelope-room-side-field')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('envelope-length-field')), findsNothing);
+      expect(find.byKey(const ValueKey('envelope-area-field')), findsOneWidget);
+      expect(find.text('Площадь стены, м²'), findsOneWidget);
+    },
+  );
+
+  testWidgets('wizard saves draft envelope and opening with room', (
+    tester,
+  ) async {
     final repository = FakeProjectRepository();
     final project = (await repository.getProject('demo'))!;
 
-    await _pumpWizard(
-      tester,
-      repository: repository,
-      project: project,
-    );
+    await _pumpWizard(tester, repository: repository, project: project);
 
     await _completeStepOne(tester);
     await tester.tap(find.byKey(const ValueKey('room-wizard-next-step2')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('room-wizard-add-envelope-button')));
+    await tester.tap(
+      find.byKey(const ValueKey('room-wizard-add-envelope-button')),
+    );
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('envelope-room-side-field')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('envelope-length-field')), findsNothing);
+    await tester.enterText(
+      find.byKey(const ValueKey('envelope-area-field')),
+      '18.5',
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('envelope-wizard-next')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('envelope-add-opening-button')));
@@ -120,8 +163,21 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('envelope-wizard-finish')));
     await tester.pumpAndSettle();
 
+    expect(find.text('Сверху'), findsNothing);
+    expect(find.text('Снизу'), findsNothing);
+    expect(find.text('Слева'), findsNothing);
+    expect(find.text('Справа'), findsNothing);
+    expect(find.textContaining('сегмент'), findsNothing);
+
     await tester.tap(find.byKey(const ValueKey('room-wizard-next-step3')));
     await tester.pumpAndSettle();
+
+    expect(find.text('Сверху'), findsNothing);
+    expect(find.text('Снизу'), findsNothing);
+    expect(find.text('Слева'), findsNothing);
+    expect(find.text('Справа'), findsNothing);
+    expect(find.textContaining('сегмент'), findsNothing);
+
     await tester.ensureVisible(find.byKey(const ValueKey('room-wizard-save')));
     await tester.tap(find.byKey(const ValueKey('room-wizard-save')));
     await tester.pumpAndSettle();
@@ -147,16 +203,14 @@ void main() {
     final repository = FakeProjectRepository();
     final project = (await repository.getProject('demo'))!;
 
-    await _pumpWizard(
-      tester,
-      repository: repository,
-      project: project,
-    );
+    await _pumpWizard(tester, repository: repository, project: project);
 
     await _completeStepOne(tester);
     await tester.tap(find.byKey(const ValueKey('room-wizard-next-step2')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('room-wizard-add-envelope-button')));
+    await tester.tap(
+      find.byKey(const ValueKey('room-wizard-add-envelope-button')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('envelope-wizard-next')));
     await tester.pumpAndSettle();
@@ -165,12 +219,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('room-wizard-next-step3')));
     await tester.pumpAndSettle();
 
-    final before = tester.widget<Text>(
-      find.descendant(
-        of: find.byKey(const ValueKey('room-wizard-heat-loss-card')),
-        matching: find.textContaining('Вт'),
-      ).last,
-    ).data!;
+    final before = tester
+        .widget<Text>(
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('room-wizard-heat-loss-card')),
+                matching: find.textContaining('Вт'),
+              )
+              .last,
+        )
+        .data!;
 
     await tester.enterText(
       find.byKey(const ValueKey('room-wizard-review-comfort-field')),
@@ -182,39 +240,39 @@ void main() {
     );
     await tester.pump();
 
-    final after = tester.widget<Text>(
-      find.descendant(
-        of: find.byKey(const ValueKey('room-wizard-heat-loss-card')),
-        matching: find.textContaining('Вт'),
-      ).last,
-    ).data!;
+    final after = tester
+        .widget<Text>(
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('room-wizard-heat-loss-card')),
+                matching: find.textContaining('Вт'),
+              )
+              .last,
+        )
+        .data!;
     expect(after, isNot(equals(before)));
   });
 
-  testWidgets('close button exits immediately when no data entered', (tester) async {
+  testWidgets('close button exits immediately when no data entered', (
+    tester,
+  ) async {
     final repository = FakeProjectRepository();
     final project = (await repository.getProject('demo'))!;
 
-    await _pumpWizard(
-      tester,
-      repository: repository,
-      project: project,
-    );
+    await _pumpWizard(tester, repository: repository, project: project);
 
     await tester.tap(find.byKey(const ValueKey('room-wizard-close')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('wizard-host')), findsOneWidget);
   });
 
-  testWidgets('close button asks confirmation after data entry', (tester) async {
+  testWidgets('close button asks confirmation after data entry', (
+    tester,
+  ) async {
     final repository = FakeProjectRepository();
     final project = (await repository.getProject('demo'))!;
 
-    await _pumpWizard(
-      tester,
-      repository: repository,
-      project: project,
-    );
+    await _pumpWizard(tester, repository: repository, project: project);
     await tester.enterText(
       find.byKey(const ValueKey('room-wizard-title-field')),
       'Тестовое помещение',
@@ -227,7 +285,9 @@ void main() {
     expect(find.text('Закрыть'), findsOneWidget);
   });
 
-  testWidgets('house scheme add flow opens wizard and saves room', (tester) async {
+  testWidgets('house scheme add flow opens wizard and saves room', (
+    tester,
+  ) async {
     final repository = FakeProjectRepository();
     await tester.binding.setSurfaceSize(const Size(900, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -253,7 +313,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Новое помещение'), findsOneWidget);
-    expect(find.byKey(const ValueKey('room-wizard-next-step1')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('room-wizard-next-step1')),
+      findsOneWidget,
+    );
 
     await _completeStepOne(tester);
     await tester.tap(find.byKey(const ValueKey('room-wizard-next-step2')));
@@ -273,8 +336,9 @@ Future<void> _pumpWizard(
   WidgetTester tester, {
   required FakeProjectRepository repository,
   required Project project,
+  Size surfaceSize = const Size(900, 1400),
 }) async {
-  await tester.binding.setSurfaceSize(const Size(900, 1400));
+  await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
@@ -282,9 +346,7 @@ Future<void> _pumpWizard(
         catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
         projectRepositoryProvider.overrideWithValue(repository),
       ],
-      child: MaterialApp(
-        home: _WizardHost(project: project),
-      ),
+      child: MaterialApp(home: _WizardHost(project: project)),
     ),
   );
   await tester.pumpAndSettle();
@@ -337,9 +399,7 @@ class _WizardHostState extends State<_WizardHost> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(
-        child: Text('host', key: ValueKey('wizard-host')),
-      ),
+      body: Center(child: Text('host', key: ValueKey('wizard-host'))),
     );
   }
 }

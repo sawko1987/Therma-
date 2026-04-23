@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talker_flutter/talker_flutter.dart';
 
 import '../core/providers.dart';
-import '../features/object_step/presentation/object_step_screen.dart';
+import 'app_shell.dart';
 import 'theme.dart';
 
 class SmartCalcApp extends ConsumerWidget {
@@ -16,7 +16,7 @@ class SmartCalcApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       navigatorObservers: [TalkerRouteObserver(ref.watch(talkerProvider))],
-      home: const ObjectStepScreen(),
+      home: const AppShell(),
     );
   }
 }
