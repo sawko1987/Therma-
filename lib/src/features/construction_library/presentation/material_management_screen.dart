@@ -72,6 +72,23 @@ class _MaterialManagementScreenState
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                          ChoiceChip(
+                            label: Text(
+                              _filter.application?.label ?? 'Область',
+                            ),
+                            selected: _filter.application != null,
+                            onSelected: (_) async {
+                              final selected = await _showApplicationPicker(
+                                context,
+                                current: _filter.application,
+                              );
+                              setState(
+                                () => _filter = selected == null
+                                    ? _filter.copyWith(clearApplication: true)
+                                    : _filter.copyWith(application: selected),
+                              );
+                            },
+                          ),
                           FilterChip(
                             label: const Text('Избранные'),
                             selected: _filter.favoritesOnly,
@@ -187,11 +204,12 @@ class _MaterialManagementScreenState
                       entry: entry,
                       onToggleFavorite: () =>
                           _handleToggleFavorite(entry.material.id),
-                      onEdit: entry.isCustom
-                          ? () => _handleEditMaterial(entry.material)
-                          : null,
-                      onDelete: entry.isCustom
+                      onEdit: () => _handleEditMaterial(entry),
+                      onDelete: entry.isCustom && !entry.isSeedOverride
                           ? () => _handleDeleteMaterial(entry.material.id)
+                          : null,
+                      onRestore: entry.isSeedOverride
+                          ? () => _handleRestoreSeedMaterial(entry.material.id)
                           : null,
                     ),
                   ),
@@ -219,9 +237,21 @@ class _MaterialManagementScreenState
     }
   }
 
-  Future<void> _handleEditMaterial(MaterialEntry material) async {
+  Future<void> _handleEditMaterial(MaterialCatalogEntry entry) async {
     final messenger = ScaffoldMessenger.of(context);
-    final updated = await showMaterialEditor(context, material: material);
+    final updated = await showMaterialEditor(
+      context,
+      material: entry.material,
+      title: entry.isSeedOverride
+          ? 'Редактирование измененного базового материала'
+          : entry.isCustom
+          ? 'Редактирование своего материала'
+          : 'Настройка базового материала',
+      saveLabel:
+          entry.isCustom && !entry.isSeedOverride
+              ? 'Сохранить материал'
+              : 'Сохранить изменение',
+    );
     if (!mounted || updated == null) {
       return;
     }
@@ -241,6 +271,15 @@ class _MaterialManagementScreenState
     }
   }
 
+  Future<void> _handleRestoreSeedMaterial(String materialId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(projectEditorProvider).restoreSeedMaterial(materialId);
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
   Future<void> _handleToggleFavorite(String materialId) async {
     await ref.read(projectEditorProvider).toggleFavoriteMaterial(materialId);
   }
@@ -252,17 +291,36 @@ class _MaterialCard extends StatelessWidget {
     required this.onToggleFavorite,
     this.onEdit,
     this.onDelete,
+    this.onRestore,
   });
 
   final MaterialCatalogEntry entry;
   final VoidCallback onToggleFavorite;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onRestore;
 
   @override
   Widget build(BuildContext context) {
     final material = entry.material;
+    final sourceLabel = switch ((entry.isSeedOverride, entry.isCustom)) {
+      (true, _) => 'Изменен',
+      (false, true) => 'Свой',
+      _ => 'Базовый',
+    };
+    final borderColor = switch ((entry.isSeedOverride, entry.isCustom)) {
+      (true, _) => const Color(0xFFE0A11B),
+      (false, true) => const Color(0xFF0F766E),
+      _ => const Color(0xFFD9D4C7),
+    };
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: borderColor,
+          width: entry.isSeedOverride ? 2 : 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -283,12 +341,14 @@ class _MaterialCard extends StatelessWidget {
                   onPressed: onToggleFavorite,
                   icon: Icon(entry.isFavorite ? Icons.star : Icons.star_border),
                 ),
-                if (onEdit != null || onDelete != null)
+                if (onEdit != null || onDelete != null || onRestore != null)
                   PopupMenuButton<String>(
                     onSelected: (value) {
                       switch (value) {
                         case 'edit':
                           onEdit?.call();
+                        case 'restore':
+                          onRestore?.call();
                         case 'delete':
                           onDelete?.call();
                       }
@@ -298,6 +358,11 @@ class _MaterialCard extends StatelessWidget {
                         const PopupMenuItem(
                           value: 'edit',
                           child: Text('Редактировать'),
+                        ),
+                      if (onRestore != null)
+                        const PopupMenuItem(
+                          value: 'restore',
+                          child: Text('Восстановить базовый'),
                         ),
                       if (onDelete != null)
                         const PopupMenuItem(
@@ -314,13 +379,23 @@ class _MaterialCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 Chip(label: Text(material.category)),
-                Chip(label: Text(entry.isCustom ? 'Свой' : 'Базовый')),
+                Chip(label: Text(sourceLabel)),
                 if (material.subcategory != null)
                   Chip(label: Text(material.subcategory!)),
                 if (material.manufacturer != null)
                   Chip(label: Text(material.manufacturer!)),
               ],
             ),
+            if (material.applications.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: material.applications
+                    .map((item) => Chip(label: Text(item.label)))
+                    .toList(growable: false),
+              ),
+            ],
             const SizedBox(height: 8),
             Text(
               'λ ${material.thermalConductivity.toStringAsFixed(3)} • δ ${material.vaporPermeability.toStringAsFixed(3)}'
@@ -387,6 +462,34 @@ Future<String?> _showCategoryPicker(
             (item) => ListTile(
               leading: item == current ? const Icon(Icons.check) : null,
               title: Text(item),
+              onTap: () => Navigator.of(context).pop(item),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<MaterialApplication?> _showApplicationPicker(
+  BuildContext context, {
+  required MaterialApplication? current,
+}) {
+  return showModalBottomSheet<MaterialApplication>(
+    context: context,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: current == null ? const Icon(Icons.check) : null,
+            title: const Text('Все области'),
+            onTap: () => Navigator.of(context).pop(),
+          ),
+          ...MaterialApplication.values.map(
+            (item) => ListTile(
+              leading: item == current ? const Icon(Icons.check) : null,
+              title: Text(item.label),
               onTap: () => Navigator.of(context).pop(item),
             ),
           ),

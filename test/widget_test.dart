@@ -171,7 +171,61 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Добавить конструкцию'), findsOneWidget);
+    expect(
+      find.text('Чтобы перейти к шагу 2, добавьте в проект хотя бы одну конструкцию.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<FilledButton>(
+        find.widgetWithText(
+          FilledButton,
+          'Перейти к созданию помещений (Шаг 2)',
+        ),
+      ).onPressed,
+      isNull,
+    );
   });
+
+  testWidgets(
+    'step 1 allows removing the last construction and keeps next step blocked',
+    (tester) async {
+      final repository = FakeProjectRepository(
+        projects: [buildTestProject(showBuildingStepRoomsOnboarding: false)],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+            projectRepositoryProvider.overrideWithValue(repository),
+            thermalCalculationEngineProvider.overrideWithValue(
+              const NormativeThermalCalculationEngine(),
+            ),
+          ],
+          child: const MaterialApp(home: ConstructionStepScreen()),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Убрать из проекта'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('В проект пока не добавлена ни одна конструкция'),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<FilledButton>(
+          find.widgetWithText(
+            FilledButton,
+            'Перейти к созданию помещений (Шаг 2)',
+          ),
+        ).onPressed,
+        isNull,
+      );
+      expect((await repository.getProject('demo'))!.constructions, isEmpty);
+    },
+  );
 
   testWidgets('step 1 opens construction picker modal', (tester) async {
     await tester.pumpWidget(

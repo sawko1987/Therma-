@@ -79,8 +79,7 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
           ),
     ];
 
-    final hasActiveConstructions =
-        widget.project.activeSelectedConstructionIds.isNotEmpty;
+    final hasProjectConstructions = selectedRows.isNotEmpty;
 
     return Stack(
       children: [
@@ -213,15 +212,15 @@ class _ConstructionStepBodyState extends ConsumerState<_ConstructionStepBody> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      hasActiveConstructions
+                      hasProjectConstructions
                           ? 'Можно переходить к созданию помещений и планировки дома.'
-                          : 'Чтобы перейти к шагу 2, оставьте хотя бы одну конструкцию включенной в расчет.',
+                          : 'Чтобы перейти к шагу 2, добавьте в проект хотя бы одну конструкцию.',
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: hasActiveConstructions
+                        onPressed: hasProjectConstructions
                             ? () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(

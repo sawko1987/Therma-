@@ -225,10 +225,6 @@ class ProjectEditingService {
   }
 
   Project deleteConstruction(Project project, String constructionId) {
-    if (project.constructions.length <= 1) {
-      throw StateError('В проекте должна остаться хотя бы одна конструкция.');
-    }
-
     return project.copyWith(
       constructions: [
         for (final item in project.constructions)
@@ -320,17 +316,13 @@ class ProjectEditingService {
         'Нельзя убрать конструкцию из проекта, пока она используется в расчете пола по грунту.',
       );
     }
-    final selectedIds = project.effectiveSelectedConstructionIds;
-    if (selectedIds.length <= 1) {
-      throw StateError('В проекте должна остаться хотя бы одна конструкция.');
-    }
     return project.copyWith(
       constructions: [
         for (final item in project.constructions)
           if (item.id != constructionId) item,
       ],
       selectedConstructionIds: [
-        for (final item in selectedIds)
+        for (final item in project.effectiveSelectedConstructionIds)
           if (item != constructionId) item,
       ],
       projectConstructionSelections: [

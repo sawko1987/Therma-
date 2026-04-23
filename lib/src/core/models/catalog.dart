@@ -101,6 +101,7 @@ class MaterialEntry {
     required this.vaporPermeability,
     this.aliases = const [],
     this.tags = const [],
+    this.applications = const [],
     this.manufacturer,
     this.subcategory,
     this.densityKgM3,
@@ -119,6 +120,9 @@ class MaterialEntry {
     tags: ((json['tags'] as List<dynamic>?) ?? const [])
         .map((item) => item as String)
         .toList(growable: false),
+    applications: ((json['applications'] as List<dynamic>?) ?? const [])
+        .map((item) => parseMaterialApplication(item as String))
+        .toList(growable: false),
     manufacturer: json['manufacturer'] as String?,
     subcategory: json['subcategory'] as String?,
     densityKgM3: (json['densityKgM3'] as num?)?.toDouble(),
@@ -132,6 +136,7 @@ class MaterialEntry {
   final double vaporPermeability;
   final List<String> aliases;
   final List<String> tags;
+  final List<MaterialApplication> applications;
   final String? manufacturer;
   final String? subcategory;
   final double? densityKgM3;
@@ -145,6 +150,7 @@ class MaterialEntry {
     double? vaporPermeability,
     List<String>? aliases,
     List<String>? tags,
+    List<MaterialApplication>? applications,
     String? manufacturer,
     String? subcategory,
     double? densityKgM3,
@@ -158,6 +164,7 @@ class MaterialEntry {
       vaporPermeability: vaporPermeability ?? this.vaporPermeability,
       aliases: aliases ?? this.aliases,
       tags: tags ?? this.tags,
+      applications: applications ?? this.applications,
       manufacturer: manufacturer ?? this.manufacturer,
       subcategory: subcategory ?? this.subcategory,
       densityKgM3: densityKgM3 ?? this.densityKgM3,
@@ -173,6 +180,9 @@ class MaterialEntry {
     'vaporPermeability': vaporPermeability,
     'aliases': aliases,
     'tags': tags,
+    'applications': applications
+        .map((item) => item.storageKey)
+        .toList(growable: false),
     'manufacturer': manufacturer,
     'subcategory': subcategory,
     'densityKgM3': densityKgM3,
@@ -184,6 +194,49 @@ class MaterialEntry {
 
 enum MaterialCatalogSource { seed, custom }
 
+enum MaterialApplication {
+  wall,
+  floor,
+  roof,
+  ceiling,
+  partition,
+  facade,
+  foundation,
+}
+
+MaterialApplication parseMaterialApplication(String value) {
+  return MaterialApplication.values.firstWhere(
+    (item) => item.storageKey == value,
+    orElse: () => throw ArgumentError.value(
+      value,
+      'value',
+      'Unknown material application',
+    ),
+  );
+}
+
+extension MaterialApplicationX on MaterialApplication {
+  String get storageKey => switch (this) {
+    MaterialApplication.wall => 'wall',
+    MaterialApplication.floor => 'floor',
+    MaterialApplication.roof => 'roof',
+    MaterialApplication.ceiling => 'ceiling',
+    MaterialApplication.partition => 'partition',
+    MaterialApplication.facade => 'facade',
+    MaterialApplication.foundation => 'foundation',
+  };
+
+  String get label => switch (this) {
+    MaterialApplication.wall => 'Стены',
+    MaterialApplication.floor => 'Полы',
+    MaterialApplication.roof => 'Кровля',
+    MaterialApplication.ceiling => 'Потолки',
+    MaterialApplication.partition => 'Перегородки',
+    MaterialApplication.facade => 'Фасады',
+    MaterialApplication.foundation => 'Фундаменты',
+  };
+}
+
 enum MaterialSortOption { name, category, lambdaAscending, lambdaDescending }
 
 class MaterialCatalogEntry {
@@ -191,13 +244,16 @@ class MaterialCatalogEntry {
     required this.material,
     required this.source,
     required this.isFavorite,
+    this.seedMaterial,
   });
 
   final MaterialEntry material;
   final MaterialCatalogSource source;
   final bool isFavorite;
+  final MaterialEntry? seedMaterial;
 
   bool get isCustom => source == MaterialCatalogSource.custom;
+  bool get isSeedOverride => seedMaterial != null && isCustom;
 }
 
 class NormReference {

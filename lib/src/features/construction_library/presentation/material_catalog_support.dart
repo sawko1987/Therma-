@@ -23,6 +23,7 @@ class MaterialFilterState {
   const MaterialFilterState({
     this.query = '',
     this.category,
+    this.application,
     this.source = MaterialSourceFilter.all,
     this.favoritesOnly = false,
     this.lambdaMin,
@@ -34,6 +35,7 @@ class MaterialFilterState {
 
   final String query;
   final String? category;
+  final MaterialApplication? application;
   final MaterialSourceFilter source;
   final bool favoritesOnly;
   final double? lambdaMin;
@@ -46,6 +48,8 @@ class MaterialFilterState {
     String? query,
     String? category,
     bool clearCategory = false,
+    MaterialApplication? application,
+    bool clearApplication = false,
     MaterialSourceFilter? source,
     bool? favoritesOnly,
     double? lambdaMin,
@@ -61,6 +65,7 @@ class MaterialFilterState {
     return MaterialFilterState(
       query: query ?? this.query,
       category: clearCategory ? null : category ?? this.category,
+      application: clearApplication ? null : application ?? this.application,
       source: source ?? this.source,
       favoritesOnly: favoritesOnly ?? this.favoritesOnly,
       lambdaMin: clearLambdaMin ? null : lambdaMin ?? this.lambdaMin,
@@ -74,6 +79,7 @@ class MaterialFilterState {
   bool get hasActiveFilters =>
       query.trim().isNotEmpty ||
       category != null ||
+      application != null ||
       source != MaterialSourceFilter.all ||
       favoritesOnly ||
       lambdaMin != null ||
@@ -92,6 +98,10 @@ List<MaterialCatalogEntry> filterMaterialCatalogEntries(
       .where((entry) {
         final material = entry.material;
         if (filter.category != null && material.category != filter.category) {
+          return false;
+        }
+        if (filter.application != null &&
+            !material.applications.contains(filter.application)) {
           return false;
         }
         if (filter.source == MaterialSourceFilter.seed &&

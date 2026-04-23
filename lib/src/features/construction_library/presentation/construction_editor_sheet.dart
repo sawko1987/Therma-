@@ -169,6 +169,9 @@ Future<Construction?> showConstructionEditor(
                         final layer = await showLayerEditor(
                           context,
                           materialEntries: availableEntries,
+                          suggestedApplication: _applicationForConstructionKind(
+                            selectedKind,
+                          ),
                           onSaveCustomMaterial: onSaveCustomMaterial,
                         );
                         if (layer == null) {
@@ -244,6 +247,10 @@ Future<Construction?> showConstructionEditor(
                                         context,
                                         materialEntries: availableEntries,
                                         layer: layer,
+                                        suggestedApplication:
+                                            _applicationForConstructionKind(
+                                              selectedKind,
+                                            ),
                                         onSaveCustomMaterial:
                                             onSaveCustomMaterial,
                                       );
@@ -361,6 +368,7 @@ Future<LayerEditorResult?> showLayerEditor(
   BuildContext context, {
   required List<MaterialCatalogEntry> materialEntries,
   ConstructionLayer? layer,
+  MaterialApplication? suggestedApplication,
   CustomMaterialSaver? onSaveCustomMaterial,
 }) async {
   if (materialEntries.isEmpty) {
@@ -410,7 +418,10 @@ Future<LayerEditorResult?> showLayerEditor(
                       onPressed: onSaveCustomMaterial == null
                           ? null
                           : () async {
-                              final draft = await showMaterialEditor(context);
+                              final draft = await showMaterialEditor(
+                                context,
+                                initialApplication: suggestedApplication,
+                              );
                               if (draft == null) {
                                 return;
                               }
@@ -434,6 +445,7 @@ Future<LayerEditorResult?> showLayerEditor(
                 const SizedBox(height: 12),
                 _MaterialPickerField(
                   materialEntries: localEntries,
+                  suggestedApplication: suggestedApplication,
                   value: localEntries.firstWhere(
                     (entry) => entry.material.id == selectedMaterial.id,
                     orElse: () => localEntries.first,
@@ -536,6 +548,9 @@ Future<LayerEditorResult?> showLayerEditor(
 Future<MaterialEntry?> showMaterialEditor(
   BuildContext context, {
   MaterialEntry? material,
+  MaterialApplication? initialApplication,
+  String? title,
+  String? saveLabel,
 }) async {
   final nameController = TextEditingController(text: material?.name ?? '');
   final categoryController = TextEditingController(
@@ -563,144 +578,198 @@ Future<MaterialEntry?> showMaterialEditor(
     text: material?.densityKgM3?.toString() ?? '',
   );
   final notesController = TextEditingController(text: material?.notes ?? '');
+  final selectedApplications = <MaterialApplication>{
+    ...material?.applications ?? const <MaterialApplication>[],
+    if (material == null && initialApplication != null) initialApplication,
+  };
 
   final result = await showModalBottomSheet<MaterialEntry>(
     context: context,
     isScrollControlled: true,
     builder: (context) {
-      return Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          20,
-          20,
-          20 + MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              material == null ? 'Свой материал' : 'Редактирование материала',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + MediaQuery.of(context).viewInsets.bottom,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Название'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: categoryController,
-              decoration: const InputDecoration(labelText: 'Категория'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: thermalController,
-              decoration: const InputDecoration(
-                labelText: 'Теплопроводность λ, Вт/(м·°C)',
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: vaporController,
-              decoration: const InputDecoration(
-                labelText: 'Паропроницаемость δ, мг/(м·ч·Па)',
-              ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: aliasesController,
-              decoration: const InputDecoration(
-                labelText: 'Синонимы для поиска',
-                hintText: 'через запятую',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: tagsController,
-              decoration: const InputDecoration(
-                labelText: 'Теги',
-                hintText: 'каркас, фасад, тёплая стена',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: manufacturerController,
-              decoration: const InputDecoration(labelText: 'Производитель'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: subcategoryController,
-              decoration: const InputDecoration(labelText: 'Подкатегория'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: densityController,
-              decoration: const InputDecoration(labelText: 'Плотность, кг/м³'),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(labelText: 'Примечание'),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(context).pop(
-                  MaterialEntry(
-                    id: material?.id ?? buildEditorEntityId('custom-material'),
-                    name: requiredEditorText(
-                      nameController.text,
-                      fallback: 'Свой материал',
-                    ),
-                    category: requiredEditorText(
-                      categoryController.text,
-                      fallback: 'Пользовательские',
-                    ),
-                    thermalConductivity: parseEditorDouble(
-                      thermalController.text,
-                      fallback: 0.04,
-                    ),
-                    vaporPermeability: parseEditorDouble(
-                      vaporController.text,
-                      fallback: 0.30,
-                    ),
-                    aliases: aliasesController.text
-                        .split(',')
-                        .map((item) => item.trim())
-                        .where((item) => item.isNotEmpty)
-                        .toList(growable: false),
-                    tags: tagsController.text
-                        .split(',')
-                        .map((item) => item.trim())
-                        .where((item) => item.isNotEmpty)
-                        .toList(growable: false),
-                    manufacturer: _nullableEditorText(
-                      manufacturerController.text,
-                    ),
-                    subcategory: _nullableEditorText(
-                      subcategoryController.text,
-                    ),
-                    densityKgM3: _nullableEditorDouble(densityController.text),
-                    notes: _nullableEditorText(notesController.text),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title ??
+                        (material == null
+                            ? 'Свой материал'
+                            : 'Редактирование материала'),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                );
-              },
-              child: const Text('Сохранить материал'),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Название'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: categoryController,
+                    decoration: const InputDecoration(labelText: 'Категория'),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Области применения',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: MaterialApplication.values
+                        .map(
+                          (item) => FilterChip(
+                            label: Text(item.label),
+                            selected: selectedApplications.contains(item),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  selectedApplications.add(item);
+                                } else {
+                                  selectedApplications.remove(item);
+                                }
+                              });
+                            },
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: thermalController,
+                    decoration: const InputDecoration(
+                      labelText: 'Теплопроводность λ, Вт/(м·°C)',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: vaporController,
+                    decoration: const InputDecoration(
+                      labelText: 'Паропроницаемость δ, мг/(м·ч·Па)',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: aliasesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Синонимы для поиска',
+                      hintText: 'через запятую',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: tagsController,
+                    decoration: const InputDecoration(
+                      labelText: 'Теги',
+                      hintText: 'каркас, фасад, тёплая стена',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: manufacturerController,
+                    decoration: const InputDecoration(labelText: 'Производитель'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: subcategoryController,
+                    decoration: const InputDecoration(labelText: 'Подкатегория'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: densityController,
+                    decoration: const InputDecoration(
+                      labelText: 'Плотность, кг/м³',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    decoration: const InputDecoration(labelText: 'Примечание'),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(
+                        MaterialEntry(
+                          id:
+                              material?.id ??
+                              buildEditorEntityId('custom-material'),
+                          name: requiredEditorText(
+                            nameController.text,
+                            fallback: 'Свой материал',
+                          ),
+                          category: requiredEditorText(
+                            categoryController.text,
+                            fallback: 'Пользовательские',
+                          ),
+                          thermalConductivity: parseEditorDouble(
+                            thermalController.text,
+                            fallback: 0.04,
+                          ),
+                          vaporPermeability: parseEditorDouble(
+                            vaporController.text,
+                            fallback: 0.30,
+                          ),
+                          aliases: aliasesController.text
+                              .split(',')
+                              .map((item) => item.trim())
+                              .where((item) => item.isNotEmpty)
+                              .toList(growable: false),
+                          tags: tagsController.text
+                              .split(',')
+                              .map((item) => item.trim())
+                              .where((item) => item.isNotEmpty)
+                              .toList(growable: false),
+                          applications: selectedApplications.toList(
+                            growable: false,
+                          ),
+                          manufacturer: _nullableEditorText(
+                            manufacturerController.text,
+                          ),
+                          subcategory: _nullableEditorText(
+                            subcategoryController.text,
+                          ),
+                          densityKgM3: _nullableEditorDouble(
+                            densityController.text,
+                          ),
+                          notes: _nullableEditorText(notesController.text),
+                        ),
+                      );
+                    },
+                    child: Text(saveLabel ?? 'Сохранить материал'),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       );
     },
   );
@@ -723,12 +792,14 @@ class _MaterialPickerField extends StatelessWidget {
     required this.materialEntries,
     required this.value,
     required this.onChanged,
+    this.suggestedApplication,
     this.onEditCustomMaterial,
   });
 
   final List<MaterialCatalogEntry> materialEntries;
   final MaterialCatalogEntry value;
   final ValueChanged<MaterialEntry> onChanged;
+  final MaterialApplication? suggestedApplication;
   final Future<void> Function()? onEditCustomMaterial;
 
   @override
@@ -739,6 +810,7 @@ class _MaterialPickerField extends StatelessWidget {
         final selected = await showMaterialPicker(
           context,
           materialEntries: materialEntries,
+          initialApplication: suggestedApplication,
         );
         if (selected != null) {
           onChanged(selected);
@@ -771,8 +843,20 @@ class _MaterialPickerField extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                   ),
                 Chip(
-                  label: Text(value.isCustom ? 'Свой' : 'Базовый'),
+                  label: Text(
+                    value.isSeedOverride
+                        ? 'Изменен'
+                        : value.isCustom
+                        ? 'Свой'
+                        : 'Базовый',
+                  ),
                   visualDensity: VisualDensity.compact,
+                ),
+                ...value.material.applications.map(
+                  (item) => Chip(
+                    label: Text(item.label),
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ),
               ],
             ),
@@ -796,8 +880,9 @@ class _MaterialPickerField extends StatelessWidget {
 Future<MaterialEntry?> showMaterialPicker(
   BuildContext context, {
   required List<MaterialCatalogEntry> materialEntries,
+  MaterialApplication? initialApplication,
 }) async {
-  var filter = const MaterialFilterState();
+  var filter = MaterialFilterState(application: initialApplication);
   return showModalBottomSheet<MaterialEntry>(
     context: context,
     isScrollControlled: true,
@@ -898,6 +983,24 @@ Future<MaterialEntry?> showMaterialPicker(
                         );
                       },
                     ),
+                    ChoiceChip(
+                      label: Text(filter.application?.label ?? 'Область'),
+                      selected: filter.application != null,
+                      onSelected: (_) async {
+                        final selectedApplication =
+                            await _showMaterialApplicationPicker(
+                              context,
+                              current: filter.application,
+                            );
+                        setState(
+                          () => filter = selectedApplication == null
+                              ? filter.copyWith(clearApplication: true)
+                              : filter.copyWith(
+                                  application: selectedApplication,
+                                ),
+                        );
+                      },
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -946,7 +1049,7 @@ Future<MaterialEntry?> showMaterialPicker(
                                     ),
                                   ),
                                   subtitle: Text(
-                                    '${item.isCustom ? 'Свой' : 'Базовый'} • λ ${item.material.thermalConductivity.toStringAsFixed(3)} • δ ${item.material.vaporPermeability.toStringAsFixed(3)}',
+                                    '${item.isSeedOverride ? 'Изменен' : item.isCustom ? 'Свой' : 'Базовый'} • λ ${item.material.thermalConductivity.toStringAsFixed(3)} • δ ${item.material.vaporPermeability.toStringAsFixed(3)}',
                                   ),
                                   trailing: item.isFavorite
                                       ? const Icon(Icons.star, size: 18)
@@ -1157,6 +1260,45 @@ String _materialLabel(MaterialEntry? material, {required String fallback}) {
     return fallback;
   }
   return material.isCustom ? '${material.name} • свой' : material.name;
+}
+
+MaterialApplication? _applicationForConstructionKind(
+  ConstructionElementKind kind,
+) {
+  return switch (kind) {
+    ConstructionElementKind.wall => MaterialApplication.wall,
+    ConstructionElementKind.floor => MaterialApplication.floor,
+    ConstructionElementKind.roof => MaterialApplication.roof,
+    ConstructionElementKind.ceiling => MaterialApplication.ceiling,
+  };
+}
+
+Future<MaterialApplication?> _showMaterialApplicationPicker(
+  BuildContext context, {
+  required MaterialApplication? current,
+}) {
+  return showModalBottomSheet<MaterialApplication>(
+    context: context,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: current == null ? const Icon(Icons.check) : null,
+            title: const Text('Все области'),
+            onTap: () => Navigator.of(context).pop(),
+          ),
+          ...MaterialApplication.values.map(
+            (item) => ListTile(
+              leading: item == current ? const Icon(Icons.check) : null,
+              title: Text(item.label),
+              onTap: () => Navigator.of(context).pop(item),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 Future<MaterialSourceFilter?> _showSourcePicker(

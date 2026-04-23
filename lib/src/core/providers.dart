@@ -486,6 +486,15 @@ class ProjectEditor {
     await saveProject(project.copyWith(customMaterials: updatedMaterials));
   }
 
+  Future<void> restoreSeedMaterial(String materialId) async {
+    final project = await _requireProject();
+    final updatedMaterials = [
+      for (final item in project.customMaterials)
+        if (item.id != materialId) item,
+    ];
+    await saveProject(project.copyWith(customMaterials: updatedMaterials));
+  }
+
   Future<void> deleteCustomMaterial(String materialId) async {
     final project = await _requireProject();
     final isUsed = project.constructions.any(
@@ -991,11 +1000,15 @@ final constructionPickerSwipeTutorialSeenProvider = FutureProvider<bool>((
 final materialCatalogEntriesProvider =
     FutureProvider<List<MaterialCatalogEntry>>((ref) async {
       final catalog = await ref.watch(catalogSnapshotProvider.future);
+      final baseCatalog = await ref.read(catalogRepositoryProvider).loadSnapshot();
       final project = await ref.watch(selectedProjectProvider.future);
       final favorites = await ref.watch(favoriteMaterialIdsProvider.future);
       final customIds = {
         for (final item in project?.customMaterials ?? const <MaterialEntry>[])
           item.id,
+      };
+      final seededById = {
+        for (final item in baseCatalog.materials) item.id: item,
       };
       return catalog.materials
           .map(
@@ -1005,6 +1018,9 @@ final materialCatalogEntriesProvider =
                   ? MaterialCatalogSource.custom
                   : MaterialCatalogSource.seed,
               isFavorite: favorites.contains(material.id),
+              seedMaterial: customIds.contains(material.id)
+                  ? seededById[material.id]
+                  : null,
             ),
           )
           .toList(growable: false);

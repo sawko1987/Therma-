@@ -4,6 +4,7 @@ import 'package:smartcalc_mobile/src/core/models/catalog.dart';
 import 'package:smartcalc_mobile/src/core/models/ground_floor_calculation.dart';
 import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/providers.dart';
+import 'package:smartcalc_mobile/src/features/construction_library/presentation/material_catalog_support.dart';
 
 import 'support/fakes.dart';
 
@@ -132,6 +133,74 @@ void main() {
       isTrue,
     );
     expect(catalog.constructionTemplates, isNotEmpty);
+  });
+
+  test('materialCatalogEntriesProvider marks edited seeded material', () async {
+    final project = buildTestProject().copyWith(
+      customMaterials: const [
+        MaterialEntry(
+          id: 'aac_d500',
+          name: 'Газобетон D500 (переопределен)',
+          category: 'Блоки',
+          thermalConductivity: 0.13,
+          vaporPermeability: 0.22,
+          applications: [MaterialApplication.wall, MaterialApplication.floor],
+        ),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+        projectRepositoryProvider.overrideWithValue(
+          FakeProjectRepository(projects: [project]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final entries = await container.read(materialCatalogEntriesProvider.future);
+    final material = entries.firstWhere((item) => item.material.id == 'aac_d500');
+
+    expect(material.isCustom, isTrue);
+    expect(material.isSeedOverride, isTrue);
+    expect(material.seedMaterial, isNotNull);
+  });
+
+  test('filterMaterialCatalogEntries filters by application', () {
+    final entries = [
+      MaterialCatalogEntry(
+        material: const MaterialEntry(
+          id: 'floor-material',
+          name: 'Материал пола',
+          category: 'Тест',
+          thermalConductivity: 0.1,
+          vaporPermeability: 0.1,
+          applications: [MaterialApplication.floor],
+        ),
+        source: MaterialCatalogSource.seed,
+        isFavorite: false,
+      ),
+      MaterialCatalogEntry(
+        material: const MaterialEntry(
+          id: 'wall-material',
+          name: 'Материал стены',
+          category: 'Тест',
+          thermalConductivity: 0.1,
+          vaporPermeability: 0.1,
+          applications: [MaterialApplication.wall],
+        ),
+        source: MaterialCatalogSource.seed,
+        isFavorite: false,
+      ),
+    ];
+
+    final filtered = filterMaterialCatalogEntries(
+      entries,
+      const MaterialFilterState(application: MaterialApplication.floor),
+    );
+
+    expect(filtered, hasLength(1));
+    expect(filtered.single.material.id, 'floor-material');
   });
 
   test('constructionLibraryProvider includes seeded templates', () async {

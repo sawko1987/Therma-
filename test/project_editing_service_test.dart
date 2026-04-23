@@ -52,18 +52,31 @@ void main() {
     );
   });
 
-  test(
-    'deleteConstruction rejects removal when construction is still in use',
-    () {
-      final project = buildTestProject();
+  test('deleteConstruction allows removing the last construction', () {
+    final project = buildTestProject();
 
-      expect(
-        () =>
-            service.deleteConstruction(project, project.constructions.first.id),
-        throwsStateError,
-      );
-    },
-  );
+    final updated = service.deleteConstruction(
+      project,
+      project.constructions.first.id,
+    );
+
+    expect(updated.constructions, isEmpty);
+    expect(updated.effectiveSelectedConstructionIds, isEmpty);
+    expect(updated.effectiveProjectConstructionSelections, isEmpty);
+  });
+
+  test('unselectConstruction allows removing the last construction', () {
+    final project = buildTestProject();
+
+    final updated = service.unselectConstruction(
+      project,
+      project.constructions.first.id,
+    );
+
+    expect(updated.constructions, isEmpty);
+    expect(updated.effectiveSelectedConstructionIds, isEmpty);
+    expect(updated.effectiveProjectConstructionSelections, isEmpty);
+  });
 
   test(
     'updateEnvelopeElement rebinds element to another room and construction',
