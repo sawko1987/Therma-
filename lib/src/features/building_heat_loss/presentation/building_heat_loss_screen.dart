@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/building_heat_loss.dart';
+import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 
 class BuildingHeatLossScreen extends ConsumerWidget {
@@ -30,6 +31,7 @@ class BuildingHeatLossScreen extends ConsumerWidget {
                 }
                 return _ResultBody(
                   projectName: project.name,
+                  heatingSystemParameters: project.heatingSystemParameters,
                   result: result,
                 );
               },
@@ -48,10 +50,12 @@ class BuildingHeatLossScreen extends ConsumerWidget {
 class _ResultBody extends StatelessWidget {
   const _ResultBody({
     required this.projectName,
+    required this.heatingSystemParameters,
     required this.result,
   });
 
   final String projectName;
+  final HeatingSystemParameters? heatingSystemParameters;
   final BuildingHeatLossResult result;
 
   @override
@@ -82,7 +86,8 @@ class _ResultBody extends StatelessWidget {
                   children: [
                     _MetricTile(
                       label: 'Итого потерь',
-                      value: '${result.totalHeatLossWatts.toStringAsFixed(0)} Вт',
+                      value:
+                          '${result.totalHeatLossWatts.toStringAsFixed(0)} Вт',
                     ),
                     _MetricTile(
                       label: 'Через ограждения',
@@ -105,6 +110,11 @@ class _ResultBody extends StatelessWidget {
                           '${result.outsideAirTemperature.toStringAsFixed(0)} °C',
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                _HeatSourceCard(
+                  parameters: heatingSystemParameters,
+                  totalHeatLossWatts: result.totalHeatLossWatts,
                 ),
                 if (result.unresolvedElements.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -206,6 +216,57 @@ class _RoomResultCard extends StatelessWidget {
   }
 }
 
+class _HeatSourceCard extends StatelessWidget {
+  const _HeatSourceCard({
+    required this.parameters,
+    required this.totalHeatLossWatts,
+  });
+
+  final HeatingSystemParameters? parameters;
+  final double totalHeatLossWatts;
+
+  @override
+  Widget build(BuildContext context) {
+    final requiredWithReserve =
+        totalHeatLossWatts * (1 + (parameters?.reservePercent ?? 15) / 100);
+    final availablePower = parameters?.availablePowerWatts;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F5EE),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _MetricTile(
+              label: 'Источник',
+              value: parameters?.sourceKind.label ?? 'Не задан',
+            ),
+            _MetricTile(
+              label: 'Режим',
+              value: parameters == null
+                  ? '75/65 °C'
+                  : '${parameters!.designFlowTempC.toStringAsFixed(0)}/${parameters!.designReturnTempC.toStringAsFixed(0)} °C',
+            ),
+            _MetricTile(
+              label: 'С резервом',
+              value: '${requiredWithReserve.toStringAsFixed(0)} Вт',
+            ),
+            if (availablePower != null)
+              _MetricTile(
+                label: 'Доступно',
+                value: '${availablePower.toStringAsFixed(0)} Вт',
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ElementResultTile extends StatelessWidget {
   const _ElementResultTile({required this.elementResult});
 
@@ -251,7 +312,8 @@ class _ElementResultTile extends StatelessWidget {
                 ),
                 _MetricTile(
                   label: 'ΔT',
-                  value: '${elementResult.deltaTemperature.toStringAsFixed(0)} °C',
+                  value:
+                      '${elementResult.deltaTemperature.toStringAsFixed(0)} °C',
                 ),
                 _MetricTile(
                   label: 'R конструкции',
@@ -268,10 +330,7 @@ class _ElementResultTile extends StatelessWidget {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.label,
-    required this.value,
-  });
+  const _MetricTile({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -289,10 +348,7 @@ class _MetricTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text(label),
         ],

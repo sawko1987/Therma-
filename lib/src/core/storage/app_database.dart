@@ -34,7 +34,22 @@ class StoredOpeningCatalogEntries extends Table {
   Set<Column<Object>>? get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [ProjectEntries, StoredOpeningCatalogEntries])
+class StoredHeatingDeviceCatalogEntries extends Table {
+  TextColumn get id => text()();
+  TextColumn get payloadJson => text().named('payload_json')();
+  IntColumn get updatedAtEpochMs => integer().named('updated_at_epoch_ms')();
+
+  @override
+  Set<Column<Object>>? get primaryKey => {id};
+}
+
+@DriftDatabase(
+  tables: [
+    ProjectEntries,
+    StoredOpeningCatalogEntries,
+    StoredHeatingDeviceCatalogEntries,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase({AppLogger? logger}) : _logger = logger, super(_openConnection());
 
@@ -43,7 +58,7 @@ class AppDatabase extends _$AppDatabase {
   final AppLogger? _logger;
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -63,6 +78,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 3) {
         await migrator.createTable(storedOpeningCatalogEntries);
+      }
+      if (from < 4) {
+        await migrator.createTable(storedHeatingDeviceCatalogEntries);
       }
       _logger?.info(
         'Drift migration completed',

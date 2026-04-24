@@ -15,6 +15,7 @@ import 'services/asset_catalog_repository.dart';
 import 'services/building_heat_loss_service.dart';
 import 'services/drift_project_repository.dart';
 import 'services/ground_floor_calculation_service.dart';
+import 'services/heating_device_selection_service.dart';
 import 'services/heating_economics_service.dart';
 import 'services/interfaces.dart';
 import 'services/local_report_file_store.dart';
@@ -22,6 +23,7 @@ import 'services/normative_thermal_calculation_engine.dart';
 import 'services/pdf_report_service.dart';
 import 'services/project_editing_service.dart';
 import 'services/thermal_report_content_builder.dart';
+import 'services/underfloor_heating_calculation_service.dart';
 import 'storage/app_database.dart' as db;
 
 class SelectedProjectIdNotifier extends Notifier<String?> {
@@ -88,6 +90,7 @@ class ProjectEditor {
         await _ref.read(projectRepositoryProvider).saveProject(project);
         _ref.invalidate(catalogSnapshotProvider);
         _ref.invalidate(openingCatalogEntriesProvider);
+        _ref.invalidate(heatingDeviceCatalogEntriesProvider);
         _ref.invalidate(materialCatalogEntriesProvider);
         _ref.invalidate(projectListProvider);
         _ref.invalidate(selectedProjectProvider);
@@ -447,6 +450,46 @@ class ProjectEditor {
     await saveProject(updated);
   }
 
+  Future<void> addUnderfloorHeatingCalculation(
+    UnderfloorHeatingCalculation calculation,
+  ) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .addUnderfloorHeatingCalculation(project, calculation);
+    await saveProject(updated);
+  }
+
+  Future<void> updateUnderfloorHeatingCalculation(
+    UnderfloorHeatingCalculation calculation,
+  ) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .updateUnderfloorHeatingCalculation(project, calculation);
+    await saveProject(updated);
+  }
+
+  Future<void> deleteUnderfloorHeatingCalculation(String calculationId) async {
+    final project = await _requireProject();
+    final updated = _ref
+        .read(projectEditingServiceProvider)
+        .deleteUnderfloorHeatingCalculation(project, calculationId);
+    await saveProject(updated);
+  }
+
+  Future<void> updateHeatingSystemParameters(
+    HeatingSystemParameters? parameters,
+  ) async {
+    final project = await _requireProject();
+    await saveProject(
+      project.copyWith(
+        heatingSystemParameters: parameters,
+        clearHeatingSystemParameters: parameters == null,
+      ),
+    );
+  }
+
   Future<void> updateHeatingEconomicsSettings(
     HeatingEconomicsSettings settings,
   ) async {
@@ -535,6 +578,26 @@ class ProjectEditor {
     await _ref.read(openingCatalogRepositoryProvider).deleteEntry(entryId);
     _ref.invalidate(catalogSnapshotProvider);
     _ref.invalidate(openingCatalogEntriesProvider);
+  }
+
+  Future<void> saveHeatingDeviceCatalogEntry(
+    HeatingDeviceCatalogEntry entry,
+  ) async {
+    await _ref
+        .read(heatingDeviceCatalogRepositoryProvider)
+        .saveHeatingDeviceCatalogEntry(entry.copyWith(isCustom: true));
+    _ref.invalidate(catalogSnapshotProvider);
+    _ref.invalidate(heatingDeviceCatalogEntriesProvider);
+    _ref.invalidate(heatingDeviceCatalogItemsProvider);
+  }
+
+  Future<void> deleteHeatingDeviceCatalogEntry(String entryId) async {
+    await _ref
+        .read(heatingDeviceCatalogRepositoryProvider)
+        .deleteHeatingDeviceCatalogEntry(entryId);
+    _ref.invalidate(catalogSnapshotProvider);
+    _ref.invalidate(heatingDeviceCatalogEntriesProvider);
+    _ref.invalidate(heatingDeviceCatalogItemsProvider);
   }
 
   Future<void> toggleFavoriteMaterial(String materialId) async {
@@ -907,6 +970,18 @@ final openingCatalogRepositoryProvider = Provider<OpeningCatalogRepository>((
   );
 });
 
+final heatingDeviceCatalogRepositoryProvider =
+    Provider<HeatingDeviceCatalogRepository>((ref) {
+      final repository = ref.watch(projectRepositoryProvider);
+      if (repository is HeatingDeviceCatalogRepository) {
+        return repository as HeatingDeviceCatalogRepository;
+      }
+      return DriftProjectRepository(
+        ref.watch(appDatabaseProvider),
+        logger: ref.watch(appLoggerProvider),
+      );
+    });
+
 final appPreferencesRepositoryProvider = Provider<AppPreferencesRepository>((
   ref,
 ) {
@@ -927,6 +1002,16 @@ final thermalCalculationEngineProvider = Provider<ThermalCalculationEngine>(
 final projectEditingServiceProvider = Provider<ProjectEditingService>(
   (ref) => const ProjectEditingService(),
 );
+
+final heatingDeviceSelectionServiceProvider =
+    Provider<HeatingDeviceSelectionService>(
+      (ref) => const HeatingDeviceSelectionService(),
+    );
+
+final underfloorHeatingCalculationServiceProvider =
+    Provider<UnderfloorHeatingCalculationService>(
+      (ref) => const UnderfloorHeatingCalculationService(),
+    );
 
 final buildingHeatLossServiceProvider = Provider<BuildingHeatLossService>(
   (ref) => NormativeBuildingHeatLossService(
@@ -980,7 +1065,10 @@ final catalogSnapshotProvider = FutureProvider<CatalogSnapshot>((ref) async {
     norms: baseCatalog.norms,
     moistureRules: baseCatalog.moistureRules,
     roomKindConditions: baseCatalog.roomKindConditions,
-    heatingDevices: baseCatalog.heatingDevices,
+    heatingDevices: _mergeHeatingDevices(
+      baseCatalog.heatingDevices,
+      await ref.watch(heatingDeviceCatalogEntriesProvider.future),
+    ),
     openingCatalog: _mergeOpenings(
       baseCatalog.openingCatalog,
       await ref.watch(openingCatalogEntriesProvider.future),
@@ -994,6 +1082,32 @@ final openingCatalogEntriesProvider = FutureProvider<List<OpeningTypeEntry>>((
 ) async {
   return ref.read(openingCatalogRepositoryProvider).listEntries();
 });
+
+final heatingDeviceCatalogEntriesProvider =
+    FutureProvider<List<HeatingDeviceCatalogEntry>>((ref) async {
+      return ref
+          .read(heatingDeviceCatalogRepositoryProvider)
+          .listHeatingDeviceCatalogEntries();
+    });
+
+final heatingDeviceCatalogItemsProvider =
+    FutureProvider<List<HeatingDeviceCatalogItem>>((ref) async {
+      final catalog = await ref.watch(catalogSnapshotProvider.future);
+      final customEntries = await ref.watch(
+        heatingDeviceCatalogEntriesProvider.future,
+      );
+      final customIds = {for (final item in customEntries) item.id};
+      return catalog.heatingDevices
+          .map(
+            (entry) => HeatingDeviceCatalogItem(
+              entry: entry,
+              source: customIds.contains(entry.id)
+                  ? HeatingDeviceCatalogSource.custom
+                  : HeatingDeviceCatalogSource.seed,
+            ),
+          )
+          .toList(growable: false);
+    });
 
 final favoriteMaterialIdsProvider = FutureProvider<Set<String>>((ref) async {
   return ref
@@ -1154,6 +1268,21 @@ List<OpeningTypeEntry> _mergeOpenings(
   };
   for (final item in custom) {
     merged[item.id] = item;
+  }
+  final result = merged.values.toList(growable: false);
+  result.sort((a, b) => a.title.compareTo(b.title));
+  return result;
+}
+
+List<HeatingDeviceCatalogEntry> _mergeHeatingDevices(
+  List<HeatingDeviceCatalogEntry> seeded,
+  List<HeatingDeviceCatalogEntry> custom,
+) {
+  final merged = <String, HeatingDeviceCatalogEntry>{
+    for (final item in seeded) item.id: item,
+  };
+  for (final item in custom) {
+    merged[item.id] = item.copyWith(isCustom: true);
   }
   final result = merged.values.toList(growable: false);
   result.sort((a, b) => a.title.compareTo(b.title));

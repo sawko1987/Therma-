@@ -5,6 +5,8 @@ import '../../../core/models/building_heat_loss.dart';
 import '../../../core/models/catalog.dart';
 import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
+import '../../../core/services/heating_device_selection_service.dart';
+import '../../../core/services/underfloor_heating_calculation_service.dart';
 import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
 import '../../construction_library/presentation/construction_editor_sheet.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
@@ -308,6 +310,134 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
     }
   }
 
+  Future<void> _handleAddHeatingDevice(
+    Project project,
+    CatalogSnapshot catalog,
+    Room room,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final roomResult = _findRoomResult(
+      ref.read(buildingHeatLossResultProvider).asData?.value,
+      room.id,
+    );
+    final device = await showHeatingDevicePickerSheet(
+      context,
+      catalog: catalog,
+      room: room,
+      requiredPowerWatts: roomResult?.heatLossWatts ?? 1000,
+      systemParameters: project.heatingSystemParameters,
+    );
+    if (!mounted || device == null) {
+      return;
+    }
+    try {
+      await ref.read(projectEditorProvider).addHeatingDevice(device);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось добавить прибор: $error')),
+      );
+    }
+  }
+
+  Future<void> _handleEditHeatingDevice(
+    Project project,
+    CatalogSnapshot catalog,
+    Room room,
+    HeatingDevice device,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final updated = await showHeatingDevicePickerSheet(
+      context,
+      catalog: catalog,
+      room: room,
+      requiredPowerWatts: device.ratedPowerWatts,
+      systemParameters: project.heatingSystemParameters,
+      heatingDevice: device,
+    );
+    if (!mounted || updated == null) {
+      return;
+    }
+    try {
+      await ref.read(projectEditorProvider).updateHeatingDevice(updated);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось обновить прибор: $error')),
+      );
+    }
+  }
+
+  Future<void> _handleDeleteHeatingDevice(HeatingDevice device) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(projectEditorProvider).deleteHeatingDevice(device.id);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось удалить прибор: $error')),
+      );
+    }
+  }
+
+  Future<void> _handleAddUnderfloorLoop(Room room) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final calculation = await showUnderfloorHeatingCalculationSheet(
+      context,
+      room: room,
+      service: ref.read(underfloorHeatingCalculationServiceProvider),
+    );
+    if (!mounted || calculation == null) {
+      return;
+    }
+    try {
+      await ref
+          .read(projectEditorProvider)
+          .addUnderfloorHeatingCalculation(calculation);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось добавить контур: $error')),
+      );
+    }
+  }
+
+  Future<void> _handleEditUnderfloorLoop(
+    Room room,
+    UnderfloorHeatingCalculation calculation,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final updated = await showUnderfloorHeatingCalculationSheet(
+      context,
+      room: room,
+      service: ref.read(underfloorHeatingCalculationServiceProvider),
+      calculation: calculation,
+    );
+    if (!mounted || updated == null) {
+      return;
+    }
+    try {
+      await ref
+          .read(projectEditorProvider)
+          .updateUnderfloorHeatingCalculation(updated);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось обновить контур: $error')),
+      );
+    }
+  }
+
+  Future<void> _handleDeleteUnderfloorLoop(
+    UnderfloorHeatingCalculation calculation,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(projectEditorProvider)
+          .deleteUnderfloorHeatingCalculation(calculation.id);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Не удалось удалить контур: $error')),
+      );
+    }
+  }
+
   Future<void> _handleEditElementConstruction(
     CatalogSnapshot catalog,
     List<MaterialCatalogEntry> materialEntries,
@@ -452,6 +582,14 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
                     const <BuildingElementHeatLossResult>[])
               item.element.id: item,
           };
+          final roomHeatingDevices = project.houseModel.heatingDevices
+              .where((item) => item.roomId == selectedRoom.id)
+              .toList(growable: false);
+          final roomUnderfloorLoops = project
+              .houseModel
+              .underfloorHeatingCalculations
+              .where((item) => item.roomId == selectedRoom.id)
+              .toList(growable: false);
 
           return catalogAsync.when(
             data: (catalog) => materialEntriesAsync.when(
@@ -476,6 +614,27 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
                       selectedRoom,
                       selectedRoom.copyWith(ventilationSupplyM3h: value),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  _HeatingSystemSection(
+                    room: selectedRoom,
+                    roomResult: roomResult,
+                    heatingDevices: roomHeatingDevices,
+                    underfloorLoops: roomUnderfloorLoops,
+                    onAddHeatingDevice: () =>
+                        _handleAddHeatingDevice(project, catalog, selectedRoom),
+                    onEditHeatingDevice: (device) => _handleEditHeatingDevice(
+                      project,
+                      catalog,
+                      selectedRoom,
+                      device,
+                    ),
+                    onDeleteHeatingDevice: _handleDeleteHeatingDevice,
+                    onAddUnderfloorLoop: () =>
+                        _handleAddUnderfloorLoop(selectedRoom),
+                    onEditUnderfloorLoop: (calculation) =>
+                        _handleEditUnderfloorLoop(selectedRoom, calculation),
+                    onDeleteUnderfloorLoop: _handleDeleteUnderfloorLoop,
                   ),
                   const SizedBox(height: 12),
                   _EnvelopeSection(
@@ -661,6 +820,221 @@ class _RoomConditionsCard extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeatingSystemSection extends StatelessWidget {
+  const _HeatingSystemSection({
+    required this.room,
+    required this.roomResult,
+    required this.heatingDevices,
+    required this.underfloorLoops,
+    required this.onAddHeatingDevice,
+    required this.onEditHeatingDevice,
+    required this.onDeleteHeatingDevice,
+    required this.onAddUnderfloorLoop,
+    required this.onEditUnderfloorLoop,
+    required this.onDeleteUnderfloorLoop,
+  });
+
+  final Room room;
+  final BuildingRoomHeatLossResult? roomResult;
+  final List<HeatingDevice> heatingDevices;
+  final List<UnderfloorHeatingCalculation> underfloorLoops;
+  final VoidCallback onAddHeatingDevice;
+  final ValueChanged<HeatingDevice> onEditHeatingDevice;
+  final ValueChanged<HeatingDevice> onDeleteHeatingDevice;
+  final VoidCallback onAddUnderfloorLoop;
+  final ValueChanged<UnderfloorHeatingCalculation> onEditUnderfloorLoop;
+  final ValueChanged<UnderfloorHeatingCalculation> onDeleteUnderfloorLoop;
+
+  @override
+  Widget build(BuildContext context) {
+    final installedPower =
+        heatingDevices.fold<double>(
+          0,
+          (sum, item) => sum + item.ratedPowerWatts,
+        ) +
+        underfloorLoops.fold<double>(
+          0,
+          (sum, item) => sum + item.actualPowerWatts,
+        );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Система отопления',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: onAddHeatingDevice,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Радиатор'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: onAddUnderfloorLoop,
+                  icon: const Icon(Icons.grid_on_outlined),
+                  label: const Text('Контур'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _MetricChip(
+                  label: 'Установлено',
+                  value: '${installedPower.toStringAsFixed(0)} Вт',
+                ),
+                if (roomResult != null)
+                  _MetricChip(
+                    label: 'Баланс',
+                    value: _formatBalance(roomResult!.heatingPowerDeltaWatts),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (heatingDevices.isEmpty && underfloorLoops.isEmpty)
+              Text('Для комнаты ${room.title} ещё не добавлены приборы.')
+            else ...[
+              ...heatingDevices.map(
+                (device) => _HeatingDeviceTile(
+                  device: device,
+                  onTap: () => onEditHeatingDevice(device),
+                  onDelete: () => onDeleteHeatingDevice(device),
+                ),
+              ),
+              ...underfloorLoops.map(
+                (calculation) => _UnderfloorLoopTile(
+                  calculation: calculation,
+                  onTap: () => onEditUnderfloorLoop(calculation),
+                  onDelete: () => onDeleteUnderfloorLoop(calculation),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeatingDeviceTile extends StatelessWidget {
+  const _HeatingDeviceTile({
+    required this.device,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final HeatingDevice device;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return _HeatingTileShell(
+      icon: Icons.thermostat_outlined,
+      title: device.title,
+      subtitle:
+          '${device.kind.label} · ${device.ratedPowerWatts.toStringAsFixed(0)} Вт'
+          '${device.sectionCount == null ? '' : ' · ${device.sectionCount} секц.'}',
+      onTap: onTap,
+      onDelete: onDelete,
+    );
+  }
+}
+
+class _UnderfloorLoopTile extends StatelessWidget {
+  const _UnderfloorLoopTile({
+    required this.calculation,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final UnderfloorHeatingCalculation calculation;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return _HeatingTileShell(
+      icon: Icons.grid_on_outlined,
+      title: calculation.title,
+      subtitle:
+          '${calculation.actualPowerWatts.toStringAsFixed(0)} Вт · '
+          '${(calculation.loopLengthMeters ?? 0).toStringAsFixed(0)} м · '
+          '${(calculation.balancingFlowRateLitersPerMinute ?? 0).toStringAsFixed(1)} л/мин',
+      onTap: onTap,
+      onDelete: onDelete,
+    );
+  }
+}
+
+class _HeatingTileShell extends StatelessWidget {
+  const _HeatingTileShell({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      Text(subtitle),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Удалить',
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1129,7 +1503,561 @@ BuildingRoomHeatLossResult? _findRoomResult(
   return null;
 }
 
+Future<HeatingDevice?> showHeatingDevicePickerSheet(
+  BuildContext context, {
+  required CatalogSnapshot catalog,
+  required Room room,
+  required double requiredPowerWatts,
+  required HeatingSystemParameters? systemParameters,
+  HeatingDevice? heatingDevice,
+}) async {
+  final titleController = TextEditingController(
+    text: heatingDevice?.title ?? '',
+  );
+  final requiredPowerController = TextEditingController(
+    text: requiredPowerWatts.toStringAsFixed(0),
+  );
+  final flowController = TextEditingController(
+    text:
+        (heatingDevice?.designFlowTempC ??
+                systemParameters?.designFlowTempC ??
+                75)
+            .toStringAsFixed(0),
+  );
+  final returnController = TextEditingController(
+    text:
+        (heatingDevice?.designReturnTempC ??
+                systemParameters?.designReturnTempC ??
+                65)
+            .toStringAsFixed(0),
+  );
+  String? selectedEntryId = heatingDevice?.catalogItemId;
+  HeatingDeviceCatalogEntry? selectedEntry;
+  if (selectedEntryId != null) {
+    for (final entry in catalog.heatingDevices) {
+      if (entry.id == selectedEntryId) {
+        selectedEntry = entry;
+        break;
+      }
+    }
+  }
+  if (selectedEntry?.kind != HeatingDeviceKind.radiator.storageKey) {
+    selectedEntry = null;
+    selectedEntryId = null;
+  }
+
+  return showModalBottomSheet<HeatingDevice>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) {
+      return Consumer(
+        builder: (context, ref, _) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              final service = ref.read(heatingDeviceSelectionServiceProvider);
+              final requiredPower = _parseDouble(
+                requiredPowerController.text,
+                fallback: requiredPowerWatts,
+              );
+              final flowTemp = _parseDouble(flowController.text, fallback: 75);
+              final returnTemp = _parseDouble(
+                returnController.text,
+                fallback: 65,
+              );
+              final roomTemp = room.comfortTemperatureC;
+              final catalogEntries = catalog.heatingDevices
+                  .where(
+                    (item) =>
+                        item.kind == HeatingDeviceKind.radiator.storageKey,
+                  )
+                  .toList(growable: false);
+              SectionalHeatingDeviceSelection? sectionalSelection;
+              PanelHeatingDeviceSelection? panelSelection;
+              if (selectedEntry != null) {
+                if (selectedEntry!.isSectional) {
+                  sectionalSelection = service.selectSectional(
+                    entry: selectedEntry!,
+                    requiredPowerWatts: requiredPower,
+                    flowTempC: flowTemp,
+                    returnTempC: returnTemp,
+                    roomTempC: roomTemp,
+                  );
+                } else {
+                  panelSelection = PanelHeatingDeviceSelection(
+                    entry: selectedEntry!,
+                    requiredPowerWatts: requiredPower,
+                    actualPowerWatts: service.adjustedPowerWatts(
+                      entry: selectedEntry!,
+                      flowTempC: flowTemp,
+                      returnTempC: returnTemp,
+                      roomTempC: roomTemp,
+                    ),
+                  );
+                }
+              } else {
+                panelSelection = service.selectPanel(
+                  entries: catalogEntries.where((item) => !item.isSectional),
+                  requiredPowerWatts: requiredPower,
+                  flowTempC: flowTemp,
+                  returnTempC: returnTemp,
+                  roomTempC: roomTemp,
+                );
+              }
+              final actualPower =
+                  sectionalSelection?.actualPowerWatts ??
+                  panelSelection?.actualPowerWatts ??
+                  requiredPower;
+              final sectionCount = sectionalSelection?.sectionCount;
+              final suggestedEntry = selectedEntry ?? panelSelection?.entry;
+              if (titleController.text.trim().isEmpty &&
+                  suggestedEntry != null) {
+                titleController.text = suggestedEntry.title;
+              }
+
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  20,
+                  20,
+                  20 + MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        heatingDevice == null
+                            ? 'Подбор радиатора'
+                            : 'Редактирование радиатора',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String?>(
+                        initialValue: selectedEntryId,
+                        decoration: const InputDecoration(
+                          labelText: 'Прибор из каталога',
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Автоподбор панельного'),
+                          ),
+                          ...catalogEntries.map(
+                            (entry) => DropdownMenuItem<String?>(
+                              value: entry.id,
+                              child: Text(entry.title),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedEntryId = value;
+                            selectedEntry = value == null
+                                ? null
+                                : catalogEntries.firstWhere(
+                                    (item) => item.id == value,
+                                  );
+                            if (selectedEntry != null) {
+                              titleController.text = selectedEntry!.title;
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Название',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: requiredPowerController,
+                        decoration: const InputDecoration(
+                          labelText: 'Требуемая мощность, Вт',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: flowController,
+                              decoration: const InputDecoration(
+                                labelText: 'Подача, °C',
+                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: returnController,
+                              decoration: const InputDecoration(
+                                labelText: 'Обратка, °C',
+                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _MetricChip(
+                            label: 'Фактически',
+                            value: '${actualPower.toStringAsFixed(0)} Вт',
+                          ),
+                          if (sectionCount != null)
+                            _MetricChip(
+                              label: 'Секций',
+                              value: sectionCount.toString(),
+                            ),
+                          if (suggestedEntry != null)
+                            _MetricChip(
+                              label: 'Каталог',
+                              value: suggestedEntry.title,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () {
+                          final entry = suggestedEntry;
+                          Navigator.of(context).pop(
+                            HeatingDevice(
+                              id:
+                                  heatingDevice?.id ??
+                                  'heating-device-${DateTime.now().millisecondsSinceEpoch}',
+                              roomId: room.id,
+                              title: _requiredText(
+                                titleController.text,
+                                fallback: entry?.title ?? 'Радиатор',
+                              ),
+                              kind: HeatingDeviceKind.radiator,
+                              ratedPowerWatts: actualPower,
+                              catalogItemId: entry?.id,
+                              nominalPowerWatts: entry?.ratedPowerWatts,
+                              designFlowTempC: flowTemp,
+                              designReturnTempC: returnTemp,
+                              designRoomTempC: roomTemp,
+                              sectionCount: sectionCount,
+                            ),
+                          );
+                        },
+                        child: const Text('Сохранить радиатор'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    },
+  );
+}
+
+Future<UnderfloorHeatingCalculation?> showUnderfloorHeatingCalculationSheet(
+  BuildContext context, {
+  required Room room,
+  required UnderfloorHeatingCalculationService service,
+  UnderfloorHeatingCalculation? calculation,
+}) async {
+  final titleController = TextEditingController(
+    text: calculation?.title ?? 'Контур теплого пола',
+  );
+  final areaController = TextEditingController(
+    text: (calculation?.areaSquareMeters ?? room.areaSquareMeters)
+        .toStringAsFixed(1),
+  );
+  final pitchController = TextEditingController(
+    text: (calculation?.pipePitchMm ?? 150).toStringAsFixed(0),
+  );
+  final supplyController = TextEditingController(
+    text: (calculation?.supplyLengthMeters ?? 5).toStringAsFixed(1),
+  );
+  final diameterController = TextEditingController(
+    text: (calculation?.pipeOuterDiameterMm ?? 16).toStringAsFixed(0),
+  );
+  final heatFluxController = TextEditingController(
+    text: (calculation?.heatFluxWattsPerSquareMeter ?? 70).toStringAsFixed(0),
+  );
+  final flowController = TextEditingController(
+    text: (calculation?.flowTempC ?? 40).toStringAsFixed(0),
+  );
+  final returnController = TextEditingController(
+    text: (calculation?.returnTempC ?? 35).toStringAsFixed(0),
+  );
+  final floorTempController = TextEditingController(
+    text: (calculation?.floorSurfaceTempC ?? 27).toStringAsFixed(1),
+  );
+
+  UnderfloorHeatingCalculation buildCalculation() {
+    final input = UnderfloorHeatingCalculation(
+      id:
+          calculation?.id ??
+          'underfloor-loop-${DateTime.now().millisecondsSinceEpoch}',
+      roomId: room.id,
+      title: _requiredText(
+        titleController.text,
+        fallback: 'Контур теплого пола',
+      ),
+      areaSquareMeters: _parseDouble(areaController.text, fallback: 1),
+      pipePitchMm: _parseDouble(pitchController.text, fallback: 150),
+      supplyLengthMeters: _parseDouble(supplyController.text, fallback: 5),
+      pipeOuterDiameterMm: _parseDouble(diameterController.text, fallback: 16),
+      flowTempC: _parseDouble(flowController.text, fallback: 40),
+      returnTempC: _parseDouble(returnController.text, fallback: 35),
+      roomTempC: room.comfortTemperatureC,
+      floorSurfaceTempC: _parseDouble(floorTempController.text, fallback: 27),
+      heatFluxWattsPerSquareMeter: _parseDouble(
+        heatFluxController.text,
+        fallback: 70,
+      ),
+      actualPowerWatts: 0,
+    );
+    return service.calculate(input, roomKind: room.kind);
+  }
+
+  return showModalBottomSheet<UnderfloorHeatingCalculation>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final result = buildCalculation();
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    calculation == null
+                        ? 'Контур теплого пола'
+                        : 'Редактирование контура',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: 'Название'),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: areaController,
+                          decoration: const InputDecoration(
+                            labelText: 'Площадь, м²',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: pitchController,
+                          decoration: const InputDecoration(
+                            labelText: 'Шаг, мм',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: supplyController,
+                          decoration: const InputDecoration(
+                            labelText: 'Подводки, м',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: diameterController,
+                          decoration: const InputDecoration(
+                            labelText: 'Труба Ø, мм',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: flowController,
+                          decoration: const InputDecoration(
+                            labelText: 'Подача, °C',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: returnController,
+                          decoration: const InputDecoration(
+                            labelText: 'Обратка, °C',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: heatFluxController,
+                          decoration: const InputDecoration(
+                            labelText: 'Поток, Вт/м²',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: floorTempController,
+                          decoration: const InputDecoration(
+                            labelText: 'Пол, °C',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _MetricChip(
+                        label: 'Мощность',
+                        value:
+                            '${result.actualPowerWatts.toStringAsFixed(0)} Вт',
+                      ),
+                      _MetricChip(
+                        label: 'Длина',
+                        value:
+                            '${(result.loopLengthMeters ?? 0).toStringAsFixed(0)} м',
+                      ),
+                      _MetricChip(
+                        label: 'Расходомер',
+                        value:
+                            '${(result.balancingFlowRateLitersPerMinute ?? 0).toStringAsFixed(1)} л/мин',
+                      ),
+                      _MetricChip(
+                        label: 'ΔP',
+                        value:
+                            '${(result.pressureDropKpa ?? 0).toStringAsFixed(1)} кПа',
+                      ),
+                    ],
+                  ),
+                  if (result.warnings.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    ...result.warnings.map(
+                      (warning) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          warning,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(result),
+                    child: const Text('Сохранить контур'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
 String _formatBalance(double value) {
   final sign = value > 0 ? '+' : '';
   return '$sign${value.toStringAsFixed(0)} Вт';
+}
+
+String _requiredText(String value, {required String fallback}) {
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? fallback : trimmed;
+}
+
+double _parseDouble(String value, {required double fallback}) {
+  return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
 }

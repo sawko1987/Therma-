@@ -433,6 +433,11 @@ HeatingDevice buildHeatingDevice({
   HeatingDeviceKind kind = HeatingDeviceKind.radiator,
   double ratedPowerWatts = 1500,
   String? catalogItemId = 'rad-panel-22-500x1000',
+  double? nominalPowerWatts,
+  double? designFlowTempC,
+  double? designReturnTempC,
+  double? designRoomTempC,
+  int? sectionCount,
   String? notes,
 }) {
   return HeatingDevice(
@@ -442,6 +447,11 @@ HeatingDevice buildHeatingDevice({
     kind: kind,
     ratedPowerWatts: ratedPowerWatts,
     catalogItemId: catalogItemId,
+    nominalPowerWatts: nominalPowerWatts,
+    designFlowTempC: designFlowTempC,
+    designReturnTempC: designReturnTempC,
+    designRoomTempC: designRoomTempC,
+    sectionCount: sectionCount,
     notes: notes,
   );
 }
@@ -486,6 +496,7 @@ class FakeProjectRepository
         ObjectRepository,
         FavoriteMaterialsRepository,
         OpeningCatalogRepository,
+        HeatingDeviceCatalogRepository,
         AppPreferencesRepository {
   FakeProjectRepository({List<Project>? projects})
     : _projects = projects ?? [buildTestProject()],
@@ -512,6 +523,9 @@ class FakeProjectRepository
     for (final entry in testCatalogSnapshot.openingCatalog) {
       _openingCatalog[entry.id] = entry;
     }
+    for (final entry in testCatalogSnapshot.heatingDevices) {
+      _heatingDeviceCatalog[entry.id] = entry;
+    }
   }
 
   final List<Project> _projects;
@@ -520,6 +534,8 @@ class FakeProjectRepository
   final Set<String> _favoriteMaterialIds = <String>{};
   final Map<String, OpeningTypeEntry> _openingCatalog =
       <String, OpeningTypeEntry>{};
+  final Map<String, HeatingDeviceCatalogEntry> _heatingDeviceCatalog =
+      <String, HeatingDeviceCatalogEntry>{};
   bool _constructionPickerSwipeTutorialSeen = false;
   bool _hasSeededDemoProject;
   bool _hasSeededObjects;
@@ -654,6 +670,23 @@ class FakeProjectRepository
   @override
   Future<void> deleteEntry(String id) async {
     _openingCatalog.remove(id);
+  }
+
+  @override
+  Future<List<HeatingDeviceCatalogEntry>>
+  listHeatingDeviceCatalogEntries() async =>
+      List.unmodifiable(_heatingDeviceCatalog.values);
+
+  @override
+  Future<void> saveHeatingDeviceCatalogEntry(
+    HeatingDeviceCatalogEntry entry,
+  ) async {
+    _heatingDeviceCatalog[entry.id] = entry;
+  }
+
+  @override
+  Future<void> deleteHeatingDeviceCatalogEntry(String id) async {
+    _heatingDeviceCatalog.remove(id);
   }
 
   @override

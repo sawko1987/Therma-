@@ -159,11 +159,56 @@ void main() {
     addTearDown(container.dispose);
 
     final entries = await container.read(materialCatalogEntriesProvider.future);
-    final material = entries.firstWhere((item) => item.material.id == 'aac_d500');
+    final material = entries.firstWhere(
+      (item) => item.material.id == 'aac_d500',
+    );
 
     expect(material.isCustom, isTrue);
     expect(material.isSeedOverride, isTrue);
     expect(material.seedMaterial, isNotNull);
+  });
+
+  test('catalogSnapshotProvider merges custom heating devices', () async {
+    final repository = FakeProjectRepository(projects: [buildTestProject()]);
+    final container = ProviderContainer(
+      overrides: [
+        catalogRepositoryProvider.overrideWithValue(FakeCatalogRepository()),
+        projectRepositoryProvider.overrideWithValue(repository),
+        heatingDeviceCatalogRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(projectEditorProvider)
+        .saveHeatingDeviceCatalogEntry(
+          const HeatingDeviceCatalogEntry(
+            id: 'custom-heating-device-test',
+            kind: 'radiator',
+            title: 'Custom radiator',
+            manufacturer: 'Local',
+            ratedPowerWatts: 1234,
+            isCustom: true,
+          ),
+        );
+
+    final catalog = await container.read(catalogSnapshotProvider.future);
+    final items = await container.read(
+      heatingDeviceCatalogItemsProvider.future,
+    );
+
+    expect(
+      catalog.heatingDevices.any(
+        (item) => item.id == 'custom-heating-device-test',
+      ),
+      isTrue,
+    );
+    expect(
+      items
+          .firstWhere((item) => item.entry.id == 'custom-heating-device-test')
+          .isCustom,
+      isTrue,
+    );
   });
 
   test('filterMaterialCatalogEntries filters by application', () {
@@ -235,7 +280,9 @@ void main() {
     await container.read(projectEditorProvider).deleteObject(object!.id);
 
     final selectedObject = await container.read(selectedObjectProvider.future);
-    final selectedProject = await container.read(selectedProjectProvider.future);
+    final selectedProject = await container.read(
+      selectedProjectProvider.future,
+    );
 
     expect(selectedObject, isNull);
     expect(selectedProject, isNull);
@@ -295,12 +342,10 @@ void main() {
       final wall = buildWallConstruction();
       final project = buildTestProject(
         construction: wall,
-        houseModel: buildHouseModel(constructions: [wall]).copyWith(
-          elements: const [],
-        ),
-      ).copyWith(
-        selectedConstructionIds: const ['wall'],
-      );
+        houseModel: buildHouseModel(
+          constructions: [wall],
+        ).copyWith(elements: const []),
+      ).copyWith(selectedConstructionIds: const ['wall']);
       final repository = FakeProjectRepository(projects: [project]);
       final container = ProviderContainer(
         overrides: [
@@ -360,9 +405,9 @@ void main() {
       );
       final project = buildTestProject(
         constructions: [floor],
-        houseModel: buildHouseModel(constructions: [floor]).copyWith(
-          elements: const [],
-        ),
+        houseModel: buildHouseModel(
+          constructions: [floor],
+        ).copyWith(elements: const []),
         groundFloorCalculations: const [
           GroundFloorCalculation(
             id: 'floor-calc',

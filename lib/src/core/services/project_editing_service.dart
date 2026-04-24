@@ -62,6 +62,16 @@ class ProjectEditingService {
         'Нельзя удалить помещение, пока в нем есть отопительные приборы.',
       );
     }
+    final linkedUnderfloorLoops = project
+        .houseModel
+        .underfloorHeatingCalculations
+        .where((item) => item.roomId == roomId)
+        .length;
+    if (linkedUnderfloorLoops > 0) {
+      throw StateError(
+        'Нельзя удалить помещение, пока в нем есть контуры теплого пола.',
+      );
+    }
     if (project.houseModel.rooms.length <= 1) {
       throw StateError('В проекте должно остаться хотя бы одно помещение.');
     }
@@ -215,6 +225,58 @@ class ProjectEditingService {
         heatingDevices: [
           for (final item in project.houseModel.heatingDevices)
             if (item.id != heatingDeviceId) item,
+        ],
+      ),
+    );
+  }
+
+  Project addUnderfloorHeatingCalculation(
+    Project project,
+    UnderfloorHeatingCalculation calculation,
+  ) {
+    final normalized = _normalizeUnderfloorHeatingCalculation(
+      project,
+      calculation,
+    );
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        underfloorHeatingCalculations: [
+          ...project.houseModel.underfloorHeatingCalculations,
+          normalized,
+        ],
+      ),
+    );
+  }
+
+  Project updateUnderfloorHeatingCalculation(
+    Project project,
+    UnderfloorHeatingCalculation calculation,
+  ) {
+    _ensureUnderfloorHeatingCalculationExists(project, calculation.id);
+    final normalized = _normalizeUnderfloorHeatingCalculation(
+      project,
+      calculation,
+    );
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        underfloorHeatingCalculations: [
+          for (final item in project.houseModel.underfloorHeatingCalculations)
+            if (item.id == normalized.id) normalized else item,
+        ],
+      ),
+    );
+  }
+
+  Project deleteUnderfloorHeatingCalculation(
+    Project project,
+    String calculationId,
+  ) {
+    _ensureUnderfloorHeatingCalculationExists(project, calculationId);
+    return project.copyWith(
+      houseModel: project.houseModel.copyWith(
+        underfloorHeatingCalculations: [
+          for (final item in project.houseModel.underfloorHeatingCalculations)
+            if (item.id != calculationId) item,
         ],
       ),
     );
@@ -538,6 +600,18 @@ class ProjectEditingService {
     }
   }
 
+  void _ensureUnderfloorHeatingCalculationExists(
+    Project project,
+    String calculationId,
+  ) {
+    final exists = project.houseModel.underfloorHeatingCalculations.any(
+      (item) => item.id == calculationId,
+    );
+    if (!exists) {
+      throw StateError('Контур теплого пола $calculationId не найден.');
+    }
+  }
+
   void _ensureWallPlacementFitsRoom(
     Room room,
     EnvelopeWallPlacement placement,
@@ -609,5 +683,25 @@ class ProjectEditingService {
       throw StateError('Тепловая мощность прибора должна быть больше нуля.');
     }
     return device;
+  }
+
+  UnderfloorHeatingCalculation _normalizeUnderfloorHeatingCalculation(
+    Project project,
+    UnderfloorHeatingCalculation calculation,
+  ) {
+    _ensureRoomExists(project, calculation.roomId);
+    if (calculation.areaSquareMeters <= 0) {
+      throw StateError('Площадь контура теплого пола должна быть больше нуля.');
+    }
+    if (calculation.pipePitchMm <= 0) {
+      throw StateError('Шаг укладки трубы должен быть больше нуля.');
+    }
+    if (calculation.pipeOuterDiameterMm <= 0) {
+      throw StateError('Диаметр трубы должен быть больше нуля.');
+    }
+    if (calculation.actualPowerWatts < 0) {
+      throw StateError('Мощность контура не может быть отрицательной.');
+    }
+    return calculation;
   }
 }

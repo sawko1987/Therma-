@@ -126,12 +126,19 @@ class ProjectMigrationService {
     final heatingDevices = houseModel.heatingDevices
         .where((item) => roomIds.contains(item.roomId))
         .toList(growable: false);
+    final underfloorHeatingCalculations =
+        project.sourceProjectFormatVersion < 21
+        ? const <UnderfloorHeatingCalculation>[]
+        : houseModel.underfloorHeatingCalculations
+              .where((item) => roomIds.contains(item.roomId))
+              .toList(growable: false);
 
     return houseModel.copyWith(
       rooms: normalizedRooms,
       elements: elements,
       openings: openings,
       heatingDevices: heatingDevices,
+      underfloorHeatingCalculations: underfloorHeatingCalculations,
     );
   }
 

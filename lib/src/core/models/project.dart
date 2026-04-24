@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 20;
+const int currentProjectFormatVersion = 21;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -53,6 +53,8 @@ enum RoomKind {
 }
 
 enum HeatingDeviceKind { radiator, convector, underfloorLoop, towelRail, other }
+
+enum HeatSourceKind { gasBoiler, electricBoiler, heatPump, district, other }
 
 extension ConstructionElementKindX on ConstructionElementKind {
   String get label => switch (this) {
@@ -331,6 +333,35 @@ HeatingDeviceKind parseHeatingDeviceKind(String value) {
     'towelRail' => HeatingDeviceKind.towelRail,
     'other' => HeatingDeviceKind.other,
     _ => throw StateError('Unknown HeatingDeviceKind: $value'),
+  };
+}
+
+HeatSourceKind parseHeatSourceKind(String value) {
+  return switch (value) {
+    'gasBoiler' => HeatSourceKind.gasBoiler,
+    'electricBoiler' => HeatSourceKind.electricBoiler,
+    'heatPump' => HeatSourceKind.heatPump,
+    'district' => HeatSourceKind.district,
+    'other' => HeatSourceKind.other,
+    _ => throw StateError('Unknown HeatSourceKind: $value'),
+  };
+}
+
+extension HeatSourceKindX on HeatSourceKind {
+  String get label => switch (this) {
+    HeatSourceKind.gasBoiler => 'Газовый котел',
+    HeatSourceKind.electricBoiler => 'Электрокотел',
+    HeatSourceKind.heatPump => 'Тепловой насос',
+    HeatSourceKind.district => 'Центральное отопление',
+    HeatSourceKind.other => 'Другое',
+  };
+
+  String get storageKey => switch (this) {
+    HeatSourceKind.gasBoiler => 'gasBoiler',
+    HeatSourceKind.electricBoiler => 'electricBoiler',
+    HeatSourceKind.heatPump => 'heatPump',
+    HeatSourceKind.district => 'district',
+    HeatSourceKind.other => 'other',
   };
 }
 
@@ -905,6 +936,161 @@ class EnvelopeOpening {
   };
 }
 
+class UnderfloorHeatingCalculation {
+  const UnderfloorHeatingCalculation({
+    required this.id,
+    required this.roomId,
+    required this.title,
+    required this.areaSquareMeters,
+    required this.pipePitchMm,
+    required this.supplyLengthMeters,
+    required this.pipeOuterDiameterMm,
+    this.pipeInnerDiameterMm,
+    required this.flowTempC,
+    required this.returnTempC,
+    required this.roomTempC,
+    required this.floorSurfaceTempC,
+    required this.heatFluxWattsPerSquareMeter,
+    required this.actualPowerWatts,
+    this.loopLengthMeters,
+    this.flowRateLitersPerMinute,
+    this.balancingFlowRateLitersPerMinute,
+    this.pressureDropKpa,
+    this.warnings = const [],
+  });
+
+  factory UnderfloorHeatingCalculation.fromJson(Map<String, dynamic> json) =>
+      UnderfloorHeatingCalculation(
+        id: json['id'] as String,
+        roomId: (json['roomId'] as String?) ?? defaultRoomId,
+        title: json['title'] as String,
+        areaSquareMeters: (json['areaSquareMeters'] as num).toDouble(),
+        pipePitchMm: (json['pipePitchMm'] as num).toDouble(),
+        supplyLengthMeters: (json['supplyLengthMeters'] as num).toDouble(),
+        pipeOuterDiameterMm: (json['pipeOuterDiameterMm'] as num).toDouble(),
+        pipeInnerDiameterMm: (json['pipeInnerDiameterMm'] as num?)?.toDouble(),
+        flowTempC: (json['flowTempC'] as num).toDouble(),
+        returnTempC: (json['returnTempC'] as num).toDouble(),
+        roomTempC: (json['roomTempC'] as num).toDouble(),
+        floorSurfaceTempC: (json['floorSurfaceTempC'] as num).toDouble(),
+        heatFluxWattsPerSquareMeter:
+            (json['heatFluxWattsPerSquareMeter'] as num).toDouble(),
+        actualPowerWatts: (json['actualPowerWatts'] as num).toDouble(),
+        loopLengthMeters: (json['loopLengthMeters'] as num?)?.toDouble(),
+        flowRateLitersPerMinute: (json['flowRateLitersPerMinute'] as num?)
+            ?.toDouble(),
+        balancingFlowRateLitersPerMinute:
+            (json['balancingFlowRateLitersPerMinute'] as num?)?.toDouble(),
+        pressureDropKpa: (json['pressureDropKpa'] as num?)?.toDouble(),
+        warnings: ((json['warnings'] as List<dynamic>?) ?? const [])
+            .map((item) => item as String)
+            .toList(growable: false),
+      );
+
+  final String id;
+  final String roomId;
+  final String title;
+  final double areaSquareMeters;
+  final double pipePitchMm;
+  final double supplyLengthMeters;
+  final double pipeOuterDiameterMm;
+  final double? pipeInnerDiameterMm;
+  final double flowTempC;
+  final double returnTempC;
+  final double roomTempC;
+  final double floorSurfaceTempC;
+  final double heatFluxWattsPerSquareMeter;
+  final double actualPowerWatts;
+  final double? loopLengthMeters;
+  final double? flowRateLitersPerMinute;
+  final double? balancingFlowRateLitersPerMinute;
+  final double? pressureDropKpa;
+  final List<String> warnings;
+
+  UnderfloorHeatingCalculation copyWith({
+    String? id,
+    String? roomId,
+    String? title,
+    double? areaSquareMeters,
+    double? pipePitchMm,
+    double? supplyLengthMeters,
+    double? pipeOuterDiameterMm,
+    double? pipeInnerDiameterMm,
+    double? flowTempC,
+    double? returnTempC,
+    double? roomTempC,
+    double? floorSurfaceTempC,
+    double? heatFluxWattsPerSquareMeter,
+    double? actualPowerWatts,
+    double? loopLengthMeters,
+    double? flowRateLitersPerMinute,
+    double? balancingFlowRateLitersPerMinute,
+    double? pressureDropKpa,
+    List<String>? warnings,
+    bool clearPipeInnerDiameterMm = false,
+    bool clearLoopLengthMeters = false,
+    bool clearFlowRateLitersPerMinute = false,
+    bool clearBalancingFlowRateLitersPerMinute = false,
+    bool clearPressureDropKpa = false,
+  }) {
+    return UnderfloorHeatingCalculation(
+      id: id ?? this.id,
+      roomId: roomId ?? this.roomId,
+      title: title ?? this.title,
+      areaSquareMeters: areaSquareMeters ?? this.areaSquareMeters,
+      pipePitchMm: pipePitchMm ?? this.pipePitchMm,
+      supplyLengthMeters: supplyLengthMeters ?? this.supplyLengthMeters,
+      pipeOuterDiameterMm: pipeOuterDiameterMm ?? this.pipeOuterDiameterMm,
+      pipeInnerDiameterMm: clearPipeInnerDiameterMm
+          ? null
+          : pipeInnerDiameterMm ?? this.pipeInnerDiameterMm,
+      flowTempC: flowTempC ?? this.flowTempC,
+      returnTempC: returnTempC ?? this.returnTempC,
+      roomTempC: roomTempC ?? this.roomTempC,
+      floorSurfaceTempC: floorSurfaceTempC ?? this.floorSurfaceTempC,
+      heatFluxWattsPerSquareMeter:
+          heatFluxWattsPerSquareMeter ?? this.heatFluxWattsPerSquareMeter,
+      actualPowerWatts: actualPowerWatts ?? this.actualPowerWatts,
+      loopLengthMeters: clearLoopLengthMeters
+          ? null
+          : loopLengthMeters ?? this.loopLengthMeters,
+      flowRateLitersPerMinute: clearFlowRateLitersPerMinute
+          ? null
+          : flowRateLitersPerMinute ?? this.flowRateLitersPerMinute,
+      balancingFlowRateLitersPerMinute: clearBalancingFlowRateLitersPerMinute
+          ? null
+          : balancingFlowRateLitersPerMinute ??
+                this.balancingFlowRateLitersPerMinute,
+      pressureDropKpa: clearPressureDropKpa
+          ? null
+          : pressureDropKpa ?? this.pressureDropKpa,
+      warnings: warnings ?? this.warnings,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'roomId': roomId,
+    'title': title,
+    'areaSquareMeters': areaSquareMeters,
+    'pipePitchMm': pipePitchMm,
+    'supplyLengthMeters': supplyLengthMeters,
+    'pipeOuterDiameterMm': pipeOuterDiameterMm,
+    'pipeInnerDiameterMm': pipeInnerDiameterMm,
+    'flowTempC': flowTempC,
+    'returnTempC': returnTempC,
+    'roomTempC': roomTempC,
+    'floorSurfaceTempC': floorSurfaceTempC,
+    'heatFluxWattsPerSquareMeter': heatFluxWattsPerSquareMeter,
+    'actualPowerWatts': actualPowerWatts,
+    'loopLengthMeters': loopLengthMeters,
+    'flowRateLitersPerMinute': flowRateLitersPerMinute,
+    'balancingFlowRateLitersPerMinute': balancingFlowRateLitersPerMinute,
+    'pressureDropKpa': pressureDropKpa,
+    'warnings': warnings,
+  };
+}
+
 class HeatingDevice {
   const HeatingDevice({
     required this.id,
@@ -913,6 +1099,11 @@ class HeatingDevice {
     required this.kind,
     required this.ratedPowerWatts,
     this.catalogItemId,
+    this.nominalPowerWatts,
+    this.designFlowTempC,
+    this.designReturnTempC,
+    this.designRoomTempC,
+    this.sectionCount,
     this.notes,
   });
 
@@ -925,6 +1116,11 @@ class HeatingDevice {
     ),
     ratedPowerWatts: (json['ratedPowerWatts'] as num).toDouble(),
     catalogItemId: json['catalogItemId'] as String?,
+    nominalPowerWatts: (json['nominalPowerWatts'] as num?)?.toDouble(),
+    designFlowTempC: (json['designFlowTempC'] as num?)?.toDouble(),
+    designReturnTempC: (json['designReturnTempC'] as num?)?.toDouble(),
+    designRoomTempC: (json['designRoomTempC'] as num?)?.toDouble(),
+    sectionCount: (json['sectionCount'] as num?)?.toInt(),
     notes: json['notes'] as String?,
   );
 
@@ -934,6 +1130,11 @@ class HeatingDevice {
   final HeatingDeviceKind kind;
   final double ratedPowerWatts;
   final String? catalogItemId;
+  final double? nominalPowerWatts;
+  final double? designFlowTempC;
+  final double? designReturnTempC;
+  final double? designRoomTempC;
+  final int? sectionCount;
   final String? notes;
 
   HeatingDevice copyWith({
@@ -943,8 +1144,18 @@ class HeatingDevice {
     HeatingDeviceKind? kind,
     double? ratedPowerWatts,
     String? catalogItemId,
+    double? nominalPowerWatts,
+    double? designFlowTempC,
+    double? designReturnTempC,
+    double? designRoomTempC,
+    int? sectionCount,
     String? notes,
     bool clearCatalogItemId = false,
+    bool clearNominalPowerWatts = false,
+    bool clearDesignFlowTempC = false,
+    bool clearDesignReturnTempC = false,
+    bool clearDesignRoomTempC = false,
+    bool clearSectionCount = false,
     bool clearNotes = false,
   }) {
     return HeatingDevice(
@@ -956,6 +1167,21 @@ class HeatingDevice {
       catalogItemId: clearCatalogItemId
           ? null
           : catalogItemId ?? this.catalogItemId,
+      nominalPowerWatts: clearNominalPowerWatts
+          ? null
+          : nominalPowerWatts ?? this.nominalPowerWatts,
+      designFlowTempC: clearDesignFlowTempC
+          ? null
+          : designFlowTempC ?? this.designFlowTempC,
+      designReturnTempC: clearDesignReturnTempC
+          ? null
+          : designReturnTempC ?? this.designReturnTempC,
+      designRoomTempC: clearDesignRoomTempC
+          ? null
+          : designRoomTempC ?? this.designRoomTempC,
+      sectionCount: clearSectionCount
+          ? null
+          : sectionCount ?? this.sectionCount,
       notes: clearNotes ? null : notes ?? this.notes,
     );
   }
@@ -967,6 +1193,11 @@ class HeatingDevice {
     'kind': kind.storageKey,
     'ratedPowerWatts': ratedPowerWatts,
     'catalogItemId': catalogItemId,
+    'nominalPowerWatts': nominalPowerWatts,
+    'designFlowTempC': designFlowTempC,
+    'designReturnTempC': designReturnTempC,
+    'designRoomTempC': designRoomTempC,
+    'sectionCount': sectionCount,
     'notes': notes,
   };
 }
@@ -979,6 +1210,7 @@ class HouseModel {
     required this.elements,
     required this.openings,
     this.heatingDevices = const [],
+    this.underfloorHeatingCalculations = const [],
   });
 
   factory HouseModel.fromJson(
@@ -1004,6 +1236,12 @@ class HouseModel {
         ((json['heatingDevices'] as List<dynamic>?) ?? const [])
             .map((item) => HeatingDevice.fromJson(_asJsonMap(item)))
             .toList(growable: false);
+    final underfloorHeatingCalculations =
+        ((json['underfloorHeatingCalculations'] as List<dynamic>?) ?? const [])
+            .map(
+              (item) => UnderfloorHeatingCalculation.fromJson(_asJsonMap(item)),
+            )
+            .toList(growable: false);
     return HouseModel(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -1021,6 +1259,16 @@ class HouseModel {
       heatingDevices: rooms.isEmpty && heatingDevices.isEmpty
           ? const []
           : heatingDevices
+                .map(
+                  (item) => item.copyWith(
+                    roomId: rooms.isEmpty ? defaultRoomId : item.roomId,
+                  ),
+                )
+                .toList(growable: false),
+      underfloorHeatingCalculations:
+          rooms.isEmpty && underfloorHeatingCalculations.isEmpty
+          ? const []
+          : underfloorHeatingCalculations
                 .map(
                   (item) => item.copyWith(
                     roomId: rooms.isEmpty ? defaultRoomId : item.roomId,
@@ -1048,6 +1296,7 @@ class HouseModel {
           .toList(growable: false),
       openings: const [],
       heatingDevices: const [],
+      underfloorHeatingCalculations: const [],
     );
   }
 
@@ -1057,6 +1306,7 @@ class HouseModel {
   final List<HouseEnvelopeElement> elements;
   final List<EnvelopeOpening> openings;
   final List<HeatingDevice> heatingDevices;
+  final List<UnderfloorHeatingCalculation> underfloorHeatingCalculations;
 
   double get totalRoomAreaSquareMeters =>
       rooms.fold(0, (sum, room) => sum + room.areaSquareMeters);
@@ -1074,6 +1324,7 @@ class HouseModel {
     List<HouseEnvelopeElement>? elements,
     List<EnvelopeOpening>? openings,
     List<HeatingDevice>? heatingDevices,
+    List<UnderfloorHeatingCalculation>? underfloorHeatingCalculations,
   }) {
     return HouseModel(
       id: id ?? this.id,
@@ -1082,6 +1333,8 @@ class HouseModel {
       elements: elements ?? this.elements,
       openings: openings ?? this.openings,
       heatingDevices: heatingDevices ?? this.heatingDevices,
+      underfloorHeatingCalculations:
+          underfloorHeatingCalculations ?? this.underfloorHeatingCalculations,
     );
   }
 
@@ -1094,6 +1347,68 @@ class HouseModel {
     'heatingDevices': heatingDevices
         .map((item) => item.toJson())
         .toList(growable: false),
+    'underfloorHeatingCalculations': underfloorHeatingCalculations
+        .map((item) => item.toJson())
+        .toList(growable: false),
+  };
+}
+
+class HeatingSystemParameters {
+  const HeatingSystemParameters({
+    required this.sourceKind,
+    required this.designFlowTempC,
+    required this.designReturnTempC,
+    this.availablePowerWatts,
+    this.reservePercent = 15,
+    this.notes,
+  });
+
+  factory HeatingSystemParameters.fromJson(Map<String, dynamic> json) =>
+      HeatingSystemParameters(
+        sourceKind: parseHeatSourceKind(json['sourceKind'] as String),
+        designFlowTempC: (json['designFlowTempC'] as num).toDouble(),
+        designReturnTempC: (json['designReturnTempC'] as num).toDouble(),
+        availablePowerWatts: (json['availablePowerWatts'] as num?)?.toDouble(),
+        reservePercent: (json['reservePercent'] as num?)?.toDouble() ?? 15,
+        notes: json['notes'] as String?,
+      );
+
+  final HeatSourceKind sourceKind;
+  final double designFlowTempC;
+  final double designReturnTempC;
+  final double? availablePowerWatts;
+  final double reservePercent;
+  final String? notes;
+
+  HeatingSystemParameters copyWith({
+    HeatSourceKind? sourceKind,
+    double? designFlowTempC,
+    double? designReturnTempC,
+    double? availablePowerWatts,
+    double? reservePercent,
+    String? notes,
+    bool clearAvailablePowerWatts = false,
+    bool clearNotes = false,
+  }) {
+    return HeatingSystemParameters(
+      sourceKind: sourceKind ?? this.sourceKind,
+      designFlowTempC: designFlowTempC ?? this.designFlowTempC,
+      designReturnTempC: designReturnTempC ?? this.designReturnTempC,
+      availablePowerWatts: clearAvailablePowerWatts
+          ? null
+          : availablePowerWatts ?? this.availablePowerWatts,
+      reservePercent: reservePercent ?? this.reservePercent,
+      notes: clearNotes ? null : notes ?? this.notes,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'sourceKind': sourceKind.storageKey,
+    'designFlowTempC': designFlowTempC,
+    'designReturnTempC': designReturnTempC,
+    'availablePowerWatts': availablePowerWatts,
+    'reservePercent': reservePercent,
+    'notes': notes,
   };
 }
 
@@ -1262,6 +1577,7 @@ class Project {
     this.projectConstructionSelections = const [],
     this.groundFloorCalculations = const [],
     this.heatingEconomicsSettings = const HeatingEconomicsSettings(),
+    this.heatingSystemParameters,
     this.showBuildingStepRoomsOnboarding = true,
     this.datasetVersion,
     this.migratedFromDatasetVersion,
@@ -1283,6 +1599,7 @@ class Project {
             .map((item) => GroundFloorCalculation.fromJson(_asJsonMap(item)))
             .toList(growable: false);
     final heatingEconomicsSettingsJson = json['heatingEconomicsSettings'];
+    final heatingSystemParametersJson = json['heatingSystemParameters'];
 
     return Project(
       id: json['id'] as String,
@@ -1317,6 +1634,11 @@ class Project {
           : HeatingEconomicsSettings.fromJson(
               _asJsonMap(heatingEconomicsSettingsJson),
             ),
+      heatingSystemParameters: heatingSystemParametersJson == null
+          ? null
+          : HeatingSystemParameters.fromJson(
+              _asJsonMap(heatingSystemParametersJson),
+            ),
       showBuildingStepRoomsOnboarding:
           json['showBuildingStepRoomsOnboarding'] as bool? ?? true,
       datasetVersion: json['datasetVersion'] as String?,
@@ -1336,6 +1658,7 @@ class Project {
   final List<ProjectConstructionSelection> projectConstructionSelections;
   final List<GroundFloorCalculation> groundFloorCalculations;
   final HeatingEconomicsSettings heatingEconomicsSettings;
+  final HeatingSystemParameters? heatingSystemParameters;
   final bool showBuildingStepRoomsOnboarding;
   final String? datasetVersion;
   final String? migratedFromDatasetVersion;
@@ -1395,11 +1718,13 @@ class Project {
     List<ProjectConstructionSelection>? projectConstructionSelections,
     List<GroundFloorCalculation>? groundFloorCalculations,
     HeatingEconomicsSettings? heatingEconomicsSettings,
+    HeatingSystemParameters? heatingSystemParameters,
     bool? showBuildingStepRoomsOnboarding,
     String? datasetVersion,
     String? migratedFromDatasetVersion,
     int? sourceProjectFormatVersion,
     bool clearMigratedFromDatasetVersion = false,
+    bool clearHeatingSystemParameters = false,
   }) {
     return Project(
       id: id ?? this.id,
@@ -1417,6 +1742,9 @@ class Project {
           groundFloorCalculations ?? this.groundFloorCalculations,
       heatingEconomicsSettings:
           heatingEconomicsSettings ?? this.heatingEconomicsSettings,
+      heatingSystemParameters: clearHeatingSystemParameters
+          ? null
+          : heatingSystemParameters ?? this.heatingSystemParameters,
       showBuildingStepRoomsOnboarding:
           showBuildingStepRoomsOnboarding ??
           this.showBuildingStepRoomsOnboarding,
@@ -1450,6 +1778,7 @@ class Project {
         .map((item) => item.toJson())
         .toList(growable: false),
     'heatingEconomicsSettings': heatingEconomicsSettings.toJson(),
+    'heatingSystemParameters': heatingSystemParameters?.toJson(),
     'showBuildingStepRoomsOnboarding': showBuildingStepRoomsOnboarding,
     'datasetVersion': datasetVersion,
     'migratedFromDatasetVersion': migratedFromDatasetVersion,

@@ -31,6 +31,7 @@ class DriftProjectRepository
         ObjectRepository,
         FavoriteMaterialsRepository,
         OpeningCatalogRepository,
+        HeatingDeviceCatalogRepository,
         AppPreferencesRepository {
   DriftProjectRepository(this._database, {AppLogger? logger})
     : _logger = logger;
@@ -614,6 +615,63 @@ class DriftProjectRepository
     );
     await (_database.delete(
       _database.storedOpeningCatalogEntries,
+    )..where((table) => table.id.equals(id))).go();
+  }
+
+  @override
+  Future<List<HeatingDeviceCatalogEntry>>
+  listHeatingDeviceCatalogEntries() async {
+    _logger?.debug(
+      'Load heating device catalog entries from store',
+      category: AppLogCategory.storage,
+    );
+    final rows =
+        await (_database.select(_database.storedHeatingDeviceCatalogEntries)
+              ..orderBy([
+                (table) => OrderingTerm(
+                  expression: table.updatedAtEpochMs,
+                  mode: OrderingMode.desc,
+                ),
+              ]))
+            .get();
+    return rows
+        .map(
+          (row) => HeatingDeviceCatalogEntry.fromJson(
+            Map<String, dynamic>.from(jsonDecode(row.payloadJson) as Map),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> saveHeatingDeviceCatalogEntry(
+    HeatingDeviceCatalogEntry entry,
+  ) async {
+    _logger?.info(
+      'Save heating device catalog entry',
+      category: AppLogCategory.storage,
+      context: {'entryId': entry.id, 'title': entry.title},
+    );
+    await _database
+        .into(_database.storedHeatingDeviceCatalogEntries)
+        .insertOnConflictUpdate(
+          db.StoredHeatingDeviceCatalogEntriesCompanion.insert(
+            id: entry.id,
+            payloadJson: jsonEncode(entry.toJson()),
+            updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+  }
+
+  @override
+  Future<void> deleteHeatingDeviceCatalogEntry(String id) async {
+    _logger?.info(
+      'Delete heating device catalog entry',
+      category: AppLogCategory.storage,
+      context: {'entryId': id},
+    );
+    await (_database.delete(
+      _database.storedHeatingDeviceCatalogEntries,
     )..where((table) => table.id.equals(id))).go();
   }
 }

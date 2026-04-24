@@ -44,6 +44,12 @@ abstract interface class OpeningCatalogRepository {
   Future<void> deleteEntry(String id);
 }
 
+abstract interface class HeatingDeviceCatalogRepository {
+  Future<List<HeatingDeviceCatalogEntry>> listHeatingDeviceCatalogEntries();
+  Future<void> saveHeatingDeviceCatalogEntry(HeatingDeviceCatalogEntry entry);
+  Future<void> deleteHeatingDeviceCatalogEntry(String id);
+}
+
 abstract interface class AppPreferencesRepository {
   Future<bool> getConstructionPickerSwipeTutorialSeen();
   Future<void> setConstructionPickerSwipeTutorialSeen(bool seen);

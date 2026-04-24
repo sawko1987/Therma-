@@ -81,4 +81,30 @@ void main() {
     expect(entry.toJson()['defaultWidthMeters'], 1.2);
     expect(entry.toJson()['defaultHeightMeters'], 1.4);
   });
+
+  test(
+    'migrate format 20 initializes underfloor loops and heat source fields',
+    () {
+      final project = buildTestProject();
+      final payload = project.toJson();
+      payload['projectFormatVersion'] = 20;
+      final houseModel = payload['houseModel'] as Map<String, dynamic>;
+      houseModel.remove('underfloorHeatingCalculations');
+      payload.remove('heatingSystemParameters');
+
+      final restored = Project.fromJson(payload);
+      final migrated = const ProjectMigrationService().migrate(restored);
+
+      expect(migrated.wasMigrated, isTrue);
+      expect(
+        migrated.project.houseModel.underfloorHeatingCalculations,
+        isEmpty,
+      );
+      expect(migrated.project.heatingSystemParameters, isNull);
+      expect(
+        migrated.project.sourceProjectFormatVersion,
+        currentProjectFormatVersion,
+      );
+    },
+  );
 }

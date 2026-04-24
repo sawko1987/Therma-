@@ -2374,6 +2374,10 @@ Future<HeatingDevice?> _showHeatingDeviceEditor(
   HeatingDeviceKind selectedKind =
       heatingDevice?.kind ?? HeatingDeviceKind.radiator;
   String? selectedCatalogItemId = heatingDevice?.catalogItemId;
+  if (selectedCatalogItemId != null &&
+      !catalog.heatingDevices.any((item) => item.id == selectedCatalogItemId)) {
+    selectedCatalogItemId = null;
+  }
 
   final result = await showModalBottomSheet<HeatingDevice>(
     context: context,

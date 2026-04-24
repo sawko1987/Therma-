@@ -169,6 +169,33 @@ void main() {
   );
 
   test(
+    'heating device catalog entries round-trip through drift store',
+    () async {
+      const entry = HeatingDeviceCatalogEntry(
+        id: 'custom-heating-device-drift',
+        kind: 'radiator',
+        title: 'Drift radiator',
+        manufacturer: 'Custom',
+        ratedPowerWatts: 1800,
+        designFlowTempC: 70,
+        designReturnTempC: 55,
+        roomTempC: 20,
+        isCustom: true,
+      );
+
+      await repository.saveHeatingDeviceCatalogEntry(entry);
+
+      final entries = await repository.listHeatingDeviceCatalogEntries();
+      expect(entries.single.id, entry.id);
+      expect(entries.single.manufacturer, 'Custom');
+      expect(entries.single.designFlowTempC, 70);
+
+      await repository.deleteHeatingDeviceCatalogEntry(entry.id);
+      expect(await repository.listHeatingDeviceCatalogEntries(), isEmpty);
+    },
+  );
+
+  test(
     'seedDemoProjectIfEmpty does not recreate demo after deletion',
     () async {
       await repository.saveProject(buildTestProject());

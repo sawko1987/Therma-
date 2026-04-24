@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../construction_library/presentation/construction_directory_screen.dart';
 import '../../construction_library/presentation/material_management_screen.dart';
 import 'diagnostics_logs_screen.dart';
+import 'heating_device_directory_screen.dart';
 import 'opening_directory_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -69,6 +70,21 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const OpeningTypeDirectoryScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.thermostat_outlined),
+                    title: const Text('Справочник приборов отопления'),
+                    subtitle: const Text(
+                      'Радиаторы, типоразмеры и пользовательские приборы',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const HeatingDeviceDirectoryScreen(),
                       ),
                     ),
                   ),

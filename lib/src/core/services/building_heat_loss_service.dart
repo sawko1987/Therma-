@@ -39,6 +39,11 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       final roomHeatingDevices = project.houseModel.heatingDevices
           .where((item) => item.roomId == room.id)
           .toList(growable: false);
+      final roomUnderfloorLoops = project
+          .houseModel
+          .underfloorHeatingCalculations
+          .where((item) => item.roomId == room.id)
+          .toList(growable: false);
       final elementResults = <BuildingElementHeatLossResult>[];
       final roomUnresolvedElements = <HouseEnvelopeElement>[];
       final outsideAirTemperature = climate.designTemperature;
@@ -73,7 +78,10 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           element.areaSquareMeters,
         );
         final opaqueHeatLoss =
-            deltaTemperature / result.totalResistance * opaqueArea * orientationFactor;
+            deltaTemperature /
+            result.totalResistance *
+            opaqueArea *
+            orientationFactor;
         final openingHeatLoss = elementOpenings.fold<double>(
           0,
           (sum, item) =>
@@ -125,10 +133,15 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         0,
         (sum, item) => sum + item.areaSquareMeters,
       );
-      final installedHeatingPowerWatts = roomHeatingDevices.fold<double>(
-        0,
-        (sum, item) => sum + item.ratedPowerWatts,
-      );
+      final installedHeatingPowerWatts =
+          roomHeatingDevices.fold<double>(
+            0,
+            (sum, item) => sum + item.ratedPowerWatts,
+          ) +
+          roomUnderfloorLoops.fold<double>(
+            0,
+            (sum, item) => sum + item.actualPowerWatts,
+          );
 
       roomResults.add(
         BuildingRoomHeatLossResult(
@@ -140,10 +153,8 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           heatingDeviceCount: roomHeatingDevices.length,
           totalEnvelopeAreaSquareMeters: totalEnvelopeAreaSquareMeters,
           totalOpaqueAreaSquareMeters:
-              (totalEnvelopeAreaSquareMeters - totalOpeningAreaSquareMeters).clamp(
-                0.0,
-                totalEnvelopeAreaSquareMeters,
-              ),
+              (totalEnvelopeAreaSquareMeters - totalOpeningAreaSquareMeters)
+                  .clamp(0.0, totalEnvelopeAreaSquareMeters),
           totalOpeningAreaSquareMeters: totalOpeningAreaSquareMeters,
           insideAirTemperature: insideAirTemperature,
           outsideAirTemperature: outsideAirTemperature,
@@ -187,7 +198,9 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         0,
         (sum, item) => sum + item.ventilationHeatLossWatts,
       ),
-      totalHeatingDeviceCount: project.houseModel.heatingDevices.length,
+      totalHeatingDeviceCount:
+          project.houseModel.heatingDevices.length +
+          project.houseModel.underfloorHeatingCalculations.length,
       totalInstalledHeatingPowerWatts: roomResults.fold<double>(
         0,
         (sum, item) => sum + item.installedHeatingPowerWatts,

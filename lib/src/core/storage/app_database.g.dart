@@ -892,12 +892,302 @@ class StoredOpeningCatalogEntriesCompanion
   }
 }
 
+class $StoredHeatingDeviceCatalogEntriesTable
+    extends StoredHeatingDeviceCatalogEntries
+    with
+        TableInfo<
+          $StoredHeatingDeviceCatalogEntriesTable,
+          StoredHeatingDeviceCatalogEntry
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $StoredHeatingDeviceCatalogEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtEpochMsMeta = const VerificationMeta(
+    'updatedAtEpochMs',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAtEpochMs = GeneratedColumn<int>(
+    'updated_at_epoch_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, payloadJson, updatedAtEpochMs];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'stored_heating_device_catalog_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredHeatingDeviceCatalogEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('updated_at_epoch_ms')) {
+      context.handle(
+        _updatedAtEpochMsMeta,
+        updatedAtEpochMs.isAcceptableOrUnknown(
+          data['updated_at_epoch_ms']!,
+          _updatedAtEpochMsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtEpochMsMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  StoredHeatingDeviceCatalogEntry map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredHeatingDeviceCatalogEntry(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      updatedAtEpochMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at_epoch_ms'],
+      )!,
+    );
+  }
+
+  @override
+  $StoredHeatingDeviceCatalogEntriesTable createAlias(String alias) {
+    return $StoredHeatingDeviceCatalogEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredHeatingDeviceCatalogEntry extends DataClass
+    implements Insertable<StoredHeatingDeviceCatalogEntry> {
+  final String id;
+  final String payloadJson;
+  final int updatedAtEpochMs;
+  const StoredHeatingDeviceCatalogEntry({
+    required this.id,
+    required this.payloadJson,
+    required this.updatedAtEpochMs,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['updated_at_epoch_ms'] = Variable<int>(updatedAtEpochMs);
+    return map;
+  }
+
+  StoredHeatingDeviceCatalogEntriesCompanion toCompanion(bool nullToAbsent) {
+    return StoredHeatingDeviceCatalogEntriesCompanion(
+      id: Value(id),
+      payloadJson: Value(payloadJson),
+      updatedAtEpochMs: Value(updatedAtEpochMs),
+    );
+  }
+
+  factory StoredHeatingDeviceCatalogEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredHeatingDeviceCatalogEntry(
+      id: serializer.fromJson<String>(json['id']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      updatedAtEpochMs: serializer.fromJson<int>(json['updatedAtEpochMs']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'updatedAtEpochMs': serializer.toJson<int>(updatedAtEpochMs),
+    };
+  }
+
+  StoredHeatingDeviceCatalogEntry copyWith({
+    String? id,
+    String? payloadJson,
+    int? updatedAtEpochMs,
+  }) => StoredHeatingDeviceCatalogEntry(
+    id: id ?? this.id,
+    payloadJson: payloadJson ?? this.payloadJson,
+    updatedAtEpochMs: updatedAtEpochMs ?? this.updatedAtEpochMs,
+  );
+  StoredHeatingDeviceCatalogEntry copyWithCompanion(
+    StoredHeatingDeviceCatalogEntriesCompanion data,
+  ) {
+    return StoredHeatingDeviceCatalogEntry(
+      id: data.id.present ? data.id.value : this.id,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      updatedAtEpochMs: data.updatedAtEpochMs.present
+          ? data.updatedAtEpochMs.value
+          : this.updatedAtEpochMs,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredHeatingDeviceCatalogEntry(')
+          ..write('id: $id, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('updatedAtEpochMs: $updatedAtEpochMs')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, payloadJson, updatedAtEpochMs);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredHeatingDeviceCatalogEntry &&
+          other.id == this.id &&
+          other.payloadJson == this.payloadJson &&
+          other.updatedAtEpochMs == this.updatedAtEpochMs);
+}
+
+class StoredHeatingDeviceCatalogEntriesCompanion
+    extends UpdateCompanion<StoredHeatingDeviceCatalogEntry> {
+  final Value<String> id;
+  final Value<String> payloadJson;
+  final Value<int> updatedAtEpochMs;
+  final Value<int> rowid;
+  const StoredHeatingDeviceCatalogEntriesCompanion({
+    this.id = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.updatedAtEpochMs = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  StoredHeatingDeviceCatalogEntriesCompanion.insert({
+    required String id,
+    required String payloadJson,
+    required int updatedAtEpochMs,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       payloadJson = Value(payloadJson),
+       updatedAtEpochMs = Value(updatedAtEpochMs);
+  static Insertable<StoredHeatingDeviceCatalogEntry> custom({
+    Expression<String>? id,
+    Expression<String>? payloadJson,
+    Expression<int>? updatedAtEpochMs,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (updatedAtEpochMs != null) 'updated_at_epoch_ms': updatedAtEpochMs,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  StoredHeatingDeviceCatalogEntriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? payloadJson,
+    Value<int>? updatedAtEpochMs,
+    Value<int>? rowid,
+  }) {
+    return StoredHeatingDeviceCatalogEntriesCompanion(
+      id: id ?? this.id,
+      payloadJson: payloadJson ?? this.payloadJson,
+      updatedAtEpochMs: updatedAtEpochMs ?? this.updatedAtEpochMs,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (updatedAtEpochMs.present) {
+      map['updated_at_epoch_ms'] = Variable<int>(updatedAtEpochMs.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredHeatingDeviceCatalogEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('updatedAtEpochMs: $updatedAtEpochMs, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $ProjectEntriesTable projectEntries = $ProjectEntriesTable(this);
   late final $StoredOpeningCatalogEntriesTable storedOpeningCatalogEntries =
       $StoredOpeningCatalogEntriesTable(this);
+  late final $StoredHeatingDeviceCatalogEntriesTable
+  storedHeatingDeviceCatalogEntries = $StoredHeatingDeviceCatalogEntriesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -905,6 +1195,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     projectEntries,
     storedOpeningCatalogEntries,
+    storedHeatingDeviceCatalogEntries,
   ];
 }
 
@@ -1387,6 +1678,191 @@ typedef $$StoredOpeningCatalogEntriesTableProcessedTableManager =
       StoredOpeningCatalogEntry,
       PrefetchHooks Function()
     >;
+typedef $$StoredHeatingDeviceCatalogEntriesTableCreateCompanionBuilder =
+    StoredHeatingDeviceCatalogEntriesCompanion Function({
+      required String id,
+      required String payloadJson,
+      required int updatedAtEpochMs,
+      Value<int> rowid,
+    });
+typedef $$StoredHeatingDeviceCatalogEntriesTableUpdateCompanionBuilder =
+    StoredHeatingDeviceCatalogEntriesCompanion Function({
+      Value<String> id,
+      Value<String> payloadJson,
+      Value<int> updatedAtEpochMs,
+      Value<int> rowid,
+    });
+
+class $$StoredHeatingDeviceCatalogEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $StoredHeatingDeviceCatalogEntriesTable> {
+  $$StoredHeatingDeviceCatalogEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAtEpochMs => $composableBuilder(
+    column: $table.updatedAtEpochMs,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$StoredHeatingDeviceCatalogEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $StoredHeatingDeviceCatalogEntriesTable> {
+  $$StoredHeatingDeviceCatalogEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAtEpochMs => $composableBuilder(
+    column: $table.updatedAtEpochMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$StoredHeatingDeviceCatalogEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $StoredHeatingDeviceCatalogEntriesTable> {
+  $$StoredHeatingDeviceCatalogEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAtEpochMs => $composableBuilder(
+    column: $table.updatedAtEpochMs,
+    builder: (column) => column,
+  );
+}
+
+class $$StoredHeatingDeviceCatalogEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $StoredHeatingDeviceCatalogEntriesTable,
+          StoredHeatingDeviceCatalogEntry,
+          $$StoredHeatingDeviceCatalogEntriesTableFilterComposer,
+          $$StoredHeatingDeviceCatalogEntriesTableOrderingComposer,
+          $$StoredHeatingDeviceCatalogEntriesTableAnnotationComposer,
+          $$StoredHeatingDeviceCatalogEntriesTableCreateCompanionBuilder,
+          $$StoredHeatingDeviceCatalogEntriesTableUpdateCompanionBuilder,
+          (
+            StoredHeatingDeviceCatalogEntry,
+            BaseReferences<
+              _$AppDatabase,
+              $StoredHeatingDeviceCatalogEntriesTable,
+              StoredHeatingDeviceCatalogEntry
+            >,
+          ),
+          StoredHeatingDeviceCatalogEntry,
+          PrefetchHooks Function()
+        > {
+  $$StoredHeatingDeviceCatalogEntriesTableTableManager(
+    _$AppDatabase db,
+    $StoredHeatingDeviceCatalogEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$StoredHeatingDeviceCatalogEntriesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$StoredHeatingDeviceCatalogEntriesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$StoredHeatingDeviceCatalogEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<int> updatedAtEpochMs = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => StoredHeatingDeviceCatalogEntriesCompanion(
+                id: id,
+                payloadJson: payloadJson,
+                updatedAtEpochMs: updatedAtEpochMs,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String payloadJson,
+                required int updatedAtEpochMs,
+                Value<int> rowid = const Value.absent(),
+              }) => StoredHeatingDeviceCatalogEntriesCompanion.insert(
+                id: id,
+                payloadJson: payloadJson,
+                updatedAtEpochMs: updatedAtEpochMs,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$StoredHeatingDeviceCatalogEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $StoredHeatingDeviceCatalogEntriesTable,
+      StoredHeatingDeviceCatalogEntry,
+      $$StoredHeatingDeviceCatalogEntriesTableFilterComposer,
+      $$StoredHeatingDeviceCatalogEntriesTableOrderingComposer,
+      $$StoredHeatingDeviceCatalogEntriesTableAnnotationComposer,
+      $$StoredHeatingDeviceCatalogEntriesTableCreateCompanionBuilder,
+      $$StoredHeatingDeviceCatalogEntriesTableUpdateCompanionBuilder,
+      (
+        StoredHeatingDeviceCatalogEntry,
+        BaseReferences<
+          _$AppDatabase,
+          $StoredHeatingDeviceCatalogEntriesTable,
+          StoredHeatingDeviceCatalogEntry
+        >,
+      ),
+      StoredHeatingDeviceCatalogEntry,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1398,5 +1874,11 @@ class $AppDatabaseManager {
       $$StoredOpeningCatalogEntriesTableTableManager(
         _db,
         _db.storedOpeningCatalogEntries,
+      );
+  $$StoredHeatingDeviceCatalogEntriesTableTableManager
+  get storedHeatingDeviceCatalogEntries =>
+      $$StoredHeatingDeviceCatalogEntriesTableTableManager(
+        _db,
+        _db.storedHeatingDeviceCatalogEntries,
       );
 }

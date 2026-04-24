@@ -364,6 +364,24 @@ class HeatingDeviceCatalogEntry {
     required this.kind,
     required this.title,
     required this.ratedPowerWatts,
+    this.manufacturer,
+    this.model,
+    this.sectionCount,
+    this.widthMm,
+    this.heightMm,
+    this.depthMm,
+    this.panelType,
+    this.connection,
+    this.workingPressureBar,
+    this.testPressureBar,
+    this.designFlowTempC = 75,
+    this.designReturnTempC = 65,
+    this.roomTempC = 20,
+    this.heatOutputExponent,
+    this.sourceUrl,
+    this.sourceLabel,
+    this.sourceCheckedAt,
+    this.isCustom = false,
   });
 
   factory HeatingDeviceCatalogEntry.fromJson(Map<String, dynamic> json) =>
@@ -372,12 +390,166 @@ class HeatingDeviceCatalogEntry {
         kind: json['kind'] as String,
         title: json['title'] as String,
         ratedPowerWatts: (json['ratedPowerWatts'] as num).toDouble(),
+        manufacturer: json['manufacturer'] as String?,
+        model: json['model'] as String?,
+        sectionCount: (json['sectionCount'] as num?)?.toInt(),
+        widthMm: (json['widthMm'] as num?)?.toDouble(),
+        heightMm: (json['heightMm'] as num?)?.toDouble(),
+        depthMm: (json['depthMm'] as num?)?.toDouble(),
+        panelType: json['panelType'] as String?,
+        connection: json['connection'] as String?,
+        workingPressureBar: (json['workingPressureBar'] as num?)?.toDouble(),
+        testPressureBar: (json['testPressureBar'] as num?)?.toDouble(),
+        designFlowTempC: (json['designFlowTempC'] as num?)?.toDouble() ?? 75,
+        designReturnTempC:
+            (json['designReturnTempC'] as num?)?.toDouble() ?? 65,
+        roomTempC: (json['roomTempC'] as num?)?.toDouble() ?? 20,
+        heatOutputExponent: (json['heatOutputExponent'] as num?)?.toDouble(),
+        sourceUrl: json['sourceUrl'] as String?,
+        sourceLabel: json['sourceLabel'] as String?,
+        sourceCheckedAt: json['sourceCheckedAt'] as String?,
+        isCustom: json['isCustom'] as bool? ?? false,
       );
 
   final String id;
   final String kind;
   final String title;
   final double ratedPowerWatts;
+  final String? manufacturer;
+  final String? model;
+  final int? sectionCount;
+  final double? widthMm;
+  final double? heightMm;
+  final double? depthMm;
+  final String? panelType;
+  final String? connection;
+  final double? workingPressureBar;
+  final double? testPressureBar;
+  final double designFlowTempC;
+  final double designReturnTempC;
+  final double roomTempC;
+  final double? heatOutputExponent;
+  final String? sourceUrl;
+  final String? sourceLabel;
+  final String? sourceCheckedAt;
+  final bool isCustom;
+
+  double get nominalDeltaT =>
+      (designFlowTempC + designReturnTempC) / 2 - roomTempC;
+
+  bool get isSectional => sectionCount != null && sectionCount! > 0;
+
+  HeatingDeviceCatalogEntry copyWith({
+    String? id,
+    String? kind,
+    String? title,
+    double? ratedPowerWatts,
+    String? manufacturer,
+    String? model,
+    int? sectionCount,
+    double? widthMm,
+    double? heightMm,
+    double? depthMm,
+    String? panelType,
+    String? connection,
+    double? workingPressureBar,
+    double? testPressureBar,
+    double? designFlowTempC,
+    double? designReturnTempC,
+    double? roomTempC,
+    double? heatOutputExponent,
+    String? sourceUrl,
+    String? sourceLabel,
+    String? sourceCheckedAt,
+    bool? isCustom,
+    bool clearManufacturer = false,
+    bool clearModel = false,
+    bool clearSectionCount = false,
+    bool clearWidthMm = false,
+    bool clearHeightMm = false,
+    bool clearDepthMm = false,
+    bool clearPanelType = false,
+    bool clearConnection = false,
+    bool clearWorkingPressureBar = false,
+    bool clearTestPressureBar = false,
+    bool clearHeatOutputExponent = false,
+    bool clearSourceUrl = false,
+    bool clearSourceLabel = false,
+    bool clearSourceCheckedAt = false,
+  }) {
+    return HeatingDeviceCatalogEntry(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      title: title ?? this.title,
+      ratedPowerWatts: ratedPowerWatts ?? this.ratedPowerWatts,
+      manufacturer: clearManufacturer
+          ? null
+          : manufacturer ?? this.manufacturer,
+      model: clearModel ? null : model ?? this.model,
+      sectionCount: clearSectionCount
+          ? null
+          : sectionCount ?? this.sectionCount,
+      widthMm: clearWidthMm ? null : widthMm ?? this.widthMm,
+      heightMm: clearHeightMm ? null : heightMm ?? this.heightMm,
+      depthMm: clearDepthMm ? null : depthMm ?? this.depthMm,
+      panelType: clearPanelType ? null : panelType ?? this.panelType,
+      connection: clearConnection ? null : connection ?? this.connection,
+      workingPressureBar: clearWorkingPressureBar
+          ? null
+          : workingPressureBar ?? this.workingPressureBar,
+      testPressureBar: clearTestPressureBar
+          ? null
+          : testPressureBar ?? this.testPressureBar,
+      designFlowTempC: designFlowTempC ?? this.designFlowTempC,
+      designReturnTempC: designReturnTempC ?? this.designReturnTempC,
+      roomTempC: roomTempC ?? this.roomTempC,
+      heatOutputExponent: clearHeatOutputExponent
+          ? null
+          : heatOutputExponent ?? this.heatOutputExponent,
+      sourceUrl: clearSourceUrl ? null : sourceUrl ?? this.sourceUrl,
+      sourceLabel: clearSourceLabel ? null : sourceLabel ?? this.sourceLabel,
+      sourceCheckedAt: clearSourceCheckedAt
+          ? null
+          : sourceCheckedAt ?? this.sourceCheckedAt,
+      isCustom: isCustom ?? this.isCustom,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'kind': kind,
+    'title': title,
+    'ratedPowerWatts': ratedPowerWatts,
+    'manufacturer': manufacturer,
+    'model': model,
+    'sectionCount': sectionCount,
+    'widthMm': widthMm,
+    'heightMm': heightMm,
+    'depthMm': depthMm,
+    'panelType': panelType,
+    'connection': connection,
+    'workingPressureBar': workingPressureBar,
+    'testPressureBar': testPressureBar,
+    'designFlowTempC': designFlowTempC,
+    'designReturnTempC': designReturnTempC,
+    'roomTempC': roomTempC,
+    'heatOutputExponent': heatOutputExponent,
+    'sourceUrl': sourceUrl,
+    'sourceLabel': sourceLabel,
+    'sourceCheckedAt': sourceCheckedAt,
+    'isCustom': isCustom,
+  };
+}
+
+enum HeatingDeviceCatalogSource { seed, custom }
+
+class HeatingDeviceCatalogItem {
+  const HeatingDeviceCatalogItem({required this.entry, required this.source});
+
+  final HeatingDeviceCatalogEntry entry;
+  final HeatingDeviceCatalogSource source;
+
+  bool get isCustom => source == HeatingDeviceCatalogSource.custom;
 }
 
 class OpeningTypeEntry {
