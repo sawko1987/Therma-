@@ -91,6 +91,7 @@ class ProjectEditor {
         _ref.invalidate(catalogSnapshotProvider);
         _ref.invalidate(openingCatalogEntriesProvider);
         _ref.invalidate(heatingDeviceCatalogEntriesProvider);
+        _ref.invalidate(heatingValveCatalogEntriesProvider);
         _ref.invalidate(materialCatalogEntriesProvider);
         _ref.invalidate(projectListProvider);
         _ref.invalidate(selectedProjectProvider);
@@ -600,6 +601,26 @@ class ProjectEditor {
     _ref.invalidate(heatingDeviceCatalogItemsProvider);
   }
 
+  Future<void> saveHeatingValveCatalogEntry(
+    HeatingValveCatalogEntry entry,
+  ) async {
+    await _ref
+        .read(heatingValveCatalogRepositoryProvider)
+        .saveHeatingValveCatalogEntry(entry.copyWith(isCustom: true));
+    _ref.invalidate(catalogSnapshotProvider);
+    _ref.invalidate(heatingValveCatalogEntriesProvider);
+    _ref.invalidate(heatingValveCatalogItemsProvider);
+  }
+
+  Future<void> deleteHeatingValveCatalogEntry(String entryId) async {
+    await _ref
+        .read(heatingValveCatalogRepositoryProvider)
+        .deleteHeatingValveCatalogEntry(entryId);
+    _ref.invalidate(catalogSnapshotProvider);
+    _ref.invalidate(heatingValveCatalogEntriesProvider);
+    _ref.invalidate(heatingValveCatalogItemsProvider);
+  }
+
   Future<void> toggleFavoriteMaterial(String materialId) async {
     final repository = _ref.read(favoriteMaterialsRepositoryProvider);
     final current = await repository.listFavoriteMaterialIds();
@@ -982,6 +1003,18 @@ final heatingDeviceCatalogRepositoryProvider =
       );
     });
 
+final heatingValveCatalogRepositoryProvider =
+    Provider<HeatingValveCatalogRepository>((ref) {
+      final repository = ref.watch(projectRepositoryProvider);
+      if (repository is HeatingValveCatalogRepository) {
+        return repository as HeatingValveCatalogRepository;
+      }
+      return DriftProjectRepository(
+        ref.watch(appDatabaseProvider),
+        logger: ref.watch(appLoggerProvider),
+      );
+    });
+
 final appPreferencesRepositoryProvider = Provider<AppPreferencesRepository>((
   ref,
 ) {
@@ -1069,6 +1102,10 @@ final catalogSnapshotProvider = FutureProvider<CatalogSnapshot>((ref) async {
       baseCatalog.heatingDevices,
       await ref.watch(heatingDeviceCatalogEntriesProvider.future),
     ),
+    heatingValves: _mergeHeatingValves(
+      baseCatalog.heatingValves,
+      await ref.watch(heatingValveCatalogEntriesProvider.future),
+    ),
     openingCatalog: _mergeOpenings(
       baseCatalog.openingCatalog,
       await ref.watch(openingCatalogEntriesProvider.future),
@@ -1104,6 +1141,32 @@ final heatingDeviceCatalogItemsProvider =
               source: customIds.contains(entry.id)
                   ? HeatingDeviceCatalogSource.custom
                   : HeatingDeviceCatalogSource.seed,
+            ),
+          )
+          .toList(growable: false);
+    });
+
+final heatingValveCatalogEntriesProvider =
+    FutureProvider<List<HeatingValveCatalogEntry>>((ref) async {
+      return ref
+          .read(heatingValveCatalogRepositoryProvider)
+          .listHeatingValveCatalogEntries();
+    });
+
+final heatingValveCatalogItemsProvider =
+    FutureProvider<List<HeatingValveCatalogItem>>((ref) async {
+      final catalog = await ref.watch(catalogSnapshotProvider.future);
+      final customEntries = await ref.watch(
+        heatingValveCatalogEntriesProvider.future,
+      );
+      final customIds = {for (final item in customEntries) item.id};
+      return catalog.heatingValves
+          .map(
+            (entry) => HeatingValveCatalogItem(
+              entry: entry,
+              source: customIds.contains(entry.id)
+                  ? HeatingValveCatalogSource.custom
+                  : HeatingValveCatalogSource.seed,
             ),
           )
           .toList(growable: false);
@@ -1279,6 +1342,21 @@ List<HeatingDeviceCatalogEntry> _mergeHeatingDevices(
   List<HeatingDeviceCatalogEntry> custom,
 ) {
   final merged = <String, HeatingDeviceCatalogEntry>{
+    for (final item in seeded) item.id: item,
+  };
+  for (final item in custom) {
+    merged[item.id] = item.copyWith(isCustom: true);
+  }
+  final result = merged.values.toList(growable: false);
+  result.sort((a, b) => a.title.compareTo(b.title));
+  return result;
+}
+
+List<HeatingValveCatalogEntry> _mergeHeatingValves(
+  List<HeatingValveCatalogEntry> seeded,
+  List<HeatingValveCatalogEntry> custom,
+) {
+  final merged = <String, HeatingValveCatalogEntry>{
     for (final item in seeded) item.id: item,
   };
   for (final item in custom) {

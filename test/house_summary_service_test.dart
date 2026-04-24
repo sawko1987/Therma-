@@ -119,6 +119,7 @@ void main() {
           RoomKindCondition(roomKindId: 'bedroom', insideTemperature: 18),
         ],
         heatingDevices: testCatalogSnapshot.heatingDevices,
+        heatingValves: testCatalogSnapshot.heatingValves,
         openingCatalog: testCatalogSnapshot.openingCatalog,
         datasetVersion: testCatalogSnapshot.datasetVersion,
       );
@@ -190,6 +191,74 @@ void main() {
       expect(summary.roomResults.single.unresolvedElements, isEmpty);
       expect(summary.totalEnvelopeAreaSquareMeters, 26);
       expect(summary.totalHeatLossWatts, greaterThan(0));
+    },
+  );
+  test(
+    'room heating balance sums recalculated radiator power and flow',
+    () async {
+      final project = buildTestProject(
+        houseModel: HouseModel(
+          id: 'house-model',
+          title: 'Конструктор дома',
+          rooms: [Room.defaultRoom()],
+          elements: [
+            buildEnvelopeElement(
+              id: 'element-wall',
+              title: 'Наружная стена',
+              areaSquareMeters: 20,
+              construction: buildWallConstruction(),
+            ),
+          ],
+          openings: const [],
+          heatingDevices: [
+            buildHeatingDevice(
+              id: 'device-a',
+              catalogItemId: 'rad-panel-22-500x1000',
+              ratedPowerWatts: 1700,
+            ),
+            buildHeatingDevice(
+              id: 'device-b',
+              catalogItemId: 'rad-panel-22-500x1000',
+              ratedPowerWatts: 1700,
+            ),
+          ],
+        ),
+        heatingSystemParameters: const HeatingSystemParameters(
+          sourceKind: HeatSourceKind.gasBoiler,
+          designFlowTempC: 65,
+          designReturnTempC: 55,
+        ),
+      );
+      const service = NormativeBuildingHeatLossService(
+        NormativeThermalCalculationEngine(),
+      );
+
+      final lowTempSummary = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: project,
+      );
+      final highTempSummary = await service.calculate(
+        catalog: testCatalogSnapshot,
+        project: project.copyWith(
+          heatingSystemParameters: const HeatingSystemParameters(
+            sourceKind: HeatSourceKind.gasBoiler,
+            designFlowTempC: 75,
+            designReturnTempC: 65,
+          ),
+        ),
+      );
+
+      expect(lowTempSummary.roomResults.single.heatingDeviceCount, 2);
+      expect(
+        lowTempSummary.roomResults.single.heatingFlowRateLitersPerMinute,
+        greaterThan(0),
+      );
+      expect(
+        highTempSummary.roomResults.single.installedHeatingPowerWatts,
+        greaterThan(
+          lowTempSummary.roomResults.single.installedHeatingPowerWatts,
+        ),
+      );
     },
   );
 }

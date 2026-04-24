@@ -107,4 +107,36 @@ void main() {
       );
     },
   );
+
+  test('migrate format 21 leaves new radiator calculation fields empty', () {
+    final project = buildTestProject(
+      houseModel: buildHouseModel(heatingDevices: [buildHeatingDevice()]),
+    );
+    final payload = project.toJson();
+    payload['projectFormatVersion'] = 21;
+    final devices =
+        ((payload['houseModel'] as Map<String, dynamic>)['heatingDevices']
+                as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+    devices.single
+      ..remove('valveCatalogItemId')
+      ..remove('valveSetting')
+      ..remove('designFlowRateLitersPerMinute')
+      ..remove('valvePressureDropKpa')
+      ..remove('calculatedPowerWatts')
+      ..remove('requiredPowerWatts');
+
+    final restored = Project.fromJson(payload);
+    final migrated = const ProjectMigrationService().migrate(restored);
+    final device = migrated.project.houseModel.heatingDevices.single;
+
+    expect(migrated.wasMigrated, isTrue);
+    expect(device.valveCatalogItemId, isNull);
+    expect(device.designFlowRateLitersPerMinute, isNull);
+    expect(device.calculatedPowerWatts, isNull);
+    expect(
+      migrated.project.sourceProjectFormatVersion,
+      currentProjectFormatVersion,
+    );
+  });
 }

@@ -53,6 +53,7 @@ class BuildingRoomHeatLossResult {
     required this.ventilationHeatLossWatts,
     required this.installedHeatingPowerWatts,
     required this.heatingPowerDeltaWatts,
+    this.heatingFlowRateLitersPerMinute = 0,
   });
 
   final Room room;
@@ -72,6 +73,7 @@ class BuildingRoomHeatLossResult {
   final double ventilationHeatLossWatts;
   final double installedHeatingPowerWatts;
   final double heatingPowerDeltaWatts;
+  final double heatingFlowRateLitersPerMinute;
 }
 
 class BuildingHeatLossResult {
@@ -89,6 +91,7 @@ class BuildingHeatLossResult {
     required this.totalHeatingDeviceCount,
     required this.totalInstalledHeatingPowerWatts,
     required this.totalHeatingPowerDeltaWatts,
+    this.totalHeatingFlowRateLitersPerMinute = 0,
     required this.outsideAirTemperature,
     required this.unresolvedElements,
   });
@@ -106,6 +109,7 @@ class BuildingHeatLossResult {
   final int totalHeatingDeviceCount;
   final double totalInstalledHeatingPowerWatts;
   final double totalHeatingPowerDeltaWatts;
+  final double totalHeatingFlowRateLitersPerMinute;
   final double outsideAirTemperature;
   final List<HouseEnvelopeElement> unresolvedElements;
 

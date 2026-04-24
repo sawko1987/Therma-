@@ -1,0 +1,52 @@
+[
+  {
+    "id": "generic-ball-valve-dn15",
+    "kind": "ballValve",
+    "title": "Шаровый кран DN15",
+    "manufacturer": "Типовой",
+    "model": "DN15",
+    "connectionDiameterMm": 15,
+    "kvs": 12,
+    "sourceLabel": "Типовое значение Kvs",
+    "sourceCheckedAt": "2026-04-24"
+  },
+  {
+    "id": "generic-balancing-valve-dn15",
+    "kind": "balancingValve",
+    "title": "Балансировочный вентиль DN15",
+    "manufacturer": "Типовой",
+    "model": "DN15",
+    "connectionDiameterMm": 15,
+    "kvs": 2.5,
+    "settingKvMap": {
+      "1": 0.12,
+      "2": 0.20,
+      "3": 0.32,
+      "4": 0.50,
+      "5": 0.75,
+      "6": 1.10,
+      "7": 1.60
+    },
+    "sourceLabel": "Типовые преднастройки Kv",
+    "sourceCheckedAt": "2026-04-24"
+  },
+  {
+    "id": "generic-thermostatic-valve-dn15",
+    "kind": "thermostaticValve",
+    "title": "Термостатический клапан DN15",
+    "manufacturer": "Типовой",
+    "model": "DN15",
+    "connectionDiameterMm": 15,
+    "kvs": 1.2,
+    "settingKvMap": {
+      "1": 0.08,
+      "2": 0.13,
+      "3": 0.20,
+      "4": 0.30,
+      "5": 0.45,
+      "6": 0.60
+    },
+    "sourceLabel": "Типовые преднастройки Kv",
+    "sourceCheckedAt": "2026-04-24"
+  }
+]

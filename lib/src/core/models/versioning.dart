@@ -1,3 +1,3 @@
 const String currentDatasetVersion =
-    'seed-2026-04-23-material-catalog-applications-v1';
+    'seed-2026-04-24-heating-valves-v1';
 const String legacyUnversionedDatasetVersion = 'legacy-unversioned';

@@ -196,6 +196,32 @@ void main() {
   );
 
   test(
+    'heating valve catalog entries round-trip through drift store',
+    () async {
+      const entry = HeatingValveCatalogEntry(
+        id: 'custom-valve-drift',
+        kind: HeatingValveKind.balancingValve,
+        title: 'Drift valve',
+        manufacturer: 'Custom',
+        connectionDiameterMm: 15,
+        kvs: 2.5,
+        settingKvMap: {'1': 0.12, '2': 0.32},
+        isCustom: true,
+      );
+
+      await repository.saveHeatingValveCatalogEntry(entry);
+
+      final entries = await repository.listHeatingValveCatalogEntries();
+      expect(entries.single.id, entry.id);
+      expect(entries.single.kind, HeatingValveKind.balancingValve);
+      expect(entries.single.settingKvMap['2'], 0.32);
+
+      await repository.deleteHeatingValveCatalogEntry(entry.id);
+      expect(await repository.listHeatingValveCatalogEntries(), isEmpty);
+    },
+  );
+
+  test(
     'seedDemoProjectIfEmpty does not recreate demo after deletion',
     () async {
       await repository.saveProject(buildTestProject());

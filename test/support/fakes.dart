@@ -240,6 +240,23 @@ const testCatalogSnapshot = CatalogSnapshot(
       ratedPowerWatts: 1200,
     ),
   ],
+  heatingValves: [
+    HeatingValveCatalogEntry(
+      id: 'valve-ball-dn15',
+      kind: HeatingValveKind.ballValve,
+      title: 'Шаровый кран DN15',
+      connectionDiameterMm: 15,
+      kvs: 12,
+    ),
+    HeatingValveCatalogEntry(
+      id: 'valve-balancing-dn15',
+      kind: HeatingValveKind.balancingValve,
+      title: 'Балансировочный DN15',
+      connectionDiameterMm: 15,
+      kvs: 2.5,
+      settingKvMap: {'1': 0.12, '2': 0.3, '3': 0.6},
+    ),
+  ],
   openingCatalog: [
     OpeningTypeEntry(
       id: 'window-basic',
@@ -432,11 +449,17 @@ HeatingDevice buildHeatingDevice({
   String title = 'Радиатор',
   HeatingDeviceKind kind = HeatingDeviceKind.radiator,
   double ratedPowerWatts = 1500,
-  String? catalogItemId = 'rad-panel-22-500x1000',
+  String? catalogItemId,
   double? nominalPowerWatts,
   double? designFlowTempC,
   double? designReturnTempC,
   double? designRoomTempC,
+  String? valveCatalogItemId,
+  String? valveSetting,
+  double? designFlowRateLitersPerMinute,
+  double? valvePressureDropKpa,
+  double? calculatedPowerWatts,
+  double? requiredPowerWatts,
   int? sectionCount,
   String? notes,
 }) {
@@ -451,6 +474,12 @@ HeatingDevice buildHeatingDevice({
     designFlowTempC: designFlowTempC,
     designReturnTempC: designReturnTempC,
     designRoomTempC: designRoomTempC,
+    valveCatalogItemId: valveCatalogItemId,
+    valveSetting: valveSetting,
+    designFlowRateLitersPerMinute: designFlowRateLitersPerMinute,
+    valvePressureDropKpa: valvePressureDropKpa,
+    calculatedPowerWatts: calculatedPowerWatts,
+    requiredPowerWatts: requiredPowerWatts,
     sectionCount: sectionCount,
     notes: notes,
   );
@@ -463,6 +492,7 @@ Project buildTestProject({
   List<Construction>? constructions,
   HouseModel? houseModel,
   List<GroundFloorCalculation>? groundFloorCalculations,
+  HeatingSystemParameters? heatingSystemParameters,
   bool showBuildingStepRoomsOnboarding = true,
   String datasetVersion = currentDatasetVersion,
   String? migratedFromDatasetVersion,
@@ -477,6 +507,7 @@ Project buildTestProject({
     houseModel:
         houseModel ?? buildHouseModel(constructions: effectiveConstructions),
     groundFloorCalculations: groundFloorCalculations ?? const [],
+    heatingSystemParameters: heatingSystemParameters,
     showBuildingStepRoomsOnboarding: showBuildingStepRoomsOnboarding,
     datasetVersion: datasetVersion,
     migratedFromDatasetVersion: migratedFromDatasetVersion,
@@ -497,6 +528,7 @@ class FakeProjectRepository
         FavoriteMaterialsRepository,
         OpeningCatalogRepository,
         HeatingDeviceCatalogRepository,
+        HeatingValveCatalogRepository,
         AppPreferencesRepository {
   FakeProjectRepository({List<Project>? projects})
     : _projects = projects ?? [buildTestProject()],
@@ -526,6 +558,9 @@ class FakeProjectRepository
     for (final entry in testCatalogSnapshot.heatingDevices) {
       _heatingDeviceCatalog[entry.id] = entry;
     }
+    for (final entry in testCatalogSnapshot.heatingValves) {
+      _heatingValveCatalog[entry.id] = entry;
+    }
   }
 
   final List<Project> _projects;
@@ -536,6 +571,8 @@ class FakeProjectRepository
       <String, OpeningTypeEntry>{};
   final Map<String, HeatingDeviceCatalogEntry> _heatingDeviceCatalog =
       <String, HeatingDeviceCatalogEntry>{};
+  final Map<String, HeatingValveCatalogEntry> _heatingValveCatalog =
+      <String, HeatingValveCatalogEntry>{};
   bool _constructionPickerSwipeTutorialSeen = false;
   bool _hasSeededDemoProject;
   bool _hasSeededObjects;
@@ -687,6 +724,23 @@ class FakeProjectRepository
   @override
   Future<void> deleteHeatingDeviceCatalogEntry(String id) async {
     _heatingDeviceCatalog.remove(id);
+  }
+
+  @override
+  Future<List<HeatingValveCatalogEntry>>
+  listHeatingValveCatalogEntries() async =>
+      List.unmodifiable(_heatingValveCatalog.values);
+
+  @override
+  Future<void> saveHeatingValveCatalogEntry(
+    HeatingValveCatalogEntry entry,
+  ) async {
+    _heatingValveCatalog[entry.id] = entry;
+  }
+
+  @override
+  Future<void> deleteHeatingValveCatalogEntry(String id) async {
+    _heatingValveCatalog.remove(id);
   }
 
   @override

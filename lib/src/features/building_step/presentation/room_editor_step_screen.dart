@@ -324,7 +324,11 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
       context,
       catalog: catalog,
       room: room,
-      requiredPowerWatts: roomResult?.heatLossWatts ?? 1000,
+      requiredPowerWatts:
+          ((roomResult?.heatLossWatts ?? 1000) -
+                  (roomResult?.installedHeatingPowerWatts ?? 0))
+              .clamp(0, double.infinity)
+              .toDouble(),
       systemParameters: project.heatingSystemParameters,
     );
     if (!mounted || device == null) {
@@ -350,7 +354,10 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
       context,
       catalog: catalog,
       room: room,
-      requiredPowerWatts: device.ratedPowerWatts,
+      requiredPowerWatts:
+          device.requiredPowerWatts ??
+          device.calculatedPowerWatts ??
+          device.ratedPowerWatts,
       systemParameters: project.heatingSystemParameters,
       heatingDevice: device,
     );
@@ -854,14 +861,16 @@ class _HeatingSystemSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final installedPower =
-        heatingDevices.fold<double>(
-          0,
-          (sum, item) => sum + item.ratedPowerWatts,
-        ) +
-        underfloorLoops.fold<double>(
-          0,
-          (sum, item) => sum + item.actualPowerWatts,
-        );
+        roomResult?.installedHeatingPowerWatts ??
+        (heatingDevices.fold<double>(
+              0,
+              (sum, item) =>
+                  sum + (item.calculatedPowerWatts ?? item.ratedPowerWatts),
+            ) +
+            underfloorLoops.fold<double>(
+              0,
+              (sum, item) => sum + item.actualPowerWatts,
+            ));
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -897,14 +906,30 @@ class _HeatingSystemSection extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _MetricChip(
+                  label: 'Потери',
+                  value:
+                      '${(roomResult?.heatLossWatts ?? 0).toStringAsFixed(0)} Вт',
+                ),
+                _MetricChip(
                   label: 'Установлено',
                   value: '${installedPower.toStringAsFixed(0)} Вт',
                 ),
                 if (roomResult != null)
                   _MetricChip(
-                    label: 'Баланс',
+                    label: roomResult!.heatingPowerDeltaWatts >= 0
+                        ? 'Избыток'
+                        : 'Остаток',
                     value: _formatBalance(roomResult!.heatingPowerDeltaWatts),
                   ),
+                _MetricChip(
+                  label: 'Радиаторов',
+                  value: heatingDevices.length.toString(),
+                ),
+                _MetricChip(
+                  label: 'Расход',
+                  value:
+                      '${(roomResult?.heatingFlowRateLitersPerMinute ?? 0).toStringAsFixed(1)} л/мин',
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -950,7 +975,10 @@ class _HeatingDeviceTile extends StatelessWidget {
       icon: Icons.thermostat_outlined,
       title: device.title,
       subtitle:
-          '${device.kind.label} · ${device.ratedPowerWatts.toStringAsFixed(0)} Вт'
+          '${device.kind.label} · ${(device.calculatedPowerWatts ?? device.ratedPowerWatts).toStringAsFixed(0)} Вт'
+          '${device.designFlowRateLitersPerMinute == null ? '' : ' · ${device.designFlowRateLitersPerMinute!.toStringAsFixed(1)} л/мин'}'
+          '${device.valveCatalogItemId == null ? '' : ' · арматура'}'
+          '${device.valvePressureDropKpa == null ? '' : ' · ${device.valvePressureDropKpa!.toStringAsFixed(1)} кПа'}'
           '${device.sectionCount == null ? '' : ' · ${device.sectionCount} секц.'}',
       onTap: onTap,
       onDelete: onDelete,
@@ -1545,6 +1573,17 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
     selectedEntry = null;
     selectedEntryId = null;
   }
+  String? selectedValveId = heatingDevice?.valveCatalogItemId;
+  HeatingValveCatalogEntry? selectedValve;
+  if (selectedValveId != null) {
+    for (final entry in catalog.heatingValves) {
+      if (entry.id == selectedValveId) {
+        selectedValve = entry;
+        break;
+      }
+    }
+  }
+  String? selectedValveSetting = heatingDevice?.valveSetting;
 
   return showModalBottomSheet<HeatingDevice>(
     context: context,
@@ -1609,6 +1648,47 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                   requiredPower;
               final sectionCount = sectionalSelection?.sectionCount;
               final suggestedEntry = selectedEntry ?? panelSelection?.entry;
+              if (selectedValve != null &&
+                  selectedValve!.hasSettings &&
+                  selectedValveSetting != null &&
+                  !selectedValve!.settingKvMap.containsKey(
+                    selectedValveSetting,
+                  )) {
+                selectedValveSetting = null;
+              }
+              final previewDevice = HeatingDevice(
+                id: heatingDevice?.id ?? 'preview-heating-device',
+                roomId: room.id,
+                title: _requiredText(
+                  titleController.text,
+                  fallback: suggestedEntry?.title ?? 'Радиатор',
+                ),
+                kind: HeatingDeviceKind.radiator,
+                ratedPowerWatts: actualPower,
+                catalogItemId: suggestedEntry?.id,
+                nominalPowerWatts: suggestedEntry?.ratedPowerWatts,
+                designFlowTempC: flowTemp,
+                designReturnTempC: returnTemp,
+                designRoomTempC: roomTemp,
+                valveCatalogItemId: selectedValve?.id,
+                valveSetting: selectedValveSetting,
+                sectionCount: sectionCount,
+                requiredPowerWatts: requiredPower,
+              );
+              final previewCalculation = service.calculateDevice(
+                device: previewDevice,
+                deviceCatalog: catalog.heatingDevices,
+                valveCatalog: catalog.heatingValves,
+                flowTempC: flowTemp,
+                returnTempC: returnTemp,
+                roomTempC: roomTemp,
+                requiredPowerWatts: requiredPower,
+              );
+              if (selectedValve != null &&
+                  selectedValve!.hasSettings &&
+                  selectedValveSetting == null) {
+                selectedValveSetting = previewCalculation.valveSetting;
+              }
               if (titleController.text.trim().isEmpty &&
                   suggestedEntry != null) {
                 titleController.text = suggestedEntry.title;
@@ -1717,6 +1797,60 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                         ],
                       ),
                       const SizedBox(height: 12),
+                      DropdownButtonFormField<String?>(
+                        initialValue: selectedValveId,
+                        decoration: const InputDecoration(
+                          labelText: 'Арматура',
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Без арматуры'),
+                          ),
+                          ...catalog.heatingValves.map(
+                            (entry) => DropdownMenuItem<String?>(
+                              value: entry.id,
+                              child: Text(entry.title),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedValveId = value;
+                            selectedValve = value == null
+                                ? null
+                                : catalog.heatingValves.firstWhere(
+                                    (item) => item.id == value,
+                                  );
+                            selectedValveSetting = null;
+                          });
+                        },
+                      ),
+                      if (selectedValve?.hasSettings ?? false) ...[
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedValveSetting,
+                          decoration: const InputDecoration(
+                            labelText: 'Преднастройка',
+                          ),
+                          items: selectedValve!.settingKvMap.entries
+                              .map(
+                                (entry) => DropdownMenuItem<String>(
+                                  value: entry.key,
+                                  child: Text(
+                                    '${entry.key} · Kv ${entry.value.toStringAsFixed(2)}',
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            setState(() {
+                              selectedValveSetting = value;
+                            });
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -1730,6 +1864,27 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                               label: 'Секций',
                               value: sectionCount.toString(),
                             ),
+                          _MetricChip(
+                            label: 'ΔT',
+                            value:
+                                '${previewCalculation.deltaT.toStringAsFixed(0)}°C',
+                          ),
+                          _MetricChip(
+                            label: 'Расход',
+                            value:
+                                '${previewCalculation.flowRateLitersPerMinute.toStringAsFixed(2)} л/мин',
+                          ),
+                          if (previewCalculation.valvePressureDropKpa != null)
+                            _MetricChip(
+                              label: 'Арматура',
+                              value:
+                                  '${previewCalculation.valvePressureDropKpa!.toStringAsFixed(1)} кПа',
+                            ),
+                          if (previewCalculation.valveSetting != null)
+                            _MetricChip(
+                              label: 'Настройка',
+                              value: previewCalculation.valveSetting!,
+                            ),
                           if (suggestedEntry != null)
                             _MetricChip(
                               label: 'Каталог',
@@ -1737,6 +1892,20 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                             ),
                         ],
                       ),
+                      if (previewCalculation.warnings.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        ...previewCalculation.warnings.map(
+                          (warning) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              warning,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       FilledButton(
                         onPressed: () {
@@ -1758,6 +1927,15 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                               designFlowTempC: flowTemp,
                               designReturnTempC: returnTemp,
                               designRoomTempC: roomTemp,
+                              valveCatalogItemId: selectedValve?.id,
+                              valveSetting: previewCalculation.valveSetting,
+                              designFlowRateLitersPerMinute:
+                                  previewCalculation.flowRateLitersPerMinute,
+                              valvePressureDropKpa:
+                                  previewCalculation.valvePressureDropKpa,
+                              calculatedPowerWatts:
+                                  previewCalculation.calculatedPowerWatts,
+                              requiredPowerWatts: requiredPower,
                               sectionCount: sectionCount,
                             ),
                           );

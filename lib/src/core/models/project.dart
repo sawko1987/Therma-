@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 21;
+const int currentProjectFormatVersion = 22;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -1103,6 +1103,12 @@ class HeatingDevice {
     this.designFlowTempC,
     this.designReturnTempC,
     this.designRoomTempC,
+    this.valveCatalogItemId,
+    this.valveSetting,
+    this.designFlowRateLitersPerMinute,
+    this.valvePressureDropKpa,
+    this.calculatedPowerWatts,
+    this.requiredPowerWatts,
     this.sectionCount,
     this.notes,
   });
@@ -1120,6 +1126,13 @@ class HeatingDevice {
     designFlowTempC: (json['designFlowTempC'] as num?)?.toDouble(),
     designReturnTempC: (json['designReturnTempC'] as num?)?.toDouble(),
     designRoomTempC: (json['designRoomTempC'] as num?)?.toDouble(),
+    valveCatalogItemId: json['valveCatalogItemId'] as String?,
+    valveSetting: json['valveSetting'] as String?,
+    designFlowRateLitersPerMinute:
+        (json['designFlowRateLitersPerMinute'] as num?)?.toDouble(),
+    valvePressureDropKpa: (json['valvePressureDropKpa'] as num?)?.toDouble(),
+    calculatedPowerWatts: (json['calculatedPowerWatts'] as num?)?.toDouble(),
+    requiredPowerWatts: (json['requiredPowerWatts'] as num?)?.toDouble(),
     sectionCount: (json['sectionCount'] as num?)?.toInt(),
     notes: json['notes'] as String?,
   );
@@ -1134,6 +1147,12 @@ class HeatingDevice {
   final double? designFlowTempC;
   final double? designReturnTempC;
   final double? designRoomTempC;
+  final String? valveCatalogItemId;
+  final String? valveSetting;
+  final double? designFlowRateLitersPerMinute;
+  final double? valvePressureDropKpa;
+  final double? calculatedPowerWatts;
+  final double? requiredPowerWatts;
   final int? sectionCount;
   final String? notes;
 
@@ -1148,6 +1167,12 @@ class HeatingDevice {
     double? designFlowTempC,
     double? designReturnTempC,
     double? designRoomTempC,
+    String? valveCatalogItemId,
+    String? valveSetting,
+    double? designFlowRateLitersPerMinute,
+    double? valvePressureDropKpa,
+    double? calculatedPowerWatts,
+    double? requiredPowerWatts,
     int? sectionCount,
     String? notes,
     bool clearCatalogItemId = false,
@@ -1155,6 +1180,12 @@ class HeatingDevice {
     bool clearDesignFlowTempC = false,
     bool clearDesignReturnTempC = false,
     bool clearDesignRoomTempC = false,
+    bool clearValveCatalogItemId = false,
+    bool clearValveSetting = false,
+    bool clearDesignFlowRateLitersPerMinute = false,
+    bool clearValvePressureDropKpa = false,
+    bool clearCalculatedPowerWatts = false,
+    bool clearRequiredPowerWatts = false,
     bool clearSectionCount = false,
     bool clearNotes = false,
   }) {
@@ -1179,6 +1210,24 @@ class HeatingDevice {
       designRoomTempC: clearDesignRoomTempC
           ? null
           : designRoomTempC ?? this.designRoomTempC,
+      valveCatalogItemId: clearValveCatalogItemId
+          ? null
+          : valveCatalogItemId ?? this.valveCatalogItemId,
+      valveSetting: clearValveSetting
+          ? null
+          : valveSetting ?? this.valveSetting,
+      designFlowRateLitersPerMinute: clearDesignFlowRateLitersPerMinute
+          ? null
+          : designFlowRateLitersPerMinute ?? this.designFlowRateLitersPerMinute,
+      valvePressureDropKpa: clearValvePressureDropKpa
+          ? null
+          : valvePressureDropKpa ?? this.valvePressureDropKpa,
+      calculatedPowerWatts: clearCalculatedPowerWatts
+          ? null
+          : calculatedPowerWatts ?? this.calculatedPowerWatts,
+      requiredPowerWatts: clearRequiredPowerWatts
+          ? null
+          : requiredPowerWatts ?? this.requiredPowerWatts,
       sectionCount: clearSectionCount
           ? null
           : sectionCount ?? this.sectionCount,
@@ -1197,6 +1246,12 @@ class HeatingDevice {
     'designFlowTempC': designFlowTempC,
     'designReturnTempC': designReturnTempC,
     'designRoomTempC': designRoomTempC,
+    'valveCatalogItemId': valveCatalogItemId,
+    'valveSetting': valveSetting,
+    'designFlowRateLitersPerMinute': designFlowRateLitersPerMinute,
+    'valvePressureDropKpa': valvePressureDropKpa,
+    'calculatedPowerWatts': calculatedPowerWatts,
+    'requiredPowerWatts': requiredPowerWatts,
     'sectionCount': sectionCount,
     'notes': notes,
   };

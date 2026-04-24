@@ -23,6 +23,8 @@ const _objectEntryIdPrefix = '__object__';
 const _objectPayloadVersion = 1;
 const _appPreferencesEntryId = '__app_preferences__';
 const _appPreferencesPayloadVersion = 1;
+const _heatingValveCatalogEntryId = '__heating_valve_catalog__';
+const _heatingValveCatalogPayloadVersion = 1;
 
 class DriftProjectRepository
     implements
@@ -32,6 +34,7 @@ class DriftProjectRepository
         FavoriteMaterialsRepository,
         OpeningCatalogRepository,
         HeatingDeviceCatalogRepository,
+        HeatingValveCatalogRepository,
         AppPreferencesRepository {
   DriftProjectRepository(this._database, {AppLogger? logger})
     : _logger = logger;
@@ -558,6 +561,7 @@ class DriftProjectRepository
         id == _demoSeedStateEntryId ||
         id == _objectSeedStateEntryId ||
         id == _favoriteMaterialsEntryId ||
+        id == _heatingValveCatalogEntryId ||
         id.startsWith(_objectEntryIdPrefix);
   }
 
@@ -673,5 +677,87 @@ class DriftProjectRepository
     await (_database.delete(
       _database.storedHeatingDeviceCatalogEntries,
     )..where((table) => table.id.equals(id))).go();
+  }
+
+  @override
+  Future<List<HeatingValveCatalogEntry>>
+  listHeatingValveCatalogEntries() async {
+    _logger?.debug(
+      'Load heating valve catalog entries from store',
+      category: AppLogCategory.storage,
+    );
+    final query = _database.select(_database.projectEntries)
+      ..where((table) => table.id.equals(_heatingValveCatalogEntryId));
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return const [];
+    }
+    final payload = Map<String, dynamic>.from(
+      jsonDecode(row.payloadJson) as Map,
+    );
+    return ((payload['entries'] as List<dynamic>?) ?? const [])
+        .map(
+          (item) => HeatingValveCatalogEntry.fromJson(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> saveHeatingValveCatalogEntry(
+    HeatingValveCatalogEntry entry,
+  ) async {
+    _logger?.info(
+      'Save heating valve catalog entry',
+      category: AppLogCategory.storage,
+      context: {'entryId': entry.id, 'title': entry.title},
+    );
+    final entries = await listHeatingValveCatalogEntries();
+    final updated = [
+      for (final item in entries)
+        if (item.id == entry.id) entry else item,
+      if (!entries.any((item) => item.id == entry.id)) entry,
+    ];
+    await _saveHeatingValveCatalogEntries(updated);
+  }
+
+  @override
+  Future<void> deleteHeatingValveCatalogEntry(String id) async {
+    _logger?.info(
+      'Delete heating valve catalog entry',
+      category: AppLogCategory.storage,
+      context: {'entryId': id},
+    );
+    final entries = await listHeatingValveCatalogEntries();
+    await _saveHeatingValveCatalogEntries([
+      for (final item in entries)
+        if (item.id != id) item,
+    ]);
+  }
+
+  Future<void> _saveHeatingValveCatalogEntries(
+    List<HeatingValveCatalogEntry> entries,
+  ) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _database
+        .into(_database.projectEntries)
+        .insertOnConflictUpdate(
+          db.ProjectEntriesCompanion.insert(
+            id: _heatingValveCatalogEntryId,
+            name: 'Heating valve catalog',
+            climatePointId: 'catalog',
+            roomPreset: RoomPreset.livingRoom.storageKey,
+            payloadJson: jsonEncode({
+              'type': 'heatingValveCatalog',
+              'payloadVersion': _heatingValveCatalogPayloadVersion,
+              'entries': entries.map((item) => item.toJson()).toList(),
+            }),
+            projectFormatVersion: currentProjectFormatVersion,
+            datasetVersion: const Value(currentDatasetVersion),
+            migratedFromDatasetVersion: const Value(null),
+            updatedAtEpochMs: now,
+          ),
+        );
   }
 }

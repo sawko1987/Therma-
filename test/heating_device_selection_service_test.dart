@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartcalc_mobile/src/core/models/catalog.dart';
+import 'package:smartcalc_mobile/src/core/models/project.dart';
 import 'package:smartcalc_mobile/src/core/services/heating_device_selection_service.dart';
 
 void main() {
@@ -98,4 +99,116 @@ void main() {
       expect(selection?.actualPowerWatts, 876);
     },
   );
+
+  test('design flow rate changes when supply return delta changes', () {
+    final highDelta = service.designFlowRateLitersPerMinute(
+      powerWatts: 1000,
+      flowTempC: 75,
+      returnTempC: 65,
+    );
+    final lowDelta = service.designFlowRateLitersPerMinute(
+      powerWatts: 1000,
+      flowTempC: 70,
+      returnTempC: 65,
+    );
+
+    expect(highDelta, closeTo(1.43, 0.01));
+    expect(lowDelta, greaterThan(highDelta));
+  });
+
+  test('valve pressure drop is calculated from Kv', () {
+    final drop = service.valvePressureDropKpa(
+      flowRateLitersPerMinute: 1.0,
+      kv: 0.3,
+    );
+
+    expect(drop, closeTo(4.0, 0.001));
+  });
+
+  test('calculateDevice picks residual load and warns for ball valve', () {
+    const radiator = HeatingDeviceCatalogEntry(
+      id: 'panel',
+      kind: 'radiator',
+      title: 'Panel',
+      ratedPowerWatts: 1000,
+      panelType: '22',
+      designFlowTempC: 75,
+      designReturnTempC: 65,
+      roomTempC: 20,
+    );
+    const ballValve = HeatingValveCatalogEntry(
+      id: 'ball',
+      kind: HeatingValveKind.ballValve,
+      title: 'Ball',
+      connectionDiameterMm: 15,
+      kvs: 12,
+    );
+    const device = HeatingDevice(
+      id: 'd1',
+      roomId: 'r1',
+      title: 'R1',
+      kind: HeatingDeviceKind.radiator,
+      ratedPowerWatts: 1000,
+      catalogItemId: 'panel',
+      valveCatalogItemId: 'ball',
+      requiredPowerWatts: 700,
+    );
+
+    final result = service.calculateDevice(
+      device: device,
+      deviceCatalog: const [radiator],
+      valveCatalog: const [ballValve],
+      flowTempC: 75,
+      returnTempC: 65,
+      roomTempC: 20,
+      requiredPowerWatts: 700,
+    );
+
+    expect(result.calculatedPowerWatts, 1000);
+    expect(result.flowRateLitersPerMinute, closeTo(1.43, 0.01));
+    expect(
+      result.warnings,
+      contains('Шаровый кран не предназначен для балансировки расхода.'),
+    );
+    expect(result.warnings, contains('Запас мощности выше 25%.'));
+  });
+
+  test('calculateDevice selects closest regulating valve setting', () {
+    const radiator = HeatingDeviceCatalogEntry(
+      id: 'panel',
+      kind: 'radiator',
+      title: 'Panel',
+      ratedPowerWatts: 1000,
+      panelType: '22',
+    );
+    const valve = HeatingValveCatalogEntry(
+      id: 'balancing',
+      kind: HeatingValveKind.balancingValve,
+      title: 'Balancing',
+      connectionDiameterMm: 15,
+      kvs: 2.5,
+      settingKvMap: {'1': 0.1, '2': 0.3, '3': 0.8},
+    );
+    const device = HeatingDevice(
+      id: 'd1',
+      roomId: 'r1',
+      title: 'R1',
+      kind: HeatingDeviceKind.radiator,
+      ratedPowerWatts: 1000,
+      catalogItemId: 'panel',
+      valveCatalogItemId: 'balancing',
+    );
+
+    final result = service.calculateDevice(
+      device: device,
+      deviceCatalog: const [radiator],
+      valveCatalog: const [valve],
+      flowTempC: 75,
+      returnTempC: 65,
+      roomTempC: 20,
+    );
+
+    expect(result.valveSetting, '2');
+    expect(result.valvePressureDropKpa, closeTo(8.16, 0.1));
+  });
 }

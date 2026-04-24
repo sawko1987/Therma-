@@ -365,11 +365,13 @@ class HeatingDeviceCatalogEntry {
     required this.title,
     required this.ratedPowerWatts,
     this.manufacturer,
+    this.series,
     this.model,
     this.sectionCount,
     this.widthMm,
     this.heightMm,
     this.depthMm,
+    this.waterVolumePerSection,
     this.panelType,
     this.connection,
     this.workingPressureBar,
@@ -384,43 +386,47 @@ class HeatingDeviceCatalogEntry {
     this.isCustom = false,
   });
 
-  factory HeatingDeviceCatalogEntry.fromJson(Map<String, dynamic> json) =>
-      HeatingDeviceCatalogEntry(
-        id: json['id'] as String,
-        kind: json['kind'] as String,
-        title: json['title'] as String,
-        ratedPowerWatts: (json['ratedPowerWatts'] as num).toDouble(),
-        manufacturer: json['manufacturer'] as String?,
-        model: json['model'] as String?,
-        sectionCount: (json['sectionCount'] as num?)?.toInt(),
-        widthMm: (json['widthMm'] as num?)?.toDouble(),
-        heightMm: (json['heightMm'] as num?)?.toDouble(),
-        depthMm: (json['depthMm'] as num?)?.toDouble(),
-        panelType: json['panelType'] as String?,
-        connection: json['connection'] as String?,
-        workingPressureBar: (json['workingPressureBar'] as num?)?.toDouble(),
-        testPressureBar: (json['testPressureBar'] as num?)?.toDouble(),
-        designFlowTempC: (json['designFlowTempC'] as num?)?.toDouble() ?? 75,
-        designReturnTempC:
-            (json['designReturnTempC'] as num?)?.toDouble() ?? 65,
-        roomTempC: (json['roomTempC'] as num?)?.toDouble() ?? 20,
-        heatOutputExponent: (json['heatOutputExponent'] as num?)?.toDouble(),
-        sourceUrl: json['sourceUrl'] as String?,
-        sourceLabel: json['sourceLabel'] as String?,
-        sourceCheckedAt: json['sourceCheckedAt'] as String?,
-        isCustom: json['isCustom'] as bool? ?? false,
-      );
+  factory HeatingDeviceCatalogEntry.fromJson(
+    Map<String, dynamic> json,
+  ) => HeatingDeviceCatalogEntry(
+    id: json['id'] as String,
+    kind: json['kind'] as String,
+    title: json['title'] as String,
+    ratedPowerWatts: (json['ratedPowerWatts'] as num).toDouble(),
+    manufacturer: json['manufacturer'] as String?,
+    series: json['series'] as String?,
+    model: json['model'] as String?,
+    sectionCount: (json['sectionCount'] as num?)?.toInt(),
+    widthMm: (json['widthMm'] as num?)?.toDouble(),
+    heightMm: (json['heightMm'] as num?)?.toDouble(),
+    depthMm: (json['depthMm'] as num?)?.toDouble(),
+    waterVolumePerSection: (json['waterVolumePerSection'] as num?)?.toDouble(),
+    panelType: json['panelType'] as String?,
+    connection: json['connection'] as String?,
+    workingPressureBar: (json['workingPressureBar'] as num?)?.toDouble(),
+    testPressureBar: (json['testPressureBar'] as num?)?.toDouble(),
+    designFlowTempC: (json['designFlowTempC'] as num?)?.toDouble() ?? 75,
+    designReturnTempC: (json['designReturnTempC'] as num?)?.toDouble() ?? 65,
+    roomTempC: (json['roomTempC'] as num?)?.toDouble() ?? 20,
+    heatOutputExponent: (json['heatOutputExponent'] as num?)?.toDouble(),
+    sourceUrl: json['sourceUrl'] as String?,
+    sourceLabel: json['sourceLabel'] as String?,
+    sourceCheckedAt: json['sourceCheckedAt'] as String?,
+    isCustom: json['isCustom'] as bool? ?? false,
+  );
 
   final String id;
   final String kind;
   final String title;
   final double ratedPowerWatts;
   final String? manufacturer;
+  final String? series;
   final String? model;
   final int? sectionCount;
   final double? widthMm;
   final double? heightMm;
   final double? depthMm;
+  final double? waterVolumePerSection;
   final String? panelType;
   final String? connection;
   final double? workingPressureBar;
@@ -445,11 +451,13 @@ class HeatingDeviceCatalogEntry {
     String? title,
     double? ratedPowerWatts,
     String? manufacturer,
+    String? series,
     String? model,
     int? sectionCount,
     double? widthMm,
     double? heightMm,
     double? depthMm,
+    double? waterVolumePerSection,
     String? panelType,
     String? connection,
     double? workingPressureBar,
@@ -463,11 +471,13 @@ class HeatingDeviceCatalogEntry {
     String? sourceCheckedAt,
     bool? isCustom,
     bool clearManufacturer = false,
+    bool clearSeries = false,
     bool clearModel = false,
     bool clearSectionCount = false,
     bool clearWidthMm = false,
     bool clearHeightMm = false,
     bool clearDepthMm = false,
+    bool clearWaterVolumePerSection = false,
     bool clearPanelType = false,
     bool clearConnection = false,
     bool clearWorkingPressureBar = false,
@@ -485,6 +495,7 @@ class HeatingDeviceCatalogEntry {
       manufacturer: clearManufacturer
           ? null
           : manufacturer ?? this.manufacturer,
+      series: clearSeries ? null : series ?? this.series,
       model: clearModel ? null : model ?? this.model,
       sectionCount: clearSectionCount
           ? null
@@ -492,6 +503,9 @@ class HeatingDeviceCatalogEntry {
       widthMm: clearWidthMm ? null : widthMm ?? this.widthMm,
       heightMm: clearHeightMm ? null : heightMm ?? this.heightMm,
       depthMm: clearDepthMm ? null : depthMm ?? this.depthMm,
+      waterVolumePerSection: clearWaterVolumePerSection
+          ? null
+          : waterVolumePerSection ?? this.waterVolumePerSection,
       panelType: clearPanelType ? null : panelType ?? this.panelType,
       connection: clearConnection ? null : connection ?? this.connection,
       workingPressureBar: clearWorkingPressureBar
@@ -521,11 +535,13 @@ class HeatingDeviceCatalogEntry {
     'title': title,
     'ratedPowerWatts': ratedPowerWatts,
     'manufacturer': manufacturer,
+    'series': series,
     'model': model,
     'sectionCount': sectionCount,
     'widthMm': widthMm,
     'heightMm': heightMm,
     'depthMm': depthMm,
+    'waterVolumePerSection': waterVolumePerSection,
     'panelType': panelType,
     'connection': connection,
     'workingPressureBar': workingPressureBar,
@@ -550,6 +566,147 @@ class HeatingDeviceCatalogItem {
   final HeatingDeviceCatalogSource source;
 
   bool get isCustom => source == HeatingDeviceCatalogSource.custom;
+}
+
+enum HeatingValveKind { ballValve, balancingValve, thermostaticValve }
+
+HeatingValveKind parseHeatingValveKind(String value) => switch (value) {
+  'ballValve' => HeatingValveKind.ballValve,
+  'balancingValve' => HeatingValveKind.balancingValve,
+  'thermostaticValve' => HeatingValveKind.thermostaticValve,
+  _ => throw ArgumentError.value(value, 'value', 'Unknown valve kind'),
+};
+
+extension HeatingValveKindX on HeatingValveKind {
+  String get label => switch (this) {
+    HeatingValveKind.ballValve => 'Шаровый кран',
+    HeatingValveKind.balancingValve => 'Балансировочный вентиль',
+    HeatingValveKind.thermostaticValve => 'Термостатический клапан',
+  };
+
+  String get storageKey => switch (this) {
+    HeatingValveKind.ballValve => 'ballValve',
+    HeatingValveKind.balancingValve => 'balancingValve',
+    HeatingValveKind.thermostaticValve => 'thermostaticValve',
+  };
+
+  bool get isRegulating => this != HeatingValveKind.ballValve;
+}
+
+class HeatingValveCatalogEntry {
+  const HeatingValveCatalogEntry({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.connectionDiameterMm,
+    required this.kvs,
+    this.manufacturer,
+    this.model,
+    this.settingKvMap = const {},
+    this.sourceUrl,
+    this.sourceLabel,
+    this.sourceCheckedAt,
+    this.isCustom = false,
+  });
+
+  factory HeatingValveCatalogEntry.fromJson(Map<String, dynamic> json) =>
+      HeatingValveCatalogEntry(
+        id: json['id'] as String,
+        kind: parseHeatingValveKind(json['kind'] as String),
+        title: json['title'] as String,
+        manufacturer: json['manufacturer'] as String?,
+        model: json['model'] as String?,
+        connectionDiameterMm: (json['connectionDiameterMm'] as num).toDouble(),
+        kvs: (json['kvs'] as num).toDouble(),
+        settingKvMap:
+            ((json['settingKvMap'] as Map<String, dynamic>?) ?? const {}).map(
+              (key, value) => MapEntry(key, (value as num).toDouble()),
+            ),
+        sourceUrl: json['sourceUrl'] as String?,
+        sourceLabel: json['sourceLabel'] as String?,
+        sourceCheckedAt: json['sourceCheckedAt'] as String?,
+        isCustom: json['isCustom'] as bool? ?? false,
+      );
+
+  final String id;
+  final HeatingValveKind kind;
+  final String title;
+  final String? manufacturer;
+  final String? model;
+  final double connectionDiameterMm;
+  final double kvs;
+  final Map<String, double> settingKvMap;
+  final String? sourceUrl;
+  final String? sourceLabel;
+  final String? sourceCheckedAt;
+  final bool isCustom;
+
+  bool get hasSettings => settingKvMap.isNotEmpty;
+
+  HeatingValveCatalogEntry copyWith({
+    String? id,
+    HeatingValveKind? kind,
+    String? title,
+    String? manufacturer,
+    String? model,
+    double? connectionDiameterMm,
+    double? kvs,
+    Map<String, double>? settingKvMap,
+    String? sourceUrl,
+    String? sourceLabel,
+    String? sourceCheckedAt,
+    bool? isCustom,
+    bool clearManufacturer = false,
+    bool clearModel = false,
+    bool clearSourceUrl = false,
+    bool clearSourceLabel = false,
+    bool clearSourceCheckedAt = false,
+  }) {
+    return HeatingValveCatalogEntry(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      title: title ?? this.title,
+      manufacturer: clearManufacturer
+          ? null
+          : manufacturer ?? this.manufacturer,
+      model: clearModel ? null : model ?? this.model,
+      connectionDiameterMm: connectionDiameterMm ?? this.connectionDiameterMm,
+      kvs: kvs ?? this.kvs,
+      settingKvMap: settingKvMap ?? this.settingKvMap,
+      sourceUrl: clearSourceUrl ? null : sourceUrl ?? this.sourceUrl,
+      sourceLabel: clearSourceLabel ? null : sourceLabel ?? this.sourceLabel,
+      sourceCheckedAt: clearSourceCheckedAt
+          ? null
+          : sourceCheckedAt ?? this.sourceCheckedAt,
+      isCustom: isCustom ?? this.isCustom,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'kind': kind.storageKey,
+    'title': title,
+    'manufacturer': manufacturer,
+    'model': model,
+    'connectionDiameterMm': connectionDiameterMm,
+    'kvs': kvs,
+    'settingKvMap': settingKvMap,
+    'sourceUrl': sourceUrl,
+    'sourceLabel': sourceLabel,
+    'sourceCheckedAt': sourceCheckedAt,
+    'isCustom': isCustom,
+  };
+}
+
+enum HeatingValveCatalogSource { seed, custom }
+
+class HeatingValveCatalogItem {
+  const HeatingValveCatalogItem({required this.entry, required this.source});
+
+  final HeatingValveCatalogEntry entry;
+  final HeatingValveCatalogSource source;
+
+  bool get isCustom => source == HeatingValveCatalogSource.custom;
 }
 
 class OpeningTypeEntry {
@@ -676,6 +833,7 @@ class CatalogSnapshot {
     required this.moistureRules,
     required this.roomKindConditions,
     required this.heatingDevices,
+    required this.heatingValves,
     required this.openingCatalog,
     required this.datasetVersion,
   });
@@ -687,6 +845,7 @@ class CatalogSnapshot {
   final MoistureRuleSet moistureRules;
   final List<RoomKindCondition> roomKindConditions;
   final List<HeatingDeviceCatalogEntry> heatingDevices;
+  final List<HeatingValveCatalogEntry> heatingValves;
   final List<OpeningTypeEntry> openingCatalog;
   final String datasetVersion;
 }

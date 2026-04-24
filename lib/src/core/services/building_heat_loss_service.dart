@@ -2,12 +2,18 @@ import '../models/building_heat_loss.dart';
 import '../models/calculation.dart';
 import '../models/catalog.dart';
 import '../models/project.dart';
+import 'heating_device_selection_service.dart';
 import 'interfaces.dart';
 
 class NormativeBuildingHeatLossService implements BuildingHeatLossService {
-  const NormativeBuildingHeatLossService(this._engine);
+  const NormativeBuildingHeatLossService(
+    this._engine, {
+    HeatingDeviceSelectionService heatingDeviceSelectionService =
+        const HeatingDeviceSelectionService(),
+  }) : _heatingDeviceSelectionService = heatingDeviceSelectionService;
 
   final ThermalCalculationEngine _engine;
+  final HeatingDeviceSelectionService _heatingDeviceSelectionService;
 
   @override
   Future<BuildingHeatLossResult> calculate({
@@ -133,15 +139,46 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
         0,
         (sum, item) => sum + item.areaSquareMeters,
       );
-      final installedHeatingPowerWatts =
-          roomHeatingDevices.fold<double>(
+      final flowTemp = project.heatingSystemParameters?.designFlowTempC ?? 75.0;
+      final returnTemp =
+          project.heatingSystemParameters?.designReturnTempC ?? 65.0;
+      final radiatorCalculations = roomHeatingDevices
+          .map(
+            (item) => _heatingDeviceSelectionService.calculateDevice(
+              device: item,
+              deviceCatalog: catalog.heatingDevices,
+              valveCatalog: catalog.heatingValves,
+              flowTempC: item.designFlowTempC ?? flowTemp,
+              returnTempC: item.designReturnTempC ?? returnTemp,
+              roomTempC: item.designRoomTempC ?? insideAirTemperature,
+            ),
+          )
+          .toList(growable: false);
+      final radiatorHeatingPowerWatts = radiatorCalculations.fold<double>(
+        0,
+        (sum, item) => sum + item.calculatedPowerWatts,
+      );
+      final radiatorFlowRateLitersPerMinute = radiatorCalculations.fold<double>(
+        0,
+        (sum, item) => sum + item.flowRateLitersPerMinute,
+      );
+      final underfloorFlowRateLitersPerMinute = roomUnderfloorLoops
+          .fold<double>(
             0,
-            (sum, item) => sum + item.ratedPowerWatts,
-          ) +
+            (sum, item) =>
+                sum +
+                (item.balancingFlowRateLitersPerMinute ??
+                    item.flowRateLitersPerMinute ??
+                    0),
+          );
+      final installedHeatingPowerWatts =
+          radiatorHeatingPowerWatts +
           roomUnderfloorLoops.fold<double>(
             0,
             (sum, item) => sum + item.actualPowerWatts,
           );
+      final heatingFlowRateLitersPerMinute =
+          radiatorFlowRateLitersPerMinute + underfloorFlowRateLitersPerMinute;
 
       roomResults.add(
         BuildingRoomHeatLossResult(
@@ -166,6 +203,7 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
           heatingPowerDeltaWatts:
               installedHeatingPowerWatts -
               (heatLossWatts + ventilationHeatLossWatts),
+          heatingFlowRateLitersPerMinute: heatingFlowRateLitersPerMinute,
         ),
       );
     }
@@ -208,6 +246,10 @@ class NormativeBuildingHeatLossService implements BuildingHeatLossService {
       totalHeatingPowerDeltaWatts: roomResults.fold<double>(
         0,
         (sum, item) => sum + item.heatingPowerDeltaWatts,
+      ),
+      totalHeatingFlowRateLitersPerMinute: roomResults.fold<double>(
+        0,
+        (sum, item) => sum + item.heatingFlowRateLitersPerMinute,
       ),
       outsideAirTemperature: climate.designTemperature,
       unresolvedElements: List.unmodifiable(unresolvedElements),

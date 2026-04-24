@@ -4,6 +4,7 @@ import '../../construction_library/presentation/construction_directory_screen.da
 import '../../construction_library/presentation/material_management_screen.dart';
 import 'diagnostics_logs_screen.dart';
 import 'heating_device_directory_screen.dart';
+import 'heating_valve_directory_screen.dart';
 import 'opening_directory_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -100,6 +101,21 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => const DiagnosticsLogsScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.tune_outlined),
+                    title: const Text('Справочник арматуры'),
+                    subtitle: const Text(
+                      'Шаровые краны, балансировочные и термоклапаны',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const HeatingValveDirectoryScreen(),
                       ),
                     ),
                   ),
