@@ -100,6 +100,38 @@ void main() {
     },
   );
 
+  test('selectPanel filters candidates by max width', () {
+    const entries = [
+      HeatingDeviceCatalogEntry(
+        id: 'wide',
+        kind: 'radiator',
+        title: 'Wide',
+        ratedPowerWatts: 900,
+        widthMm: 1400,
+        panelType: '22',
+      ),
+      HeatingDeviceCatalogEntry(
+        id: 'fit',
+        kind: 'radiator',
+        title: 'Fit',
+        ratedPowerWatts: 1000,
+        widthMm: 1000,
+        panelType: '22',
+      ),
+    ];
+
+    final selection = service.selectPanel(
+      entries: entries,
+      requiredPowerWatts: 850,
+      flowTempC: 75,
+      returnTempC: 65,
+      roomTempC: 20,
+      maxWidthMm: 1200,
+    );
+
+    expect(selection?.entry.id, 'fit');
+  });
+
   test('design flow rate changes when supply return delta changes', () {
     final highDelta = service.designFlowRateLitersPerMinute(
       powerWatts: 1000,

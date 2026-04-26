@@ -94,6 +94,11 @@ class ObjectStepScreen extends ConsumerWidget {
                 description: result.description,
                 customerPhone: result.customerPhone,
                 climatePointId: result.climatePointId,
+                heatingSystemParameters: HeatingSystemParameters(
+                  sourceKind: HeatSourceKind.gasBoiler,
+                  designFlowTempC: result.boilerSupplyTempC,
+                  designReturnTempC: result.boilerReturnTempC,
+                ),
               );
           final createdObject = await ref.read(selectedObjectProvider.future);
           if (!context.mounted || createdObject == null) {
@@ -112,6 +117,11 @@ class ObjectStepScreen extends ConsumerWidget {
                 customerPhone: result.customerPhone,
                 climatePointId: result.climatePointId,
                 updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+              ),
+              heatingSystemParameters: HeatingSystemParameters(
+                sourceKind: HeatSourceKind.gasBoiler,
+                designFlowTempC: result.boilerSupplyTempC,
+                designReturnTempC: result.boilerReturnTempC,
               ),
             );
         return true;
@@ -192,6 +202,16 @@ class _ObjectListCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final projectsById = ref.watch(
+      projectListProvider.select(
+        (async) => async.maybeWhen(
+          data: (projects) => {
+            for (final project in projects) project.id: project,
+          },
+          orElse: () => const <String, Project>{},
+        ),
+      ),
+    );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -214,12 +234,18 @@ class _ObjectListCard extends ConsumerWidget {
                   climatePoints,
                   object.climatePointId,
                 );
+                final heatingParameters =
+                    projectsById[object.projectId]?.heatingSystemParameters;
                 final subtitleLines = [
                   if (climate != null) '${climate.region}, ${climate.city}',
                   if (object.address.isNotEmpty) object.address,
                   if (object.customerPhone.isNotEmpty)
                     'Телефон: ${object.customerPhone}',
                   if (object.description.isNotEmpty) object.description,
+                  if (heatingParameters != null)
+                    'Подача/обратка: '
+                        '${heatingParameters.designFlowTempC.toStringAsFixed(0)}/'
+                        '${heatingParameters.designReturnTempC.toStringAsFixed(0)} °C',
                   if (climate != null)
                     _climateSummaryLine(
                       'Абсолютный минимум',
@@ -283,6 +309,14 @@ class _ObjectListCard extends ConsumerWidget {
                                       updatedAtEpochMs:
                                           DateTime.now().millisecondsSinceEpoch,
                                     ),
+                                    heatingSystemParameters:
+                                        HeatingSystemParameters(
+                                          sourceKind: HeatSourceKind.gasBoiler,
+                                          designFlowTempC:
+                                              result.boilerSupplyTempC,
+                                          designReturnTempC:
+                                              result.boilerReturnTempC,
+                                        ),
                                   );
                             });
                             break;
@@ -323,6 +357,8 @@ class ObjectEditorResult {
     required this.description,
     required this.customerPhone,
     required this.climatePointId,
+    required this.boilerSupplyTempC,
+    required this.boilerReturnTempC,
   });
 
   final String title;
@@ -330,6 +366,8 @@ class ObjectEditorResult {
   final String description;
   final String customerPhone;
   final String climatePointId;
+  final double boilerSupplyTempC;
+  final double boilerReturnTempC;
 }
 
 class ObjectEditorSheet extends ConsumerStatefulWidget {
@@ -346,7 +384,10 @@ class _ObjectEditorSheetState extends ConsumerState<ObjectEditorSheet> {
   late final TextEditingController _addressController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _phoneController;
+  late final TextEditingController _boilerSupplyController;
+  late final TextEditingController _boilerReturnController;
   late String _selectedClimatePointId;
+  bool _initializedSystemParameters = false;
 
   @override
   void initState() {
@@ -361,6 +402,8 @@ class _ObjectEditorSheetState extends ConsumerState<ObjectEditorSheet> {
     _phoneController = TextEditingController(
       text: widget.object?.customerPhone ?? '',
     );
+    _boilerSupplyController = TextEditingController(text: '70');
+    _boilerReturnController = TextEditingController(text: '55');
     _selectedClimatePointId = widget.object?.climatePointId ?? 'moscow';
   }
 
@@ -370,6 +413,8 @@ class _ObjectEditorSheetState extends ConsumerState<ObjectEditorSheet> {
     _addressController.dispose();
     _descriptionController.dispose();
     _phoneController.dispose();
+    _boilerSupplyController.dispose();
+    _boilerReturnController.dispose();
     super.dispose();
   }
 
@@ -377,6 +422,25 @@ class _ObjectEditorSheetState extends ConsumerState<ObjectEditorSheet> {
   Widget build(BuildContext context) {
     final picker = ref.watch(customerPhonePickerProvider);
     final climateAsync = ref.watch(catalogSnapshotProvider);
+    final projectsAsync = ref.watch(projectListProvider);
+    projectsAsync.whenData((projects) {
+      if (_initializedSystemParameters || widget.object == null) {
+        return;
+      }
+      for (final project in projects) {
+        if (project.id == widget.object!.projectId) {
+          final parameters = project.heatingSystemParameters;
+          if (parameters != null) {
+            _boilerSupplyController.text = parameters.designFlowTempC
+                .toStringAsFixed(0);
+            _boilerReturnController.text = parameters.designReturnTempC
+                .toStringAsFixed(0);
+          }
+          _initializedSystemParameters = true;
+          break;
+        }
+      }
+    });
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -433,6 +497,37 @@ class _ObjectEditorSheetState extends ConsumerState<ObjectEditorSheet> {
               },
               loading: () => const SizedBox.shrink(),
               error: (error, _) => const SizedBox.shrink(),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Параметры системы отопления',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _boilerSupplyController,
+                    decoration: const InputDecoration(labelText: 'Подача, °C'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _boilerReturnController,
+                    decoration: const InputDecoration(labelText: 'Обратка, °C'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             TextField(
@@ -492,6 +587,14 @@ class _ObjectEditorSheetState extends ConsumerState<ObjectEditorSheet> {
                     description: _descriptionController.text.trim(),
                     customerPhone: _phoneController.text.trim(),
                     climatePointId: _selectedClimatePointId,
+                    boilerSupplyTempC: _parseEditorDouble(
+                      _boilerSupplyController.text,
+                      fallback: 70,
+                    ),
+                    boilerReturnTempC: _parseEditorDouble(
+                      _boilerReturnController.text,
+                      fallback: 55,
+                    ),
                   ),
                 );
               },
@@ -692,4 +795,8 @@ ClimatePoint? _findClimatePoint(
 
 String _climateSummaryLine(String label, double value) {
   return '$label: ${value.toStringAsFixed(1)} °C';
+}
+
+double _parseEditorDouble(String value, {required double fallback}) {
+  return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
 }

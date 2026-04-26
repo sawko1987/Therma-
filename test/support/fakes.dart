@@ -415,6 +415,7 @@ EnvelopeOpening buildOpening({
   OpeningKind kind = OpeningKind.window,
   double widthMeters = 1.2,
   double heightMeters = 1.4,
+  double? installationWidthMeters,
   double? heatTransferCoefficient,
   String? catalogTypeId,
 }) {
@@ -425,6 +426,7 @@ EnvelopeOpening buildOpening({
     kind: kind,
     widthMeters: widthMeters,
     heightMeters: heightMeters,
+    installationWidthMeters: installationWidthMeters,
     heatTransferCoefficient:
         heatTransferCoefficient ?? kind.defaultHeatTransferCoefficient,
     catalogTypeId: catalogTypeId,

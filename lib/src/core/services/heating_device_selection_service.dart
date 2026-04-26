@@ -263,9 +263,15 @@ class HeatingDeviceSelectionService {
     required double flowTempC,
     required double returnTempC,
     required double roomTempC,
+    double? maxWidthMm,
   }) {
     final candidates =
         entries
+            .where(
+              (entry) =>
+                  maxWidthMm == null ||
+                  (entry.widthMm != null && entry.widthMm! <= maxWidthMm),
+            )
             .map(
               (entry) => PanelHeatingDeviceSelection(
                 entry: entry,

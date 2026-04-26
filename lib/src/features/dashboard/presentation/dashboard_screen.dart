@@ -89,6 +89,11 @@ class DashboardScreen extends ConsumerWidget {
                   description: result.description,
                   customerPhone: result.customerPhone,
                   climatePointId: result.climatePointId,
+                  heatingSystemParameters: HeatingSystemParameters(
+                    sourceKind: HeatSourceKind.gasBoiler,
+                    designFlowTempC: result.boilerSupplyTempC,
+                    designReturnTempC: result.boilerReturnTempC,
+                  ),
                 );
             return true;
           },
@@ -97,9 +102,9 @@ class DashboardScreen extends ConsumerWidget {
           category: AppLogCategory.ui,
         );
     if (completed == true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Объект создан.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Объект создан.')));
     }
   }
 
@@ -117,10 +122,7 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({
-    required this.object,
-    required this.project,
-  });
+  const _HeroCard({required this.object, required this.project});
 
   final DesignObject? object;
   final Project? project;
@@ -283,7 +285,8 @@ class _ProjectStatusCard extends StatelessWidget {
       );
     }
 
-    final hasPlanDetails = project!.houseModel.openings.isNotEmpty ||
+    final hasPlanDetails =
+        project!.houseModel.openings.isNotEmpty ||
         project!.houseModel.heatingDevices.isNotEmpty ||
         project!.houseModel.rooms.any((room) => room.id != defaultRoomId);
 
@@ -397,7 +400,9 @@ class _ObjectSwitcherCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     subtitle: Text(
-                      object.address.isEmpty ? 'Адрес не указан' : object.address,
+                      object.address.isEmpty
+                          ? 'Адрес не указан'
+                          : object.address,
                     ),
                     trailing: Icon(
                       isSelected
@@ -437,10 +442,7 @@ class _QuickActionButton extends StatelessWidget {
 }
 
 class _HeroMetric extends StatelessWidget {
-  const _HeroMetric({
-    required this.label,
-    required this.value,
-  });
+  const _HeroMetric({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -472,10 +474,7 @@ class _HeroMetric extends StatelessWidget {
 }
 
 class _StatusMetric extends StatelessWidget {
-  const _StatusMetric({
-    required this.label,
-    required this.value,
-  });
+  const _StatusMetric({required this.label, required this.value});
 
   final String label;
   final String value;

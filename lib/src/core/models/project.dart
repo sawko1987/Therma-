@@ -860,6 +860,7 @@ class EnvelopeOpening {
     required this.heightMeters,
     required this.heatTransferCoefficient,
     this.catalogTypeId,
+    this.installationWidthMeters,
   });
 
   factory EnvelopeOpening.fromJson(Map<String, dynamic> json) {
@@ -877,6 +878,8 @@ class EnvelopeOpening {
           (json['widthMeters'] as num?)?.toDouble() ?? legacySideMeters,
       heightMeters:
           (json['heightMeters'] as num?)?.toDouble() ?? legacySideMeters,
+      installationWidthMeters: (json['installationWidthMeters'] as num?)
+          ?.toDouble(),
       heatTransferCoefficient:
           (json['heatTransferCoefficient'] as num?)?.toDouble() ??
           parseOpeningKind(
@@ -894,8 +897,11 @@ class EnvelopeOpening {
   final double heightMeters;
   final double heatTransferCoefficient;
   final String? catalogTypeId;
+  final double? installationWidthMeters;
 
   double get areaSquareMeters => widthMeters * heightMeters;
+  double get effectiveInstallationWidthMeters =>
+      installationWidthMeters ?? widthMeters;
 
   EnvelopeOpening copyWith({
     String? id,
@@ -906,7 +912,9 @@ class EnvelopeOpening {
     double? heightMeters,
     double? heatTransferCoefficient,
     String? catalogTypeId,
+    double? installationWidthMeters,
     bool clearCatalogTypeId = false,
+    bool clearInstallationWidthMeters = false,
   }) {
     return EnvelopeOpening(
       id: id ?? this.id,
@@ -920,6 +928,9 @@ class EnvelopeOpening {
       catalogTypeId: clearCatalogTypeId
           ? null
           : catalogTypeId ?? this.catalogTypeId,
+      installationWidthMeters: clearInstallationWidthMeters
+          ? null
+          : installationWidthMeters ?? this.installationWidthMeters,
     );
   }
 
@@ -930,6 +941,7 @@ class EnvelopeOpening {
     'kind': kind.storageKey,
     'widthMeters': widthMeters,
     'heightMeters': heightMeters,
+    'installationWidthMeters': installationWidthMeters,
     'areaSquareMeters': areaSquareMeters,
     'heatTransferCoefficient': heatTransferCoefficient,
     'catalogTypeId': catalogTypeId,

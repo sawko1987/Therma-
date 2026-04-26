@@ -116,6 +116,7 @@ class ProjectEditor {
     required String description,
     required String customerPhone,
     required String climatePointId,
+    required HeatingSystemParameters heatingSystemParameters,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final project = Project(
@@ -125,6 +126,7 @@ class ProjectEditor {
       roomPreset: RoomPreset.livingRoom,
       constructions: const [],
       houseModel: HouseModel.bootstrapFromConstructions(const []),
+      heatingSystemParameters: heatingSystemParameters,
     );
     final object = DesignObject(
       id: 'object-$now',
@@ -159,7 +161,10 @@ class ProjectEditor {
     );
   }
 
-  Future<void> updateObject(DesignObject object) async {
+  Future<void> updateObject(
+    DesignObject object, {
+    HeatingSystemParameters? heatingSystemParameters,
+  }) async {
     await _logger.runLoggedAction(
       action: 'Update object',
       category: AppLogCategory.repository,
@@ -176,13 +181,24 @@ class ProjectEditor {
             .getProject(object.projectId);
         if (project != null &&
             (project.name != object.title ||
-                project.climatePointId != object.climatePointId)) {
+                project.climatePointId != object.climatePointId ||
+                heatingSystemParameters != null)) {
+          final existing = project.heatingSystemParameters;
+          final updatedHeatingSystemParameters = heatingSystemParameters == null
+              ? existing
+              : existing?.copyWith(
+                      designFlowTempC: heatingSystemParameters.designFlowTempC,
+                      designReturnTempC:
+                          heatingSystemParameters.designReturnTempC,
+                    ) ??
+                    heatingSystemParameters;
           await _ref
               .read(projectRepositoryProvider)
               .saveProject(
                 project.copyWith(
                   name: object.title,
                   climatePointId: object.climatePointId,
+                  heatingSystemParameters: updatedHeatingSystemParameters,
                 ),
               );
         }

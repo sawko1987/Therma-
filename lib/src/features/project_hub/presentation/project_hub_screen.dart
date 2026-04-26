@@ -103,6 +103,11 @@ class ProjectHubScreen extends ConsumerWidget {
                 description: result.description,
                 customerPhone: result.customerPhone,
                 climatePointId: result.climatePointId,
+                heatingSystemParameters: HeatingSystemParameters(
+                  sourceKind: HeatSourceKind.gasBoiler,
+                  designFlowTempC: result.boilerSupplyTempC,
+                  designReturnTempC: result.boilerReturnTempC,
+                ),
               );
           return true;
         }
@@ -116,6 +121,11 @@ class ProjectHubScreen extends ConsumerWidget {
                 customerPhone: result.customerPhone,
                 climatePointId: result.climatePointId,
                 updatedAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+              ),
+              heatingSystemParameters: HeatingSystemParameters(
+                sourceKind: HeatSourceKind.gasBoiler,
+                designFlowTempC: result.boilerSupplyTempC,
+                designReturnTempC: result.boilerReturnTempC,
               ),
             );
         return true;
@@ -131,9 +141,9 @@ class ProjectHubScreen extends ConsumerWidget {
 
     if (completed == true && context.mounted) {
       final message = object == null ? 'Объект создан.' : 'Объект обновлён.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -147,7 +157,9 @@ class ProjectHubScreen extends ConsumerWidget {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Удалить объект?'),
-          content: Text('Объект «${object.title}» будет удалён вместе с проектом.'),
+          content: Text(
+            'Объект «${object.title}» будет удалён вместе с проектом.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -179,9 +191,9 @@ class ProjectHubScreen extends ConsumerWidget {
           contextData: {'objectId': object.id, 'projectId': object.projectId},
         );
     if (completed == true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Объект удалён.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Объект удалён.')));
     }
   }
 
@@ -190,10 +202,7 @@ class ProjectHubScreen extends ConsumerWidget {
     ref.read(selectedProjectIdProvider.notifier).select(object.projectId);
   }
 
-  Future<void> _openProgressStep(
-    BuildContext context,
-    _ProjectHubStep step,
-  ) {
+  Future<void> _openProgressStep(BuildContext context, _ProjectHubStep step) {
     switch (step) {
       case _ProjectHubStep.object:
         return openObjectStepScreen(context);
@@ -493,8 +502,9 @@ class _ProjectStepsCard extends StatelessWidget {
               description:
                   'Комнаты, план дома и связь ограждений с помещениями.',
               statusLabel: progress.planStatus,
-              onOpen:
-                  canOpenDetailFlows ? () => openBuildingStepScreen(context) : null,
+              onOpen: canOpenDetailFlows
+                  ? () => openBuildingStepScreen(context)
+                  : null,
             ),
             const Divider(),
             _ProjectStepTile(
@@ -543,10 +553,7 @@ class _ProjectStepTile extends StatelessWidget {
 }
 
 class _ProgressMetric extends StatelessWidget {
-  const _ProgressMetric({
-    required this.label,
-    required this.value,
-  });
+  const _ProgressMetric({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -619,7 +626,8 @@ class _ProjectProgress {
   ].where((item) => item).length;
 
   int get roomCount => project?.houseModel.rooms.length ?? 0;
-  int get constructionCount => project?.effectiveSelectedConstructionIds.length ?? 0;
+  int get constructionCount =>
+      project?.effectiveSelectedConstructionIds.length ?? 0;
   int get groundFloorCount => project?.groundFloorCalculations.length ?? 0;
 
   String get summary {

@@ -65,6 +65,25 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
     return rooms.first.id;
   }
 
+  List<EnvelopeOpening> _roomOpenings(Project project, Room room) {
+    final elementIds = project.houseModel.elements
+        .where((element) => element.roomId == room.id)
+        .map((element) => element.id)
+        .toSet();
+    return project.houseModel.openings
+        .where((opening) => elementIds.contains(opening.elementId))
+        .toList(growable: false);
+  }
+
+  double _roomUnderfloorPower(Project project, Room room) {
+    return project.houseModel.underfloorHeatingCalculations
+        .where((calculation) => calculation.roomId == room.id)
+        .fold<double>(
+          0,
+          (sum, calculation) => sum + calculation.actualPowerWatts,
+        );
+  }
+
   Future<void> _handleAddRoom(Project project) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -330,6 +349,8 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
               .clamp(0, double.infinity)
               .toDouble(),
       systemParameters: project.heatingSystemParameters,
+      roomOpenings: _roomOpenings(project, room),
+      underfloorPowerWatts: _roomUnderfloorPower(project, room),
     );
     if (!mounted || device == null) {
       return;
@@ -359,6 +380,8 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
           device.calculatedPowerWatts ??
           device.ratedPowerWatts,
       systemParameters: project.heatingSystemParameters,
+      roomOpenings: _roomOpenings(project, room),
+      underfloorPowerWatts: _roomUnderfloorPower(project, room),
       heatingDevice: device,
     );
     if (!mounted || updated == null) {
@@ -384,12 +407,13 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
     }
   }
 
-  Future<void> _handleAddUnderfloorLoop(Room room) async {
+  Future<void> _handleAddUnderfloorLoop(Project project, Room room) async {
     final messenger = ScaffoldMessenger.of(context);
     final calculation = await showUnderfloorHeatingCalculationSheet(
       context,
       room: room,
       service: ref.read(underfloorHeatingCalculationServiceProvider),
+      systemParameters: project.heatingSystemParameters,
     );
     if (!mounted || calculation == null) {
       return;
@@ -406,6 +430,7 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
   }
 
   Future<void> _handleEditUnderfloorLoop(
+    Project project,
     Room room,
     UnderfloorHeatingCalculation calculation,
   ) async {
@@ -414,6 +439,7 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
       context,
       room: room,
       service: ref.read(underfloorHeatingCalculationServiceProvider),
+      systemParameters: project.heatingSystemParameters,
       calculation: calculation,
     );
     if (!mounted || updated == null) {
@@ -638,9 +664,13 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
                     ),
                     onDeleteHeatingDevice: _handleDeleteHeatingDevice,
                     onAddUnderfloorLoop: () =>
-                        _handleAddUnderfloorLoop(selectedRoom),
+                        _handleAddUnderfloorLoop(project, selectedRoom),
                     onEditUnderfloorLoop: (calculation) =>
-                        _handleEditUnderfloorLoop(selectedRoom, calculation),
+                        _handleEditUnderfloorLoop(
+                          project,
+                          selectedRoom,
+                          calculation,
+                        ),
                     onDeleteUnderfloorLoop: _handleDeleteUnderfloorLoop,
                   ),
                   const SizedBox(height: 12),
@@ -946,6 +976,7 @@ class _HeatingSystemSection extends StatelessWidget {
               ...underfloorLoops.map(
                 (calculation) => _UnderfloorLoopTile(
                   calculation: calculation,
+                  roomKind: room.kind,
                   onTap: () => onEditUnderfloorLoop(calculation),
                   onDelete: () => onDeleteUnderfloorLoop(calculation),
                 ),
@@ -989,23 +1020,47 @@ class _HeatingDeviceTile extends StatelessWidget {
 class _UnderfloorLoopTile extends StatelessWidget {
   const _UnderfloorLoopTile({
     required this.calculation,
+    required this.roomKind,
     required this.onTap,
     required this.onDelete,
   });
 
   final UnderfloorHeatingCalculation calculation;
+  final RoomKind roomKind;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
+    final floorLimit = _floorSurfaceLimitC(roomKind);
+    final floorOverLimit = calculation.floorSurfaceTempC > floorLimit;
+    final floorColor = floorOverLimit
+        ? Colors.orange.shade700
+        : Colors.green.shade700;
     return _HeatingTileShell(
       icon: Icons.grid_on_outlined,
       title: calculation.title,
-      subtitle:
-          '${calculation.actualPowerWatts.toStringAsFixed(0)} Вт · '
-          '${(calculation.loopLengthMeters ?? 0).toStringAsFixed(0)} м · '
-          '${(calculation.balancingFlowRateLitersPerMinute ?? 0).toStringAsFixed(1)} л/мин',
+      subtitleWidget: RichText(
+        text: TextSpan(
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          children: [
+            TextSpan(
+              text:
+                  'Контур теплого пола • ${calculation.actualPowerWatts.toStringAsFixed(0)} Вт • пол: ',
+            ),
+            TextSpan(
+              text: '${calculation.floorSurfaceTempC.toStringAsFixed(1)}°C',
+              style: TextStyle(color: floorColor, fontWeight: FontWeight.w700),
+            ),
+            TextSpan(
+              text:
+                  ' • расход: ${(calculation.balancingFlowRateLitersPerMinute ?? 0).toStringAsFixed(1)} л/мин',
+            ),
+          ],
+        ),
+      ),
       onTap: onTap,
       onDelete: onDelete,
     );
@@ -1016,14 +1071,16 @@ class _HeatingTileShell extends StatelessWidget {
   const _HeatingTileShell({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.onTap,
     required this.onDelete,
+    this.subtitle,
+    this.subtitleWidget,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
+  final Widget? subtitleWidget;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
@@ -1051,7 +1108,7 @@ class _HeatingTileShell extends StatelessWidget {
                         title,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                      Text(subtitle),
+                      subtitleWidget ?? Text(subtitle ?? ''),
                     ],
                   ),
                 ),
@@ -1537,6 +1594,8 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
   required Room room,
   required double requiredPowerWatts,
   required HeatingSystemParameters? systemParameters,
+  required List<EnvelopeOpening> roomOpenings,
+  required double underfloorPowerWatts,
   HeatingDevice? heatingDevice,
 }) async {
   final titleController = TextEditingController(
@@ -1549,16 +1608,21 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
     text:
         (heatingDevice?.designFlowTempC ??
                 systemParameters?.designFlowTempC ??
-                75)
+                70)
             .toStringAsFixed(0),
   );
   final returnController = TextEditingController(
     text:
         (heatingDevice?.designReturnTempC ??
                 systemParameters?.designReturnTempC ??
-                65)
+                55)
             .toStringAsFixed(0),
   );
+  final windows = roomOpenings
+      .where((opening) => opening.kind == OpeningKind.window)
+      .toList(growable: false);
+  String? selectedWindowId = windows.isEmpty ? null : windows.first.id;
+  var selectedHeightMm = 500.0;
   String? selectedEntryId = heatingDevice?.catalogItemId;
   HeatingDeviceCatalogEntry? selectedEntry;
   if (selectedEntryId != null) {
@@ -1598,18 +1662,49 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                 requiredPowerController.text,
                 fallback: requiredPowerWatts,
               );
-              final flowTemp = _parseDouble(flowController.text, fallback: 75);
+              final flowTemp = _parseDouble(flowController.text, fallback: 70);
               final returnTemp = _parseDouble(
                 returnController.text,
-                fallback: 65,
+                fallback: 55,
               );
               final roomTemp = room.comfortTemperatureC;
+              final maxWidthMm = selectedWindowId == null
+                  ? null
+                  : windows
+                            .firstWhere(
+                              (opening) => opening.id == selectedWindowId,
+                            )
+                            .effectiveInstallationWidthMeters *
+                        1000;
               final catalogEntries = catalog.heatingDevices
                   .where(
                     (item) =>
                         item.kind == HeatingDeviceKind.radiator.storageKey,
                   )
                   .toList(growable: false);
+              final filteredCatalogEntries = catalogEntries
+                  .where((entry) {
+                    final heightMm = entry.heightMm;
+                    if (heightMm != null &&
+                        (heightMm - selectedHeightMm).abs() > 100) {
+                      return false;
+                    }
+                    if (maxWidthMm != null) {
+                      final widthMm = entry.widthMm;
+                      if (widthMm == null || widthMm > maxWidthMm) {
+                        return false;
+                      }
+                    }
+                    return true;
+                  })
+                  .toList(growable: false);
+              if (selectedEntryId != null &&
+                  !filteredCatalogEntries.any(
+                    (entry) => entry.id == selectedEntryId,
+                  )) {
+                selectedEntryId = null;
+                selectedEntry = null;
+              }
               SectionalHeatingDeviceSelection? sectionalSelection;
               PanelHeatingDeviceSelection? panelSelection;
               if (selectedEntry != null) {
@@ -1635,11 +1730,14 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                 }
               } else {
                 panelSelection = service.selectPanel(
-                  entries: catalogEntries.where((item) => !item.isSectional),
+                  entries: filteredCatalogEntries.where(
+                    (item) => !item.isSectional,
+                  ),
                   requiredPowerWatts: requiredPower,
                   flowTempC: flowTemp,
                   returnTempC: returnTemp,
                   roomTempC: roomTemp,
+                  maxWidthMm: maxWidthMm,
                 );
               }
               final actualPower =
@@ -1715,8 +1813,58 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                         ),
                       ),
                       const SizedBox(height: 16),
+                      if (windows.isNotEmpty) ...[
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedWindowId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Монтажное окно',
+                          ),
+                          items: windows
+                              .map(
+                                (opening) => DropdownMenuItem<String>(
+                                  value: opening.id,
+                                  child: Text(
+                                    '${opening.title} • ${(opening.effectiveInstallationWidthMeters * 1000).toStringAsFixed(0)} мм',
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            setState(() {
+                              selectedWindowId = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      DropdownButtonFormField<double>(
+                        initialValue: selectedHeightMm,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Высота радиатора',
+                        ),
+                        items: const [200, 300, 350, 400, 500, 600, 700, 900]
+                            .map(
+                              (height) => DropdownMenuItem<double>(
+                                value: height.toDouble(),
+                                child: Text('$height мм'),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setState(() {
+                            selectedHeightMm = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
                       DropdownButtonFormField<String?>(
                         initialValue: selectedEntryId,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Прибор из каталога',
                         ),
@@ -1725,10 +1873,16 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                             value: null,
                             child: Text('Автоподбор панельного'),
                           ),
-                          ...catalogEntries.map(
+                          ...filteredCatalogEntries.map(
                             (entry) => DropdownMenuItem<String?>(
                               value: entry.id,
-                              child: Text(entry.title),
+                              child: Text(
+                                '${entry.title} • '
+                                '${service.adjustedPowerWatts(entry: entry, flowTempC: flowTemp, returnTempC: returnTemp, roomTempC: roomTemp).toStringAsFixed(0)} Вт при '
+                                '${flowTemp.toStringAsFixed(0)}/${returnTemp.toStringAsFixed(0)}°C'
+                                ' • паспорт ${entry.ratedPowerWatts.toStringAsFixed(0)} Вт',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ),
                         ],
@@ -1737,7 +1891,7 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                             selectedEntryId = value;
                             selectedEntry = value == null
                                 ? null
-                                : catalogEntries.firstWhere(
+                                : filteredCatalogEntries.firstWhere(
                                     (item) => item.id == value,
                                   );
                             if (selectedEntry != null) {
@@ -1851,6 +2005,21 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                         ),
                       ],
                       const SizedBox(height: 12),
+                      if (maxWidthMm != null)
+                        Text(
+                          'Ширина окна: ${maxWidthMm.toStringAsFixed(0)} мм → максимальная ширина радиатора: ${maxWidthMm.toStringAsFixed(0)} мм',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      Text(
+                        'Подходящих моделей: ${filteredCatalogEntries.length}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      if (underfloorPowerWatts > 0)
+                        Text(
+                          'Теплый пол в этой комнате: ${underfloorPowerWatts.toStringAsFixed(0)} Вт (вычтено из требуемой мощности радиатора)',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -1863,6 +2032,25 @@ Future<HeatingDevice?> showHeatingDevicePickerSheet(
                             _MetricChip(
                               label: 'Секций',
                               value: sectionCount.toString(),
+                            ),
+                          if (suggestedEntry != null)
+                            _MetricChip(
+                              label: 'Паспорт',
+                              value:
+                                  '${suggestedEntry.ratedPowerWatts.toStringAsFixed(0)} Вт',
+                            ),
+                          if (suggestedEntry != null)
+                            _MetricChip(
+                              label:
+                                  'При ${flowTemp.toStringAsFixed(0)}/${returnTemp.toStringAsFixed(0)}°C',
+                              value: '${actualPower.toStringAsFixed(0)} Вт',
+                            ),
+                          if (suggestedEntry != null)
+                            _MetricChip(
+                              label: 'Коэф. мощности',
+                              value:
+                                  (actualPower / suggestedEntry.ratedPowerWatts)
+                                      .toStringAsFixed(2),
                             ),
                           _MetricChip(
                             label: 'ΔT',
@@ -1958,8 +2146,17 @@ Future<UnderfloorHeatingCalculation?> showUnderfloorHeatingCalculationSheet(
   BuildContext context, {
   required Room room,
   required UnderfloorHeatingCalculationService service,
+  required HeatingSystemParameters? systemParameters,
   UnderfloorHeatingCalculation? calculation,
 }) async {
+  final defaultFlowTemp =
+      systemParameters != null && systemParameters.designFlowTempC < 45
+      ? systemParameters.designFlowTempC
+      : 45.0;
+  final defaultReturnTemp =
+      systemParameters != null && systemParameters.designReturnTempC < 40
+      ? systemParameters.designReturnTempC
+      : 40.0;
   final titleController = TextEditingController(
     text: calculation?.title ?? 'Контур теплого пола',
   );
@@ -1980,10 +2177,10 @@ Future<UnderfloorHeatingCalculation?> showUnderfloorHeatingCalculationSheet(
     text: (calculation?.heatFluxWattsPerSquareMeter ?? 70).toStringAsFixed(0),
   );
   final flowController = TextEditingController(
-    text: (calculation?.flowTempC ?? 40).toStringAsFixed(0),
+    text: (calculation?.flowTempC ?? defaultFlowTemp).toStringAsFixed(0),
   );
   final returnController = TextEditingController(
-    text: (calculation?.returnTempC ?? 35).toStringAsFixed(0),
+    text: (calculation?.returnTempC ?? defaultReturnTemp).toStringAsFixed(0),
   );
   final floorTempController = TextEditingController(
     text: (calculation?.floorSurfaceTempC ?? 27).toStringAsFixed(1),
@@ -2023,6 +2220,8 @@ Future<UnderfloorHeatingCalculation?> showUnderfloorHeatingCalculationSheet(
       return StatefulBuilder(
         builder: (context, setState) {
           final result = buildCalculation();
+          final floorLimit = _floorSurfaceLimitC(room.kind);
+          final floorOverLimit = result.floorSurfaceTempC > floorLimit;
           return Padding(
             padding: EdgeInsets.fromLTRB(
               20,
@@ -2048,6 +2247,11 @@ Future<UnderfloorHeatingCalculation?> showUnderfloorHeatingCalculationSheet(
                     controller: titleController,
                     decoration: const InputDecoration(labelText: 'Название'),
                     onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Рекомендуемые режимы UFH: 45/40°C и 35/30°C',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -2170,6 +2374,30 @@ Future<UnderfloorHeatingCalculation?> showUnderfloorHeatingCalculationSheet(
                     ],
                   ),
                   const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: floorOverLimit
+                          ? Theme.of(context).colorScheme.errorContainer
+                          : Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Температура поверхности пола: '
+                      '${result.floorSurfaceTempC.toStringAsFixed(1)}°C '
+                      '(лимит ${floorLimit.toStringAsFixed(0)}°C)',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: floorOverLimit
+                            ? Theme.of(context).colorScheme.onErrorContainer
+                            : Theme.of(
+                                context,
+                              ).colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -2213,7 +2441,19 @@ Future<UnderfloorHeatingCalculation?> showUnderfloorHeatingCalculationSheet(
                   ],
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: () => Navigator.of(context).pop(result),
+                    onPressed: () {
+                      if (floorOverLimit) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Температура пола выше лимита '
+                              '${floorLimit.toStringAsFixed(0)}°C.',
+                            ),
+                          ),
+                        );
+                      }
+                      Navigator.of(context).pop(result);
+                    },
                     child: const Text('Сохранить контур'),
                   ),
                 ],
@@ -2239,3 +2479,9 @@ String _requiredText(String value, {required String fallback}) {
 double _parseDouble(String value, {required double fallback}) {
   return double.tryParse(value.replaceAll(',', '.')) ?? fallback;
 }
+
+double _floorSurfaceLimitC(RoomKind roomKind) => switch (roomKind) {
+  RoomKind.bathroom => 31,
+  RoomKind.hall || RoomKind.boilerRoom => 35,
+  _ => 29,
+};

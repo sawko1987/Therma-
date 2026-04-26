@@ -82,6 +82,32 @@ void main() {
     expect(entry.toJson()['defaultHeightMeters'], 1.4);
   });
 
+  test('envelope opening json round-trips installation width', () {
+    final opening = buildOpening(
+      widthMeters: 1.2,
+      installationWidthMeters: 1.1,
+    );
+
+    final restored = EnvelopeOpening.fromJson(opening.toJson());
+
+    expect(restored.widthMeters, 1.2);
+    expect(restored.installationWidthMeters, 1.1);
+    expect(restored.effectiveInstallationWidthMeters, 1.1);
+  });
+
+  test(
+    'envelope opening falls back to width as effective installation width',
+    () {
+      final payload = buildOpening(widthMeters: 1.3).toJson()
+        ..remove('installationWidthMeters');
+
+      final restored = EnvelopeOpening.fromJson(payload);
+
+      expect(restored.installationWidthMeters, isNull);
+      expect(restored.effectiveInstallationWidthMeters, 1.3);
+    },
+  );
+
   test(
     'migrate format 20 initializes underfloor loops and heat source fields',
     () {

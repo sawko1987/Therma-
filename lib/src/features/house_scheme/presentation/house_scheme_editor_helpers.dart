@@ -242,6 +242,7 @@ Future<EnvelopeOpening?> showOpeningEditorSheet(
                         kind: selectedKind,
                         widthMeters: widthMeters,
                         heightMeters: heightMeters,
+                        installationWidthMeters: widthMeters,
                         heatTransferCoefficient: parseEditorDouble(
                           coefficientController.text,
                           fallback: selectedKind.defaultHeatTransferCoefficient,
