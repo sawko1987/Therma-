@@ -396,7 +396,7 @@ class _RoomWizardScreenState extends ConsumerState<RoomWizardScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Площадь: ${_area.toStringAsFixed(2)} м²',
+          'Площадь по размерам: ${_area.toStringAsFixed(2)} м²',
           key: const ValueKey('room-wizard-area-label'),
           style: Theme.of(
             context,

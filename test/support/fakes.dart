@@ -325,6 +325,30 @@ Construction buildWallConstruction({bool insulationEnabled = true}) {
   );
 }
 
+Construction buildFloorConstruction({bool insulationEnabled = true}) {
+  return Construction(
+    id: 'floor',
+    title: 'Пол по грунту',
+    elementKind: ConstructionElementKind.floor,
+    floorConstructionType: FloorConstructionType.onGround,
+    layers: [
+      const ConstructionLayer(
+        id: 'slab',
+        materialId: 'aac_d500',
+        kind: LayerKind.solid,
+        thicknessMm: 120,
+      ),
+      ConstructionLayer(
+        id: 'floor-wool',
+        materialId: 'mineral_wool',
+        kind: LayerKind.solid,
+        thicknessMm: 100,
+        enabled: insulationEnabled,
+      ),
+    ],
+  );
+}
+
 RoomLayoutRect buildRoomLayout({
   double xMeters = 0,
   double yMeters = 0,

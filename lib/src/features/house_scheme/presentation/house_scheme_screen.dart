@@ -1862,13 +1862,13 @@ Future<Room?> _showRoomEditor(
                   },
                 ),
                 const SizedBox(height: 12),
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Площадь помещения',
-                  ),
-                  child: Text(
-                    '${effectiveLayout.areaSquareMeters.toStringAsFixed(1)} м²',
-                  ),
+                Text(
+                  'Площадь по размерам: '
+                  '${effectiveLayout.areaSquareMeters.toStringAsFixed(1)} м²',
+                  key: const ValueKey('room-editor-area-label'),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -1982,12 +1982,10 @@ Future<HouseEnvelopeElement?> _showElementEditor(
           final constructionsForKind = project.constructions
               .where((construction) => construction.elementKind == selectedKind)
               .toList(growable: false);
-          if (constructionsForKind.isNotEmpty &&
-              !constructionsForKind.any(
-                (construction) => construction.id == selectedConstructionId,
-              )) {
-            selectedConstructionId = constructionsForKind.first.id;
-          }
+          selectedConstructionId = _validConstructionId(
+            constructionsForKind,
+            selectedConstructionId,
+          );
           return Padding(
             padding: EdgeInsets.fromLTRB(
               20,
@@ -2063,6 +2061,9 @@ Future<HouseEnvelopeElement?> _showElementEditor(
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
+                  key: ValueKey(
+                    'element-construction-field-${selectedKind.storageKey}',
+                  ),
                   initialValue: selectedConstructionId,
                   decoration: const InputDecoration(labelText: 'Конструкция'),
                   items: constructionsForKind
@@ -2171,6 +2172,22 @@ Future<HouseEnvelopeElement?> _showElementEditor(
   titleController.dispose();
   areaController.dispose();
   return result;
+}
+
+String? _validConstructionId(
+  List<Construction> constructions,
+  String? selectedConstructionId,
+) {
+  if (constructions.isEmpty) {
+    return null;
+  }
+  if (selectedConstructionId != null &&
+      constructions.any(
+        (construction) => construction.id == selectedConstructionId,
+      )) {
+    return selectedConstructionId;
+  }
+  return constructions.first.id;
 }
 
 Future<HouseEnvelopeElement?> showElementEditorSheet(

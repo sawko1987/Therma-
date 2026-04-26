@@ -342,6 +342,87 @@ void main() {
       expect(find.text('Проёмы не добавлены.'), findsOneWidget);
     },
   );
+
+  testWidgets('room editor shows calculated area as readonly text', (
+    tester,
+  ) async {
+    final room = buildRoom(
+      layout: buildRoomLayout(widthMeters: 5, heightMeters: 6),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: FilledButton(
+              onPressed: () => showRoomEditorSheet(context, room: room),
+              child: const Text('Open room editor'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open room editor'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Площадь по размерам: 30.0 м²'), findsOneWidget);
+    expect(find.text('Площадь помещения'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('room-editor-area-label')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'element editor switches construction when kind changes to floor',
+    (tester) async {
+      final project = buildTestProject(
+        constructions: [buildWallConstruction(), buildFloorConstruction()],
+      );
+      HouseEnvelopeElement? savedElement;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () async {
+                  savedElement = await showElementEditorSheet(
+                    context,
+                    project: project,
+                    catalog: testCatalogSnapshot,
+                    roomId: defaultRoomId,
+                  );
+                },
+                child: const Text('Open element editor'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open element editor'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byType(DropdownButtonFormField<ConstructionElementKind>),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Пол').last);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Пол по грунту'), findsOneWidget);
+
+      await tester.tap(find.text('Сохранить'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(savedElement?.elementKind, ConstructionElementKind.floor);
+      expect(savedElement?.sourceConstructionId, 'floor');
+      expect(savedElement?.wallOrientation, isNull);
+    },
+  );
 }
 
 Future<void> _pumpHouseScheme(

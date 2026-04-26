@@ -61,15 +61,17 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
   }
 
   String? _initialConstructionId() {
-    final constructions = widget.project.constructions
-        .where((item) => item.elementKind == _kind)
-        .toList(growable: false);
+    final constructions = _constructionsForKind(_kind);
     return constructions.isEmpty ? null : constructions.first.id;
   }
 
-  List<Construction> get _availableConstructions => widget.project.constructions
-      .where((item) => item.elementKind == _kind)
-      .toList(growable: false);
+  List<Construction> _constructionsForKind(ConstructionElementKind kind) =>
+      widget.project.constructions
+          .where((item) => item.elementKind == kind)
+          .toList(growable: false);
+
+  List<Construction> get _availableConstructions =>
+      _constructionsForKind(_kind);
 
   Construction? get _selectedConstruction {
     final id = _selectedConstructionId;
@@ -126,11 +128,25 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
   void _handleKindChanged(ConstructionElementKind kind) {
     setState(() {
       _kind = kind;
-      final constructions = _availableConstructions;
-      _selectedConstructionId = constructions.isEmpty
-          ? null
-          : constructions.first.id;
+      _selectedConstructionId = _firstValidConstructionId(
+        _constructionsForKind(kind),
+        currentId: _selectedConstructionId,
+      );
     });
+  }
+
+  String? _firstValidConstructionId(
+    List<Construction> constructions, {
+    required String? currentId,
+  }) {
+    if (constructions.isEmpty) {
+      return null;
+    }
+    if (currentId != null &&
+        constructions.any((construction) => construction.id == currentId)) {
+      return currentId;
+    }
+    return constructions.first.id;
   }
 
   void _handleSave() {
@@ -147,6 +163,7 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final selectedConstruction = _selectedConstruction;
+    final availableConstructions = _availableConstructions;
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFFF3EFE5),
@@ -204,11 +221,13 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  key: const ValueKey('envelope-construction-field'),
+                  key: ValueKey(
+                    'envelope-construction-field-${_kind.storageKey}',
+                  ),
                   initialValue: _selectedConstructionId,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Конструкция'),
-                  items: _availableConstructions
+                  items: availableConstructions
                       .map(
                         (construction) => DropdownMenuItem(
                           value: construction.id,
@@ -220,7 +239,7 @@ class _EnvelopeWizardSheetState extends State<EnvelopeWizardSheet> {
                         ),
                       )
                       .toList(),
-                  selectedItemBuilder: (context) => _availableConstructions
+                  selectedItemBuilder: (context) => availableConstructions
                       .map(
                         (construction) => Align(
                           alignment: AlignmentDirectional.centerStart,

@@ -70,7 +70,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Площадь: 30.00 м²'), findsOneWidget);
+    expect(find.text('Площадь по размерам: 30.00 м²'), findsOneWidget);
+    expect(find.text('Площадь помещения'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('room-wizard-next-step2')));
     await tester.pumpAndSettle();
@@ -127,6 +128,39 @@ void main() {
       expect(find.text('Площадь стены, м²'), findsOneWidget);
     },
   );
+
+  testWidgets('wizard can add floor envelope without dropdown exception', (
+    tester,
+  ) async {
+    final project = buildTestProject(
+      constructions: [buildWallConstruction(), buildFloorConstruction()],
+    );
+    final repository = FakeProjectRepository(projects: [project]);
+
+    await _pumpWizard(tester, repository: repository, project: project);
+
+    await _completeStepOne(tester);
+    await tester.tap(find.byKey(const ValueKey('room-wizard-next-step2')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('room-wizard-add-envelope-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('envelope-kind-floor')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Пол по грунту'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('envelope-wizard-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('envelope-wizard-finish')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Пол •'), findsOneWidget);
+  });
 
   testWidgets('wizard saves draft envelope and opening with room', (
     tester,
