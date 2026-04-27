@@ -9,6 +9,7 @@ import '../../../core/models/project.dart';
 import '../../../core/providers.dart';
 import '../../construction_library/presentation/construction_editor_sheet.dart';
 import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
+import '../../heating_devices/presentation/radiator_wizard_sheet.dart';
 import 'house_scheme_editor_helpers.dart' as editor_helpers;
 import 'room_wizard_screen.dart';
 import 'widgets/floor_plan_editor_card.dart';
@@ -64,6 +65,40 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
     final selectedRoomId = _selectedRoomId;
     final exists = rooms.any((room) => room.id == selectedRoomId);
     return exists ? selectedRoomId : rooms.first.id;
+  }
+
+  List<EnvelopeOpening> _roomOpenings(Project project, Room room) {
+    final elementIds = project.houseModel.elements
+        .where((element) => element.roomId == room.id)
+        .map((element) => element.id)
+        .toSet();
+    return project.houseModel.openings
+        .where((opening) => elementIds.contains(opening.elementId))
+        .toList(growable: false);
+  }
+
+  double _roomUnderfloorPower(Project project, Room room) {
+    return project.houseModel.underfloorHeatingCalculations
+        .where((calculation) => calculation.roomId == room.id)
+        .fold<double>(
+          0,
+          (sum, calculation) => sum + calculation.actualPowerWatts,
+        );
+  }
+
+  BuildingRoomHeatLossResult? _findRoomResult(
+    BuildingHeatLossResult? heatLoss,
+    String roomId,
+  ) {
+    if (heatLoss == null) {
+      return null;
+    }
+    for (final roomResult in heatLoss.roomResults) {
+      if (roomResult.room.id == roomId) {
+        return roomResult;
+      }
+    }
+    return null;
   }
 
   void _selectRoom(String roomId) {
@@ -420,20 +455,41 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
   Future<void> _handleAddHeatingDevice(
     BuildContext context,
     WidgetRef ref,
+    Project project,
     CatalogSnapshot catalog,
     Room room,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final heatingDevice = await _showHeatingDeviceEditor(
+    final roomResult = _findRoomResult(
+      ref.read(buildingHeatLossResultProvider).asData?.value,
+      room.id,
+    );
+    final result = await showRadiatorWizardSheet(
       context,
       catalog: catalog,
-      roomId: room.id,
+      room: room,
+      requiredPowerWatts:
+          ((roomResult?.heatLossWatts ?? 1500) -
+                  (roomResult?.installedHeatingPowerWatts ?? 0))
+              .clamp(0, double.infinity)
+              .toDouble(),
+      systemParameters: project.heatingSystemParameters,
+      roomOpenings: _roomOpenings(project, room),
+      underfloorPowerWatts: _roomUnderfloorPower(project, room),
     );
-    if (!context.mounted || heatingDevice == null) {
+    if (!context.mounted || result == null) {
       return;
     }
     try {
-      await ref.read(projectEditorProvider).addHeatingDevice(heatingDevice);
+      final customEntry = result.customCatalogEntry;
+      if (customEntry != null) {
+        await ref
+            .read(projectEditorProvider)
+            .saveHeatingDeviceCatalogEntry(customEntry);
+      }
+      await ref
+          .read(projectEditorProvider)
+          .addHeatingDevice(result.heatingDevice);
     } catch (error) {
       _showError(messenger, error);
     }
@@ -442,21 +498,40 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
   Future<void> _handleEditHeatingDevice(
     BuildContext context,
     WidgetRef ref,
+    Project project,
     CatalogSnapshot catalog,
     HeatingDevice heatingDevice,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final updated = await _showHeatingDeviceEditor(
+    final room = project.houseModel.rooms.firstWhere(
+      (room) => room.id == heatingDevice.roomId,
+    );
+    final result = await showRadiatorWizardSheet(
       context,
       catalog: catalog,
-      roomId: heatingDevice.roomId,
+      room: room,
+      requiredPowerWatts:
+          heatingDevice.requiredPowerWatts ??
+          heatingDevice.calculatedPowerWatts ??
+          heatingDevice.ratedPowerWatts,
+      systemParameters: project.heatingSystemParameters,
+      roomOpenings: _roomOpenings(project, room),
+      underfloorPowerWatts: _roomUnderfloorPower(project, room),
       heatingDevice: heatingDevice,
     );
-    if (!context.mounted || updated == null) {
+    if (!context.mounted || result == null) {
       return;
     }
     try {
-      await ref.read(projectEditorProvider).updateHeatingDevice(updated);
+      final customEntry = result.customCatalogEntry;
+      if (customEntry != null) {
+        await ref
+            .read(projectEditorProvider)
+            .saveHeatingDeviceCatalogEntry(customEntry);
+      }
+      await ref
+          .read(projectEditorProvider)
+          .updateHeatingDevice(result.heatingDevice);
     } catch (error) {
       _showError(messenger, error);
     }
@@ -699,12 +774,18 @@ class _HouseSchemeScreenState extends ConsumerState<HouseSchemeScreen> {
                           _handleEditOpening(context, ref, opening),
                       onDeleteOpening: (opening) =>
                           _handleDeleteOpening(context, ref, opening),
-                      onAddHeatingDevice: (room) =>
-                          _handleAddHeatingDevice(context, ref, catalog, room),
+                      onAddHeatingDevice: (room) => _handleAddHeatingDevice(
+                        context,
+                        ref,
+                        project,
+                        catalog,
+                        room,
+                      ),
                       onEditHeatingDevice: (heatingDevice) =>
                           _handleEditHeatingDevice(
                             context,
                             ref,
+                            project,
                             catalog,
                             heatingDevice,
                           ),
@@ -2370,188 +2451,6 @@ Future<ConstructionLayer?> _showLayerEditor(
   );
 
   thicknessController.dispose();
-  return result;
-}
-
-Future<HeatingDevice?> _showHeatingDeviceEditor(
-  BuildContext context, {
-  required CatalogSnapshot catalog,
-  required String roomId,
-  HeatingDevice? heatingDevice,
-}) async {
-  final titleController = TextEditingController(
-    text: heatingDevice?.title ?? '',
-  );
-  final powerController = TextEditingController(
-    text: (heatingDevice?.ratedPowerWatts ?? 1500).toStringAsFixed(0),
-  );
-  final notesController = TextEditingController(
-    text: heatingDevice?.notes ?? '',
-  );
-  HeatingDeviceKind selectedKind =
-      heatingDevice?.kind ?? HeatingDeviceKind.radiator;
-  String? selectedCatalogItemId = heatingDevice?.catalogItemId;
-  if (selectedCatalogItemId != null &&
-      !catalog.heatingDevices.any((item) => item.id == selectedCatalogItemId)) {
-    selectedCatalogItemId = null;
-  }
-
-  final result = await showModalBottomSheet<HeatingDevice>(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final catalogEntries = catalog.heatingDevices;
-          HeatingDeviceCatalogEntry? selectedCatalogItem;
-          if (selectedCatalogItemId != null) {
-            for (final item in catalogEntries) {
-              if (item.id == selectedCatalogItemId) {
-                selectedCatalogItem = item;
-                break;
-              }
-            }
-          }
-
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              20,
-              20,
-              20 + MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  heatingDevice == null
-                      ? 'Новый отопительный прибор'
-                      : 'Редактирование отопительного прибора',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                if (catalogEntries.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String?>(
-                    initialValue: selectedCatalogItemId,
-                    decoration: const InputDecoration(
-                      labelText: 'Шаблон из каталога',
-                    ),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Без шаблона'),
-                      ),
-                      ...catalogEntries.map(
-                        (item) => DropdownMenuItem<String?>(
-                          value: item.id,
-                          child: Text(
-                            '${item.title} • ${item.ratedPowerWatts.toStringAsFixed(0)} Вт',
-                          ),
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        selectedCatalogItemId = value;
-                        if (value == null) {
-                          return;
-                        }
-                        final selected = catalogEntries.firstWhere(
-                          (item) => item.id == value,
-                        );
-                        titleController.text = selected.title;
-                        powerController.text = selected.ratedPowerWatts
-                            .toStringAsFixed(0);
-                        selectedKind = parseHeatingDeviceKind(selected.kind);
-                      });
-                    },
-                  ),
-                ],
-                const SizedBox(height: 12),
-                DropdownButtonFormField<HeatingDeviceKind>(
-                  initialValue: selectedKind,
-                  decoration: const InputDecoration(labelText: 'Тип прибора'),
-                  items: HeatingDeviceKind.values
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => selectedKind = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Название'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: powerController,
-                  decoration: const InputDecoration(
-                    labelText: 'Тепловая мощность, Вт',
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: notesController,
-                  decoration: const InputDecoration(labelText: 'Примечание'),
-                  minLines: 1,
-                  maxLines: 3,
-                ),
-                if (selectedCatalogItem != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Каталог: ${selectedCatalogItem.title} • ${selectedCatalogItem.ratedPowerWatts.toStringAsFixed(0)} Вт',
-                  ),
-                ],
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(
-                      HeatingDevice(
-                        id: heatingDevice?.id ?? _buildId('heating-device'),
-                        roomId: roomId,
-                        title: _requiredText(
-                          titleController.text,
-                          fallback: selectedKind.label,
-                        ),
-                        kind: selectedKind,
-                        ratedPowerWatts: _parseDouble(
-                          powerController.text,
-                          fallback: 1500,
-                        ),
-                        catalogItemId: selectedCatalogItemId,
-                        notes: notesController.text.trim().isEmpty
-                            ? null
-                            : notesController.text.trim(),
-                      ),
-                    );
-                  },
-                  child: const Text('Сохранить прибор'),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-
-  titleController.dispose();
-  powerController.dispose();
-  notesController.dispose();
   return result;
 }
 

@@ -165,4 +165,45 @@ void main() {
       currentProjectFormatVersion,
     );
   });
+
+  test('migrate format 22 maps legacy radiator valve to supply side', () {
+    final project = buildTestProject(
+      houseModel: buildHouseModel(
+        heatingDevices: [
+          buildHeatingDevice(
+            valveCatalogItemId: 'legacy-valve',
+            valveSetting: '2',
+            valvePressureDropKpa: 6.5,
+          ),
+        ],
+      ),
+    );
+    final payload = project.toJson();
+    payload['projectFormatVersion'] = 22;
+    final devices =
+        ((payload['houseModel'] as Map<String, dynamic>)['heatingDevices']
+                as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+    devices.single
+      ..remove('supplyValveCatalogItemId')
+      ..remove('supplyValveSetting')
+      ..remove('supplyValvePressureDropKpa')
+      ..remove('returnValveCatalogItemId')
+      ..remove('returnValveSetting')
+      ..remove('returnValvePressureDropKpa');
+
+    final restored = Project.fromJson(payload);
+    final migrated = const ProjectMigrationService().migrate(restored);
+    final device = migrated.project.houseModel.heatingDevices.single;
+
+    expect(migrated.wasMigrated, isTrue);
+    expect(device.supplyValveCatalogItemId, 'legacy-valve');
+    expect(device.supplyValveSetting, '2');
+    expect(device.supplyValvePressureDropKpa, 6.5);
+    expect(device.returnValveCatalogItemId, isNull);
+    expect(
+      migrated.project.sourceProjectFormatVersion,
+      currentProjectFormatVersion,
+    );
+  });
 }

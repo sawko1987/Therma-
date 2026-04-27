@@ -9,6 +9,7 @@ import '../../../core/services/heating_device_selection_service.dart';
 import '../../../core/services/underfloor_heating_calculation_service.dart';
 import '../../building_heat_loss/presentation/building_heat_loss_screen.dart';
 import '../../construction_library/presentation/construction_editor_sheet.dart';
+import '../../heating_devices/presentation/radiator_wizard_sheet.dart';
 import '../../house_scheme/presentation/house_scheme_screen.dart';
 import '../../house_scheme/presentation/room_wizard_screen.dart';
 
@@ -339,7 +340,7 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
       ref.read(buildingHeatLossResultProvider).asData?.value,
       room.id,
     );
-    final device = await showHeatingDevicePickerSheet(
+    final result = await showRadiatorWizardSheet(
       context,
       catalog: catalog,
       room: room,
@@ -352,11 +353,19 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
       roomOpenings: _roomOpenings(project, room),
       underfloorPowerWatts: _roomUnderfloorPower(project, room),
     );
-    if (!mounted || device == null) {
+    if (!mounted || result == null) {
       return;
     }
     try {
-      await ref.read(projectEditorProvider).addHeatingDevice(device);
+      final customEntry = result.customCatalogEntry;
+      if (customEntry != null) {
+        await ref
+            .read(projectEditorProvider)
+            .saveHeatingDeviceCatalogEntry(customEntry);
+      }
+      await ref
+          .read(projectEditorProvider)
+          .addHeatingDevice(result.heatingDevice);
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(content: Text('Не удалось добавить прибор: $error')),
@@ -371,7 +380,7 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
     HeatingDevice device,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final updated = await showHeatingDevicePickerSheet(
+    final result = await showRadiatorWizardSheet(
       context,
       catalog: catalog,
       room: room,
@@ -384,11 +393,19 @@ class _RoomEditorStepScreenState extends ConsumerState<RoomEditorStepScreen> {
       underfloorPowerWatts: _roomUnderfloorPower(project, room),
       heatingDevice: device,
     );
-    if (!mounted || updated == null) {
+    if (!mounted || result == null) {
       return;
     }
     try {
-      await ref.read(projectEditorProvider).updateHeatingDevice(updated);
+      final customEntry = result.customCatalogEntry;
+      if (customEntry != null) {
+        await ref
+            .read(projectEditorProvider)
+            .saveHeatingDeviceCatalogEntry(customEntry);
+      }
+      await ref
+          .read(projectEditorProvider)
+          .updateHeatingDevice(result.heatingDevice);
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(content: Text('Не удалось обновить прибор: $error')),

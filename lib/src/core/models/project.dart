@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'catalog.dart';
 import 'ground_floor_calculation.dart';
 
-const int currentProjectFormatVersion = 22;
+const int currentProjectFormatVersion = 23;
 const double defaultHouseElementAreaSquareMeters = 100.0;
 const double defaultRoomLayoutWidthMeters = 4.0;
 const double defaultRoomLayoutHeightMeters = 4.0;
@@ -1119,6 +1119,12 @@ class HeatingDevice {
     this.valveSetting,
     this.designFlowRateLitersPerMinute,
     this.valvePressureDropKpa,
+    this.supplyValveCatalogItemId,
+    this.supplyValveSetting,
+    this.supplyValvePressureDropKpa,
+    this.returnValveCatalogItemId,
+    this.returnValveSetting,
+    this.returnValvePressureDropKpa,
     this.calculatedPowerWatts,
     this.requiredPowerWatts,
     this.sectionCount,
@@ -1143,6 +1149,19 @@ class HeatingDevice {
     designFlowRateLitersPerMinute:
         (json['designFlowRateLitersPerMinute'] as num?)?.toDouble(),
     valvePressureDropKpa: (json['valvePressureDropKpa'] as num?)?.toDouble(),
+    supplyValveCatalogItemId:
+        json['supplyValveCatalogItemId'] as String? ??
+        json['valveCatalogItemId'] as String?,
+    supplyValveSetting:
+        json['supplyValveSetting'] as String? ??
+        json['valveSetting'] as String?,
+    supplyValvePressureDropKpa:
+        (json['supplyValvePressureDropKpa'] as num?)?.toDouble() ??
+        (json['valvePressureDropKpa'] as num?)?.toDouble(),
+    returnValveCatalogItemId: json['returnValveCatalogItemId'] as String?,
+    returnValveSetting: json['returnValveSetting'] as String?,
+    returnValvePressureDropKpa: (json['returnValvePressureDropKpa'] as num?)
+        ?.toDouble(),
     calculatedPowerWatts: (json['calculatedPowerWatts'] as num?)?.toDouble(),
     requiredPowerWatts: (json['requiredPowerWatts'] as num?)?.toDouble(),
     sectionCount: (json['sectionCount'] as num?)?.toInt(),
@@ -1163,6 +1182,12 @@ class HeatingDevice {
   final String? valveSetting;
   final double? designFlowRateLitersPerMinute;
   final double? valvePressureDropKpa;
+  final String? supplyValveCatalogItemId;
+  final String? supplyValveSetting;
+  final double? supplyValvePressureDropKpa;
+  final String? returnValveCatalogItemId;
+  final String? returnValveSetting;
+  final double? returnValvePressureDropKpa;
   final double? calculatedPowerWatts;
   final double? requiredPowerWatts;
   final int? sectionCount;
@@ -1183,6 +1208,12 @@ class HeatingDevice {
     String? valveSetting,
     double? designFlowRateLitersPerMinute,
     double? valvePressureDropKpa,
+    String? supplyValveCatalogItemId,
+    String? supplyValveSetting,
+    double? supplyValvePressureDropKpa,
+    String? returnValveCatalogItemId,
+    String? returnValveSetting,
+    double? returnValvePressureDropKpa,
     double? calculatedPowerWatts,
     double? requiredPowerWatts,
     int? sectionCount,
@@ -1196,6 +1227,12 @@ class HeatingDevice {
     bool clearValveSetting = false,
     bool clearDesignFlowRateLitersPerMinute = false,
     bool clearValvePressureDropKpa = false,
+    bool clearSupplyValveCatalogItemId = false,
+    bool clearSupplyValveSetting = false,
+    bool clearSupplyValvePressureDropKpa = false,
+    bool clearReturnValveCatalogItemId = false,
+    bool clearReturnValveSetting = false,
+    bool clearReturnValvePressureDropKpa = false,
     bool clearCalculatedPowerWatts = false,
     bool clearRequiredPowerWatts = false,
     bool clearSectionCount = false,
@@ -1234,6 +1271,24 @@ class HeatingDevice {
       valvePressureDropKpa: clearValvePressureDropKpa
           ? null
           : valvePressureDropKpa ?? this.valvePressureDropKpa,
+      supplyValveCatalogItemId: clearSupplyValveCatalogItemId
+          ? null
+          : supplyValveCatalogItemId ?? this.supplyValveCatalogItemId,
+      supplyValveSetting: clearSupplyValveSetting
+          ? null
+          : supplyValveSetting ?? this.supplyValveSetting,
+      supplyValvePressureDropKpa: clearSupplyValvePressureDropKpa
+          ? null
+          : supplyValvePressureDropKpa ?? this.supplyValvePressureDropKpa,
+      returnValveCatalogItemId: clearReturnValveCatalogItemId
+          ? null
+          : returnValveCatalogItemId ?? this.returnValveCatalogItemId,
+      returnValveSetting: clearReturnValveSetting
+          ? null
+          : returnValveSetting ?? this.returnValveSetting,
+      returnValvePressureDropKpa: clearReturnValvePressureDropKpa
+          ? null
+          : returnValvePressureDropKpa ?? this.returnValvePressureDropKpa,
       calculatedPowerWatts: clearCalculatedPowerWatts
           ? null
           : calculatedPowerWatts ?? this.calculatedPowerWatts,
@@ -1262,6 +1317,12 @@ class HeatingDevice {
     'valveSetting': valveSetting,
     'designFlowRateLitersPerMinute': designFlowRateLitersPerMinute,
     'valvePressureDropKpa': valvePressureDropKpa,
+    'supplyValveCatalogItemId': supplyValveCatalogItemId,
+    'supplyValveSetting': supplyValveSetting,
+    'supplyValvePressureDropKpa': supplyValvePressureDropKpa,
+    'returnValveCatalogItemId': returnValveCatalogItemId,
+    'returnValveSetting': returnValveSetting,
+    'returnValvePressureDropKpa': returnValvePressureDropKpa,
     'calculatedPowerWatts': calculatedPowerWatts,
     'requiredPowerWatts': requiredPowerWatts,
     'sectionCount': sectionCount,

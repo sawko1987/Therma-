@@ -54,7 +54,14 @@ class HeatingDeviceSelectionService {
     double? requiredPowerWatts,
   }) {
     final entry = _findDeviceEntry(device, deviceCatalog);
-    final valve = _findValveEntry(device, valveCatalog);
+    final supplyValve = _findValveEntry(
+      device.supplyValveCatalogItemId ?? device.valveCatalogItemId,
+      valveCatalog,
+    );
+    final returnValve = _findValveEntry(
+      device.returnValveCatalogItemId,
+      valveCatalog,
+    );
     final powerWatts = _adjustedDevicePowerWatts(
       device: device,
       entry: entry,
@@ -67,31 +74,56 @@ class HeatingDeviceSelectionService {
       flowTempC: flowTempC,
       returnTempC: returnTempC,
     );
-    final selectedValve = _selectValveSetting(
-      valve: valve,
-      requestedSetting: device.valveSetting,
+    final selectedSupplyValve = _selectValveSetting(
+      valve: supplyValve,
+      requestedSetting: device.supplyValveSetting ?? device.valveSetting,
       flowRateLitersPerMinute: flowRate,
     );
-    final pressureDrop = selectedValve == null
+    final supplyPressureDrop = selectedSupplyValve == null
         ? null
         : valvePressureDropKpa(
             flowRateLitersPerMinute: flowRate,
-            kv: selectedValve.kv,
+            kv: selectedSupplyValve.kv,
           );
+    final selectedReturnValve = _selectValveSetting(
+      valve: returnValve,
+      requestedSetting: device.returnValveSetting,
+      flowRateLitersPerMinute: flowRate,
+    );
+    final returnPressureDrop = selectedReturnValve == null
+        ? null
+        : valvePressureDropKpa(
+            flowRateLitersPerMinute: flowRate,
+            kv: selectedReturnValve.kv,
+          );
+    final pressureDrop =
+        supplyPressureDrop == null && returnPressureDrop == null
+        ? null
+        : (supplyPressureDrop ?? 0) + (returnPressureDrop ?? 0);
     final warnings = _deviceWarnings(
       device: device,
-      valve: valve,
+      supplyValve: supplyValve,
+      returnValve: returnValve,
       requiredPowerWatts: requiredPowerWatts ?? device.requiredPowerWatts,
       powerWatts: powerWatts,
       flowRateLitersPerMinute: flowRate,
-      pressureDropKpa: pressureDrop,
+      supplyPressureDropKpa: supplyPressureDrop,
+      returnPressureDropKpa: returnPressureDrop,
     );
     return HeatingDeviceCalculation(
       device: device,
       catalogEntry: entry,
-      valve: valve,
-      valveSetting: selectedValve?.setting,
-      valveKv: selectedValve?.kv,
+      valve: supplyValve,
+      valveSetting: selectedSupplyValve?.setting,
+      valveKv: selectedSupplyValve?.kv,
+      supplyValve: supplyValve,
+      supplyValveSetting: selectedSupplyValve?.setting,
+      supplyValveKv: selectedSupplyValve?.kv,
+      supplyValvePressureDropKpa: supplyPressureDrop,
+      returnValve: returnValve,
+      returnValveSetting: selectedReturnValve?.setting,
+      returnValveKv: selectedReturnValve?.kv,
+      returnValvePressureDropKpa: returnPressureDrop,
       deltaT: (flowTempC + returnTempC) / 2 - roomTempC,
       calculatedPowerWatts: powerWatts,
       flowRateLitersPerMinute: flowRate,
@@ -117,10 +149,9 @@ class HeatingDeviceSelectionService {
   }
 
   HeatingValveCatalogEntry? _findValveEntry(
-    HeatingDevice device,
+    String? id,
     Iterable<HeatingValveCatalogEntry> catalog,
   ) {
-    final id = device.valveCatalogItemId;
     if (id == null) {
       return null;
     }
@@ -195,27 +226,32 @@ class HeatingDeviceSelectionService {
 
   List<String> _deviceWarnings({
     required HeatingDevice device,
-    required HeatingValveCatalogEntry? valve,
+    required HeatingValveCatalogEntry? supplyValve,
+    required HeatingValveCatalogEntry? returnValve,
     required double? requiredPowerWatts,
     required double powerWatts,
     required double flowRateLitersPerMinute,
-    required double? pressureDropKpa,
+    required double? supplyPressureDropKpa,
+    required double? returnPressureDropKpa,
   }) {
     final warnings = <String>[];
-    if (valve?.kind == HeatingValveKind.ballValve) {
-      warnings.add('Шаровый кран не предназначен для балансировки расхода.');
-    }
+    _addValveWarnings(
+      warnings: warnings,
+      sideLabel: 'Подача',
+      valve: supplyValve,
+      pressureDropKpa: supplyPressureDropKpa,
+    );
+    _addValveWarnings(
+      warnings: warnings,
+      sideLabel: 'Обратка',
+      valve: returnValve,
+      pressureDropKpa: returnPressureDropKpa,
+    );
     if (flowRateLitersPerMinute > 0 && flowRateLitersPerMinute < 0.2) {
       warnings.add('Расход ниже 0,2 л/мин, настройка может быть нестабильной.');
     }
     if (flowRateLitersPerMinute > 3.0) {
       warnings.add('Расход выше 3,0 л/мин, проверьте шум и потери давления.');
-    }
-    if (pressureDropKpa != null && pressureDropKpa < 3) {
-      warnings.add('Падение на арматуре ниже 3 кПа, балансировка грубая.');
-    }
-    if (pressureDropKpa != null && pressureDropKpa > 20) {
-      warnings.add('Падение на арматуре выше 20 кПа, возможен шум.');
     }
     if (requiredPowerWatts != null && requiredPowerWatts > 0) {
       final reserve = (powerWatts - requiredPowerWatts) / requiredPowerWatts;
@@ -228,6 +264,29 @@ class HeatingDeviceSelectionService {
       }
     }
     return List.unmodifiable(warnings);
+  }
+
+  void _addValveWarnings({
+    required List<String> warnings,
+    required String sideLabel,
+    required HeatingValveCatalogEntry? valve,
+    required double? pressureDropKpa,
+  }) {
+    if (valve?.kind == HeatingValveKind.ballValve) {
+      warnings.add(
+        '$sideLabel: шаровый кран не предназначен для балансировки расхода.',
+      );
+    }
+    if (pressureDropKpa != null && pressureDropKpa < 3) {
+      warnings.add(
+        '$sideLabel: падение на арматуре ниже 3 кПа, балансировка грубая.',
+      );
+    }
+    if (pressureDropKpa != null && pressureDropKpa > 20) {
+      warnings.add(
+        '$sideLabel: падение на арматуре выше 20 кПа, возможен шум.',
+      );
+    }
   }
 
   SectionalHeatingDeviceSelection selectSectional({
@@ -316,6 +375,14 @@ class HeatingDeviceCalculation {
     required this.valve,
     required this.valveSetting,
     required this.valveKv,
+    required this.supplyValve,
+    required this.supplyValveSetting,
+    required this.supplyValveKv,
+    required this.supplyValvePressureDropKpa,
+    required this.returnValve,
+    required this.returnValveSetting,
+    required this.returnValveKv,
+    required this.returnValvePressureDropKpa,
     required this.deltaT,
     required this.calculatedPowerWatts,
     required this.flowRateLitersPerMinute,
@@ -328,6 +395,14 @@ class HeatingDeviceCalculation {
   final HeatingValveCatalogEntry? valve;
   final String? valveSetting;
   final double? valveKv;
+  final HeatingValveCatalogEntry? supplyValve;
+  final String? supplyValveSetting;
+  final double? supplyValveKv;
+  final double? supplyValvePressureDropKpa;
+  final HeatingValveCatalogEntry? returnValve;
+  final String? returnValveSetting;
+  final double? returnValveKv;
+  final double? returnValvePressureDropKpa;
   final double deltaT;
   final double calculatedPowerWatts;
   final double flowRateLitersPerMinute;

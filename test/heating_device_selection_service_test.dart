@@ -200,7 +200,9 @@ void main() {
     expect(result.flowRateLitersPerMinute, closeTo(1.43, 0.01));
     expect(
       result.warnings,
-      contains('Шаровый кран не предназначен для балансировки расхода.'),
+      contains(
+        'Подача: шаровый кран не предназначен для балансировки расхода.',
+      ),
     );
     expect(result.warnings, contains('Запас мощности выше 25%.'));
   });
@@ -242,5 +244,57 @@ void main() {
 
     expect(result.valveSetting, '2');
     expect(result.valvePressureDropKpa, closeTo(8.16, 0.1));
+  });
+
+  test('calculateDevice selects supply and return valves independently', () {
+    const radiator = HeatingDeviceCatalogEntry(
+      id: 'panel',
+      kind: 'radiator',
+      title: 'Panel',
+      ratedPowerWatts: 1000,
+      panelType: '22',
+    );
+    const supplyValve = HeatingValveCatalogEntry(
+      id: 'supply',
+      kind: HeatingValveKind.thermostaticValve,
+      title: 'Supply',
+      connectionDiameterMm: 15,
+      kvs: 1.2,
+      settingKvMap: {'1': 0.1, '2': 0.3},
+    );
+    const returnValve = HeatingValveCatalogEntry(
+      id: 'return',
+      kind: HeatingValveKind.balancingValve,
+      title: 'Return',
+      connectionDiameterMm: 15,
+      kvs: 2.5,
+      settingKvMap: {'A': 0.2, 'B': 0.6},
+    );
+    const device = HeatingDevice(
+      id: 'd1',
+      roomId: 'r1',
+      title: 'R1',
+      kind: HeatingDeviceKind.radiator,
+      ratedPowerWatts: 1000,
+      catalogItemId: 'panel',
+      supplyValveCatalogItemId: 'supply',
+      supplyValveSetting: '2',
+      returnValveCatalogItemId: 'return',
+    );
+
+    final result = service.calculateDevice(
+      device: device,
+      deviceCatalog: const [radiator],
+      valveCatalog: const [supplyValve, returnValve],
+      flowTempC: 75,
+      returnTempC: 65,
+      roomTempC: 20,
+    );
+
+    expect(result.supplyValveSetting, '2');
+    expect(result.returnValveSetting, 'B');
+    expect(result.supplyValvePressureDropKpa, closeTo(8.16, 0.1));
+    expect(result.returnValvePressureDropKpa, closeTo(2.04, 0.1));
+    expect(result.valvePressureDropKpa, closeTo(10.20, 0.1));
   });
 }
